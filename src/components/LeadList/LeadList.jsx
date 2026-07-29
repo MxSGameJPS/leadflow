@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { decodeSmart } from "../../services/imports/parseLeads.js";
 import { importTextAction } from "../../app/actions/leads.js";
-import { addPlacesToCrmAction, searchPlacesAction } from "../../app/actions/places.js";
+import { addPlacesToCrmAction, listCitiesAction, searchPlacesAction } from "../../app/actions/places.js";
 import s from "./LeadList.module.css";
 
 const STAGE_LABEL = {
@@ -90,6 +90,9 @@ export default function LeadList({ initialLeads = [] }) {
   const [notice, setNotice] = useState("");
 
   const [filters, setFilters] = useState({ country: "BR", state: "RS", city: "", neighborhood: "", category: "Restaurante", count: 20 });
+  const [cities, setCities] = useState([]);
+  const [loadingCities, setLoadingCities] = useState(true);
+  const [citiesError, setCitiesError] = useState("");
   const [places, setPlaces] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
   const [searching, setSearching] = useState(false);
@@ -97,6 +100,39 @@ export default function LeadList({ initialLeads = [] }) {
   const [placesNotice, setPlacesNotice] = useState("");
 
   useEffect(() => setLeads(initialLeads), [initialLeads]);
+
+  useEffect(() => {
+    if (filters.country !== "BR") {
+      setCities([]);
+      setLoadingCities(false);
+      setCitiesError("");
+      return undefined;
+    }
+
+    let active = true;
+    setLoadingCities(true);
+    setCitiesError("");
+
+    listCitiesAction(filters.state)
+      .then(items => {
+        if (!active) return;
+        setCities(items);
+        setFilters(current => {
+          if (current.country !== "BR" || current.state !== filters.state) return current;
+          return items.includes(current.city) ? current : { ...current, city: "" };
+        });
+      })
+      .catch(error => {
+        if (!active) return;
+        setCities([]);
+        setCitiesError(error.message || "Não foi possível carregar as cidades.");
+      })
+      .finally(() => {
+        if (active) setLoadingCities(false);
+      });
+
+    return () => { active = false; };
+  }, [filters.country, filters.state]);
 
   const counts = useMemo(() => ({
     total: leads.length,
@@ -123,7 +159,15 @@ export default function LeadList({ initialLeads = [] }) {
   const withoutOwnSite = useMemo(() => places.filter(item => !item.hasOwnSite).length, [places]);
 
   function updateFilter(field, value) {
-    setFilters(current => ({ ...current, [field]: value }));
+    setFilters(current => {
+      const next = { ...current, [field]: value };
+      if (field === "country") {
+        next.city = "";
+        next.state = value === "BR" ? "RS" : "";
+      }
+      if (field === "state") next.city = "";
+      return next;
+    });
   }
 
   async function runPlacesSearch(event) {
@@ -198,6 +242,8 @@ export default function LeadList({ initialLeads = [] }) {
     }
   }
 
+  const cityDisabled = filters.country === "BR" && (loadingCities || !cities.length);
+
   return <main className={s.page}>
     <header className={s.header}>
       <div><h1>Buscar Leads</h1><p>Encontre empresas automaticamente no Google Places e envie as oportunidades para o CRM.</p></div>
@@ -213,12 +259,15 @@ export default function LeadList({ initialLeads = [] }) {
         <label><span>Estado / região</span>{filters.country === "BR"
           ? <select value={filters.state} onChange={event => updateFilter("state", event.target.value)}>{STATES.map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}</select>
           : <input value={filters.state} onChange={event => updateFilter("state", event.target.value)} placeholder="Região, distrito ou província" />}</label>
-        <label><span>Cidade</span><input required value={filters.city} onChange={event => updateFilter("city", event.target.value)} placeholder="Ex.: Santa Maria" /></label>
+        <label><span>Cidade</span>{filters.country === "BR"
+          ? <select required disabled={cityDisabled} value={filters.city} onChange={event => updateFilter("city", event.target.value)}><option value="">{loadingCities ? "Carregando cidades…" : citiesError ? "Falha ao carregar cidades" : "Selecione a cidade"}</option>{cities.map(city => <option key={city} value={city}>{city}</option>)}</select>
+          : <input required value={filters.city} onChange={event => updateFilter("city", event.target.value)} placeholder="Informe a cidade" />}</label>
         <label><span>Bairro opcional</span><input value={filters.neighborhood} onChange={event => updateFilter("neighborhood", event.target.value)} placeholder="Ex.: Centro" /></label>
         <label><span>Nicho</span><select value={filters.category} onChange={event => updateFilter("category", event.target.value)}>{CATEGORIES.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
-        <button className={s.searchButton} type="submit" disabled={searching || !filters.city.trim()}>{searching ? "Buscando…" : "Buscar"}</button>
+        <button className={s.searchButton} type="submit" disabled={searching || !filters.city.trim() || cityDisabled}>{searching ? "Buscando…" : "Buscar"}</button>
       </form>
-      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>A busca usa a chave definida em <code>GOOGLE_PLACES_API_KEY</code>.</small></div>
+      {citiesError && filters.country === "BR" && <div className={s.cityError}>Não foi possível carregar as cidades pelo IBGE: {citiesError}</div>}
+      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>Cidades do Brasil: API pública do IBGE · Leads: Google Places.</small></div>
     </section>
 
     {placesNotice && <div className={placesNotice.startsWith("Erro") ? s.error : s.notice}>{placesNotice}</div>}
