@@ -38,7 +38,16 @@ export async function importTextAction(text, fname) {
   const arr = parseLeads(text, fname);
   if (!arr.length) throw new Error("Nenhum lead reconhecido no arquivo.");
 
+  const coverage = arr.reduce((acc, lead) => {
+    if (lead.whatsapp) acc.withWhatsapp++;
+    if (lead.phone) acc.withPhone++;
+    if (lead.email) acc.withEmail++;
+    if (lead.instagram) acc.withInstagram++;
+    if (!lead.whatsapp && !lead.phone && !lead.email && !lead.instagram) acc.withoutContact++;
+    return acc;
+  }, { withWhatsapp: 0, withPhone: 0, withEmail: 0, withInstagram: 0, withoutContact: 0 });
+
   const res = await repo.importLeads(arr);
   refresh();
-  return res;
+  return { ...res, recognized: arr.length, coverage };
 }
