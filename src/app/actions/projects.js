@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getLead, setLanding } from "../../repositories/leadRepository.js";
 import { createSiteProject } from "../../services/projects/projectStore.js";
+import { generateSiteFolder } from "../../services/projects/siteGenerator.js";
 
 export async function createSiteProjectAction(input = {}) {
   const mode = ["lead", "describe", "google"].includes(input.mode) ? input.mode : "lead";
@@ -16,17 +17,37 @@ export async function createSiteProjectAction(input = {}) {
   const name = lead?.name || String(input.name || "").trim();
   if (!name) throw new Error("Informe o nome do negócio.");
 
+  const generated = await generateSiteFolder({
+    name,
+    segment: lead?.segment || input.segment,
+    city: lead?.city || lead?.location || input.city,
+    address: lead?.address || "",
+    phone: lead?.phone || lead?.whatsapp || "",
+    placeId: lead?.externalId || "",
+    mapsLink: lead?.mapsLink || (mode === "google" ? input.source : ""),
+    existingWebsite: lead?.site || "",
+    rating: lead?.googleRating || "",
+    reviews: lead?.googleReviews || "",
+    description: mode === "lead" ? [lead?.problem, lead?.offer, lead?.bio].filter(Boolean).join("\n") : input.source,
+    template: input.template,
+  });
+
   const project = await createSiteProject({
     leadId: lead?.id || null,
     name,
     segment: lead?.segment || input.segment,
-    city: lead?.city || input.city,
+    city: lead?.city || lead?.location || input.city,
     mode,
     source: mode === "lead" ? (lead?.site || lead?.mapsLink || lead?.problem || "Dados do CRM") : input.source,
     template: input.template,
+    status: "ready",
+    folderPath: generated.folderPath,
+    aiUsed: generated.aiUsed,
+    warning: generated.warning,
+    imageCount: generated.imageCount,
   });
 
-  if (lead) await setLanding(lead.id, "todo");
+  if (lead) await setLanding(lead.id, "done");
   revalidatePath("/projetos");
   revalidatePath("/criar-site");
   if (lead) revalidatePath(`/crm/${lead.id}`);
