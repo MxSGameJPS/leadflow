@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3100",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3100",
+    "start": "next start",
     "seed": "node prisma/seed.js",
     "migrate": "prisma migrate dev --name init",
     "test:services": "node tests/services.test.mjs",
