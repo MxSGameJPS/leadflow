@@ -3,6 +3,9 @@ import { revalidatePath } from "next/cache";
 import * as repo from "../../repositories/leadRepository.js";
 import { parseLeads } from "../../services/imports/parseLeads.js";
 
+const MAX_IMPORT_SIZE = 5_000_000;
+const CLEAR_CONFIRMATION = "APAGAR";
+
 function refresh() {
   revalidatePath("/dashboard");
   revalidatePath("/leads");
@@ -19,9 +22,22 @@ export async function setGradeAction(id, grade) { await repo.setGrade(id, grade)
 export async function setFollowUpAction(id, date) { await repo.setFollowUp(id, date); refresh(); }
 export async function setProposalValueAction(id, value) { await repo.setProposalValue(id, value); refresh(); }
 export async function setNotesAction(id, notes) { await repo.setNotes(id, notes); refresh(); }
-export async function clearAllAction() { await repo.clearAll(); refresh(); }
+
+export async function clearAllAction(confirmation) {
+  if (confirmation !== CLEAR_CONFIRMATION) {
+    throw new Error("Confirmação inválida. Nenhum lead foi apagado.");
+  }
+  await repo.clearAll();
+  refresh();
+}
+
 export async function importTextAction(text, fname) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("O arquivo está vazio.");
+  if (text.length > MAX_IMPORT_SIZE) throw new Error("O arquivo excede o limite local de 5 MB.");
+
   const arr = parseLeads(text, fname);
+  if (!arr.length) throw new Error("Nenhum lead reconhecido no arquivo.");
+
   const res = await repo.importLeads(arr);
   refresh();
   return res;
