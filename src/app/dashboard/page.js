@@ -24,7 +24,10 @@ export default async function DashboardPage() {
           <h1 className={styles.title}>LeadFlow</h1>
           <div className={styles.sub}>Dashboard</div>
         </div>
-        <a className={styles.cta} href="/leads">Abrir Pipeline &rarr;</a>
+        <nav className={styles.actions} aria-label="Navegação principal">
+          <a className={styles.secondary} href="/configuracoes/ia">Configurar IA</a>
+          <a className={styles.cta} href="/leads">Abrir Pipeline &rarr;</a>
+        </nav>
       </header>
       {err ? (
         <div className={styles.err}>Erro ao ler o banco: {err}</div>
