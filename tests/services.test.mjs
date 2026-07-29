@@ -6,6 +6,7 @@ import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
+import { buildPlacesCsv, placesCsvFilename } from "../src/services/exports/placeResultsCsv.js";
 
 let pass = 0, fail = 0;
 function t(name, cond) { if (cond) pass++; else { fail++; console.error("FAIL:", name); } }
@@ -63,6 +64,13 @@ t("normaliza Place ID", place.externalId === "ChIJteste");
 t("normaliza possível WhatsApp sem confirmar", place.possibleWhatsApp === true && place.whatsapp === null);
 t("normaliza presença fraca", place.weakSite === true && place.hasOwnSite === false);
 t("normaliza score e nota", place.score >= 80 && place.grade === "A");
+
+const exportedCsv = buildPlacesCsv([{ ...place, placeId: place.externalId, name: "=EMPRESA TESTE" }], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante", neighborhood: "Centro" });
+t("export CSV inclui BOM para Excel", exportedCsv.charCodeAt(0) === 0xFEFF);
+t("export CSV separa por ponto e vírgula", exportedCsv.includes(";"));
+t("export CSV identifica WhatsApp como não confirmado", exportedCsv.includes("Sim — não confirmado"));
+t("export CSV neutraliza fórmula de planilha", exportedCsv.includes("'=EMPRESA TESTE"));
+t("nome do arquivo inclui categoria e cidade", placesCsvFilename({ category: "Restaurante", city: "Santa Maria" }, "selecionados", new Date("2026-07-29T12:00:00Z")) === "leadflow_restaurante_santa-maria_selecionados_2026-07-29.csv");
 
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
