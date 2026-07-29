@@ -9,8 +9,8 @@ export default async function AppointmentsPage() {
   const workspaceByLead = new Map(workspaces.map(item => [item.leadId, item.workspace]));
   const appointments = leads
     .filter(lead => lead.followUpAt)
-    .map(lead => ({ lead, workspace: workspaceByLead.get(lead.id) || { appointment: { type: "Follow-up", time: "09:00", notes: "" } } }))
+    .map(lead => ({ lead, workspace: workspaceByLead.get(lead.id) || { appointment: { type: "Follow-up", time: "09:00", notes: "", status: "pending" } } }))
     .sort((a, b) => `${a.lead.followUpAt} ${a.workspace.appointment?.time || ""}`.localeCompare(`${b.lead.followUpAt} ${b.workspace.appointment?.time || ""}`));
 
-  return <AppointmentsList appointments={appointments} />;
+  return <AppointmentsList appointments={appointments} leads={leads} />;
 }
