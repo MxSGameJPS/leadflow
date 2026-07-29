@@ -19,7 +19,7 @@ const TEMPLATE = {
 export default function ProjectsList({ projects = [] }) {
   return <main className={s.page}>
     <header className={s.header}>
-      <div><h1>Meus projetos</h1><p>Pré­vias geradas em pastas independentes, prontas para abrir na IDE e validar antes do deploy.</p></div>
+      <div><h1>Meus projetos</h1><p>Prévias geradas em pastas independentes, prontas para abrir na IDE e validar antes do deploy.</p></div>
       <a href="/criar-site">+ Criar projeto</a>
     </header>
 
