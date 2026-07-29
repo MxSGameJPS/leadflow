@@ -10,10 +10,9 @@ const ITEMS = [
   { href: "/crm", icon: "▤", label: "CRM" },
   { href: "/agendamentos", icon: "□", label: "Agendamentos" },
   { href: "/projetos", icon: "◇", label: "Meus projetos" },
-  { href: "/criar-site", icon: "✦", label: "Criar site" },
+  { href: "/cobrancas", icon: "R$", label: "Cobrar clientes" },
+  { href: "/criar-site", icon: "+", label: "Criar site" },
 ];
-
-const SOON = ["Cobrar clientes", "Ranking", "Templates", "Afiliados"];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -63,9 +62,6 @@ export default function AppShell({ children }) {
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
             return <a key={item.href} href={item.href} className={active ? s.active : ""} title={item.label}><span className={s.icon}>{item.icon}</span><span className={s.label}>{item.label}</span></a>;
           })}
-
-          <div className={s.divider} />
-          {SOON.map(label => <div key={label} className={s.soonItem}><span className={s.icon}>·</span><span className={s.label}>{label}</span><small>Em breve</small></div>)}
         </nav>
 
         <div className={s.footer}>
