@@ -4,6 +4,7 @@ import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/mes
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
 import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
+import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
 
 let pass = 0, fail = 0;
 function t(name, cond) { if (cond) pass++; else { fail++; console.error("FAIL:", name); } }
@@ -36,6 +37,27 @@ t("parsed nome", parsed[0].name === "Bar do Ze");
 t("parsed whatsapp", parsed[0].whatsapp === "5547999999999");
 t("parsed location por DDD", /DDD 47|Joinville/.test(parsed[0].location));
 t("parsed grade calculado", ["A", "B", "C", "D"].includes(parsed[0].grade));
+
+t("classifica Instagram como presença fraca", classifyWebsite("https://www.instagram.com/exemplo").weak === true);
+t("classifica domínio próprio", classifyWebsite("https://exemplo.com.br").hasOwnSite === true);
+t("celular brasileiro pode ter WhatsApp", isPossibleWhatsApp("(55) 99944-3944", "BR") === true);
+t("telefone fixo não vira possível WhatsApp", isPossibleWhatsApp("(55) 3025-7875", "BR") === false);
+
+const place = normalizeGooglePlace({
+  id: "ChIJteste",
+  displayName: { text: "Restaurante Teste" },
+  formattedAddress: "Rua Teste, 10 - Centro",
+  nationalPhoneNumber: "(55) 99944-3944",
+  websiteUri: "https://www.instagram.com/restaurante-teste",
+  rating: 4.8,
+  userRatingCount: 800,
+  googleMapsUri: "https://maps.google.com/?cid=1",
+}, { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante" });
+
+t("normaliza Place ID", place.externalId === "ChIJteste");
+t("normaliza possível WhatsApp sem confirmar", place.possibleWhatsApp === true && place.whatsapp === null);
+t("normaliza presença fraca", place.weakSite === true && place.hasOwnSite === false);
+t("normaliza score e nota", place.score >= 80 && place.grade === "A");
 
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
