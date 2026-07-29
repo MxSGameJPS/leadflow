@@ -2,6 +2,16 @@ node_modules
 .next
 data/*.db
 data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/ai-config/
+data/ai-test/
+data/backups/
+data/exports/
+data/imports/
+data/projects/
+data/published-sites/
+data/uploads/
 .env.local
 .env
 .env.*
