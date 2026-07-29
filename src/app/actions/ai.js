@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
 import {
   listProviderModels,
   listProvidersPublic,
@@ -34,4 +35,8 @@ export async function testProviderAction(id) {
 
 export async function listModelsAction(id) {
   return listProviderModels(id);
+}
+
+export async function generateLeadMessageAction(payload) {
+  return generateLeadMessage(payload || {});
 }
