@@ -61,7 +61,6 @@ function normalizeProvider(input, existing = null) {
   };
 
   if (!AUTH_TYPES.has(provider.authType)) throw new Error("Tipo de autenticação inválido.");
-  if (!provider.model && type !== "custom-rest") throw new Error("Informe o modelo da IA.");
   if (!["GET", "POST", "PUT", "PATCH"].includes(provider.method)) throw new Error("Método HTTP não permitido.");
 
   parseJsonObject(provider.headersJson, "Cabeçalhos adicionais");
@@ -90,6 +89,23 @@ function templateValue(value, variables) {
   if (Array.isArray(value)) return value.map(item => templateValue(item, variables));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, templateValue(item, variables)]));
   return value;
+}
+
+function normalizeGenerationRequest(input) {
+  const request = typeof input === "string" ? { prompt: input } : (input || {});
+  const prompt = String(request.prompt || "").trim();
+  if (!prompt) throw new Error("Informe o conteúdo que será enviado para a IA.");
+  return {
+    prompt,
+    systemPrompt: String(request.systemPrompt || "").trim(),
+  };
+}
+
+function ensureReadyForGeneration(provider) {
+  if (!provider.enabled) throw new Error("O provedor está desativado.");
+  if (!provider.model && provider.type !== "custom-rest") {
+    throw new Error("Escolha um modelo antes de usar este provedor.");
+  }
 }
 
 function authRequest(provider, url, headers) {
@@ -131,56 +147,70 @@ async function requestJson(provider, { url, method = "POST", body }) {
     return { data: parsed, status: response.status, elapsedMs: Date.now() - started };
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("A conexão com o provedor excedeu o tempo limite.");
+    if (error?.cause?.code === "ECONNREFUSED") throw new Error(`Não foi possível conectar em ${provider.baseUrl}. Confirme se o serviço está em execução.`);
     throw error;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function generateOpenAICompatible(provider, prompt) {
+async function generateOpenAICompatible(provider, requestInput) {
+  const request = normalizeGenerationRequest(requestInput);
   const endpoint = provider.endpoint || "/chat/completions";
+  const messages = [];
+  if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
+  messages.push({ role: "user", content: request.prompt });
+
   const result = await requestJson(provider, {
     url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint),
     body: {
       model: provider.model,
-      messages: [{ role: "user", content: prompt }],
+      messages,
       temperature: provider.temperature,
       max_tokens: provider.maxTokens,
+      stream: false,
     },
   });
   const text = getPath(result.data, "choices[0].message.content")
     ?? getPath(result.data, "choices[0].text")
     ?? getPath(result.data, "output_text");
   if (typeof text !== "string") throw new Error("A resposta não contém texto no formato compatível com OpenAI.");
-  return { ...result, text };
+  return { ...result, text: text.trim() };
 }
 
-async function generateOllama(provider, prompt) {
+async function generateOllama(provider, requestInput) {
+  const request = normalizeGenerationRequest(requestInput);
   const endpoint = provider.endpoint || "/api/chat";
+  const messages = [];
+  if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
+  messages.push({ role: "user", content: request.prompt });
+
   const result = await requestJson(provider, {
     url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint),
     body: {
       model: provider.model,
-      messages: [{ role: "user", content: prompt }],
+      messages,
       stream: false,
       options: { temperature: provider.temperature, num_predict: provider.maxTokens },
     },
   });
   const text = getPath(result.data, "message.content") ?? getPath(result.data, "response");
   if (typeof text !== "string") throw new Error("A resposta do Ollama não contém texto reconhecível.");
-  return { ...result, text };
+  return { ...result, text: text.trim() };
 }
 
-async function generateCustom(provider, prompt) {
+async function generateCustom(provider, requestInput) {
+  const request = normalizeGenerationRequest(requestInput);
   const variables = {
-    prompt,
+    prompt: request.prompt,
+    systemPrompt: request.systemPrompt,
     model: provider.model,
     temperature: provider.temperature,
     maxTokens: provider.maxTokens,
   };
   const template = provider.bodyTemplate
     ? parseJsonObject(provider.bodyTemplate, "Template do corpo")
-    : { model: "{{model}}", prompt: "{{prompt}}", temperature: "{{temperature}}", max_tokens: "{{maxTokens}}" };
+    : { model: "{{model}}", prompt: "{{prompt}}", system_prompt: "{{systemPrompt}}", temperature: "{{temperature}}", max_tokens: "{{maxTokens}}" };
   const body = templateValue(template, variables);
   const endpoint = provider.endpoint || "";
   const result = await requestJson(provider, {
@@ -190,7 +220,23 @@ async function generateCustom(provider, prompt) {
   });
   const text = getPath(result.data, provider.responsePath || "choices[0].message.content");
   if (typeof text !== "string") throw new Error(`Não foi encontrado texto no caminho de resposta: ${provider.responsePath || "choices[0].message.content"}.`);
-  return { ...result, text };
+  return { ...result, text: text.trim() };
+}
+
+async function generateInternal(provider, request) {
+  ensureReadyForGeneration(provider);
+  const result = provider.type === "ollama"
+    ? await generateOllama(provider, request)
+    : provider.type === "custom-rest"
+      ? await generateCustom(provider, request)
+      : await generateOpenAICompatible(provider, request);
+
+  return {
+    ...result,
+    providerId: provider.id,
+    providerName: provider.name,
+    model: provider.model || "",
+  };
 }
 
 export async function listProvidersPublic() {
@@ -203,6 +249,16 @@ export async function getProviderInternal(id) {
   return provider;
 }
 
+export async function getDefaultProviderInternal() {
+  const providers = await loadProviders();
+  const provider = providers.find(item => item.enabled && item.isDefault)
+    || providers.find(item => item.enabled);
+  if (!provider) {
+    throw new Error("Nenhum provedor de IA ativo foi configurado. Acesse Configurações → Inteligência Artificial.");
+  }
+  return provider;
+}
+
 export async function upsertProvider(input) {
   const providers = await loadProviders();
   const index = input.id ? providers.findIndex(item => item.id === input.id) : -1;
@@ -211,6 +267,8 @@ export async function upsertProvider(input) {
 
   if (provider.isDefault) {
     for (const item of providers) item.isDefault = false;
+  } else if (!providers.some(item => item.enabled && item.isDefault && item.id !== provider.id) && provider.enabled) {
+    provider.isDefault = true;
   }
 
   if (index >= 0) providers[index] = provider;
@@ -221,21 +279,24 @@ export async function upsertProvider(input) {
 
 export async function removeProvider(id) {
   const providers = await loadProviders();
+  const removed = providers.find(item => item.id === id);
   const next = providers.filter(item => item.id !== id);
-  if (next.length === providers.length) throw new Error("Provedor de IA não encontrado.");
+  if (!removed) throw new Error("Provedor de IA não encontrado.");
+
+  if (removed.isDefault) {
+    const replacement = next.find(item => item.enabled);
+    if (replacement) replacement.isDefault = true;
+  }
   await saveProviders(next);
 }
 
 export async function testProvider(id) {
   const provider = await getProviderInternal(id);
-  if (!provider.enabled) throw new Error("O provedor está desativado.");
-  const prompt = "Responda somente com a palavra OK.";
-  const result = provider.type === "ollama"
-    ? await generateOllama(provider, prompt)
-    : provider.type === "custom-rest"
-      ? await generateCustom(provider, prompt)
-      : await generateOpenAICompatible(provider, prompt);
-  return { ok: true, text: result.text.slice(0, 500), status: result.status, elapsedMs: result.elapsedMs };
+  const result = await generateInternal(provider, {
+    systemPrompt: "Você está executando um teste de conexão.",
+    prompt: "Responda somente com a palavra OK.",
+  });
+  return { ok: true, text: result.text.slice(0, 500), status: result.status, elapsedMs: result.elapsedMs, model: result.model };
 }
 
 export async function listProviderModels(id) {
@@ -251,10 +312,10 @@ export async function listProviderModels(id) {
   return Array.isArray(result.data?.data) ? result.data.data.map(item => item.id).filter(Boolean) : [];
 }
 
-export async function generateWithProvider(id, prompt) {
-  const provider = await getProviderInternal(id);
-  if (!provider.enabled) throw new Error("O provedor está desativado.");
-  if (provider.type === "ollama") return generateOllama(provider, prompt);
-  if (provider.type === "custom-rest") return generateCustom(provider, prompt);
-  return generateOpenAICompatible(provider, prompt);
+export async function generateWithProvider(id, request) {
+  return generateInternal(await getProviderInternal(id), request);
+}
+
+export async function generateWithDefaultProvider(request) {
+  return generateInternal(await getDefaultProviderInternal(), request);
 }
