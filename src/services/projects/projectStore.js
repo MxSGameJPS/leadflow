@@ -19,6 +19,10 @@ function normalizeProject(input = {}) {
     source: clean(input.source, 3000) || null,
     template: clean(input.template, 120) || "institutional",
     status: ["draft", "building", "ready", "sent", "approved", "published"].includes(input.status) ? input.status : "draft",
+    folderPath: clean(input.folderPath, 500) || null,
+    aiUsed: Boolean(input.aiUsed),
+    warning: clean(input.warning, 1600) || null,
+    imageCount: Number.isFinite(Number(input.imageCount)) ? Math.max(0, Number(input.imageCount)) : 0,
     createdAt: input.createdAt || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString(),
   };
