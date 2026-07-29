@@ -2,12 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { importLeads } from "../../repositories/leadRepository.js";
+import { listIbgeCities } from "../../services/locations/ibge.js";
 import { searchGooglePlaces } from "../../services/places/googlePlaces.js";
 
 function refreshLeadViews() {
   revalidatePath("/dashboard");
   revalidatePath("/leads");
   revalidatePath("/crm");
+}
+
+export async function listCitiesAction(state) {
+  return listIbgeCities(state);
 }
 
 export async function searchPlacesAction(filters) {
