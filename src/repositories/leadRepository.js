@@ -139,17 +139,38 @@ export async function importLeads(incoming) {
 export async function stats() {
   const leads = await prisma.lead.findMany();
   const today = todayStr();
-  const s = { total: leads.length, byGrade: {}, bySource: {}, withWhatsapp: 0, landingTodo: 0, followupDue: 0, active: 0, won: 0, pipeline: 0, closed: 0 };
+  const s = {
+    total: leads.length,
+    byGrade: {},
+    bySource: {},
+    byStage: {},
+    withWhatsapp: 0,
+    withPhone: 0,
+    withoutContact: 0,
+    landingTodo: 0,
+    followupDue: 0,
+    followupTotal: 0,
+    active: 0,
+    won: 0,
+    lost: 0,
+    pipeline: 0,
+    closed: 0,
+  };
   const ACTIVE = ["contatado", "sem_resposta", "com_resposta", "proposta", "proposta_rejeitada", "negociacao"];
   const PIPE = ["proposta", "proposta_rejeitada", "negociacao"];
 
   for (const l of leads) {
     s.byGrade[l.grade] = (s.byGrade[l.grade] || 0) + 1;
+    s.byStage[l.stage] = (s.byStage[l.stage] || 0) + 1;
     if (l.source) s.bySource[l.source] = (s.bySource[l.source] || 0) + 1;
     if (l.whatsapp) s.withWhatsapp++;
+    if (l.phone) s.withPhone++;
+    if (!l.whatsapp && !l.phone && !l.email && !l.instagram) s.withoutContact++;
     if (l.landingStatus === "todo") s.landingTodo++;
+    if (l.followUpAt) s.followupTotal++;
     if (l.followUpAt && l.followUpAt <= today && l.stage !== "ganho" && l.stage !== "perdido") s.followupDue++;
     if (ACTIVE.includes(l.stage)) s.active++;
+    if (l.stage === "perdido") s.lost++;
     if (l.stage === "ganho") { s.won++; s.closed += (l.proposalValue || 0); }
     if (PIPE.includes(l.stage)) s.pipeline += (l.proposalValue || 0);
   }
