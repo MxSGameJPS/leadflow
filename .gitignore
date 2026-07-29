@@ -6,6 +6,7 @@ data/*.db-wal
 data/*.db-shm
 data/ai-config/
 data/ai-test/
+data/appointments/
 data/backups/
 data/exports/
 data/imports/
