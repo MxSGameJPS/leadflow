@@ -13,6 +13,7 @@ data/lead-workspaces/
 data/projects/
 data/published-sites/
 data/uploads/
+generated-sites/
 .env.local
 .env
 .env.*
