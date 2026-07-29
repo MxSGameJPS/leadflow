@@ -12,6 +12,7 @@ import {
 } from "../services/leads/validation.js";
 
 const ALLOWED = ["externalId", "source", "name", "segment", "city", "location", "address", "score", "grade", "phone", "whatsapp", "email", "instagram", "site", "weakSite", "googleRating", "googleReviews", "followers", "problem", "offer", "approach", "nextAction", "reason", "mapsLink", "bio", "stage", "notes", "proposalValue", "landingStatus", "followUpAt"];
+const PRESERVE_WHEN_EMPTY = ["phone", "whatsapp", "email", "instagram", "site", "address", "mapsLink", "googleRating", "googleReviews", "bio"];
 
 function pickLeadData(o, isPatch = false) {
   const d = {};
@@ -38,6 +39,17 @@ function pickLeadData(o, isPatch = false) {
   }
 
   return validateLeadData(d, { isPatch });
+}
+
+function preserveExistingEnrichment(data, existing) {
+  const merged = { ...data };
+  for (const field of PRESERVE_WHEN_EMPTY) {
+    if ((merged[field] === null || merged[field] === undefined || merged[field] === "") && existing[field]) {
+      merged[field] = existing[field];
+    }
+  }
+  if (!data.site && existing.site) merged.weakSite = existing.weakSite;
+  return merged;
 }
 
 export async function listLeads() {
@@ -92,7 +104,7 @@ export async function setNotes(id, notes) {
 }
 
 // Importa em uma única transação, deduplicando primeiro por externalId e depois por nome + contato.
-// Os campos comerciais produzidos durante o trabalho no CRM são preservados nas atualizações.
+// Os campos comerciais e contatos já enriquecidos são preservados nas atualizações.
 export async function importLeads(incoming) {
   if (!Array.isArray(incoming)) throw new Error("A importação deve receber uma lista de leads.");
 
@@ -109,10 +121,11 @@ export async function importLeads(incoming) {
 
       if (ex) {
         delete data.externalId;
+        const merged = preserveExistingEnrichment(data, ex);
         const saved = await tx.lead.update({
           where: { id: ex.id },
           data: {
-            ...data,
+            ...merged,
             stage: ex.stage,
             notes: ex.notes,
             proposalValue: ex.proposalValue,
