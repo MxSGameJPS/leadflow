@@ -1,42 +1,33 @@
-import { prisma } from "@/lib/prisma";
+import { stats as getStats } from "../../repositories/leadRepository.js";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  let total = 0, byGrade = {}, withWa = 0, err = null;
-  try {
-    total = await prisma.lead.count();
-    const leads = await prisma.lead.findMany({ select: { grade: true, whatsapp: true } });
-    for (const l of leads) {
-      byGrade[l.grade] = (byGrade[l.grade] || 0) + 1;
-      if (l.whatsapp) withWa++;
-    }
-  } catch (e) {
-    err = e.message;
-  }
-
-  const kpis = [
-    { label: "Leads", value: total },
-    { label: "Nota A", value: byGrade.A || 0 },
-    { label: "Nota B", value: byGrade.B || 0 },
-    { label: "Nota C", value: byGrade.C || 0 },
-    { label: "Nota D", value: byGrade.D || 0 },
-    { label: "C/ WhatsApp", value: withWa },
-  ];
+  let s = null, err = null;
+  try { s = await getStats(); } catch (e) { err = e.message; }
+  const kpis = s ? [
+    { label: "Leads", value: s.total },
+    { label: "Nota A", value: s.byGrade.A || 0 },
+    { label: "C/ WhatsApp", value: s.withWhatsapp },
+    { label: "Landings a fazer", value: s.landingTodo },
+    { label: "Retomar hoje", value: s.followupDue },
+    { label: "Em aberto", value: s.active },
+    { label: "Ganhos", value: s.won },
+  ] : [];
 
   return (
     <main className={styles.wrap}>
       <header className={styles.head}>
         <div className={styles.mark} aria-hidden="true" />
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 className={styles.title}>LeadFlow</h1>
-          <div className={styles.sub}>Dashboard — Fase 1 (scaffold)</div>
+          <div className={styles.sub}>Dashboard</div>
         </div>
+        <a className={styles.cta} href="/leads">Abrir Pipeline &rarr;</a>
       </header>
-
       {err ? (
-        <div className={styles.err}>Erro ao ler o banco: {err}<br/>Rode as migrations (prisma migrate dev).</div>
+        <div className={styles.err}>Erro ao ler o banco: {err}</div>
       ) : (
         <>
           <section className={styles.kpis}>
@@ -48,10 +39,7 @@ export default async function DashboardPage() {
             ))}
           </section>
           <p className={styles.note}>
-            Banco SQLite ativo e vazio (base em branco). Importe leads via CSV/JSON na Fase 5.
-          </p>
-          <p className={styles.note}>
-            Proximas fases: services (logica portada do HTML), Kanban 9 colunas, drawer completo, import/export.
+            {s && s.total === 0 ? "Banco vazio. Abra o Pipeline e importe seus leads (CSV/JSON)." : "Acompanhe o funil no Pipeline."}
           </p>
         </>
       )}
