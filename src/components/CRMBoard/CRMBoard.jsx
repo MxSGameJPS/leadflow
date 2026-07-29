@@ -1,0 +1,236 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { STAGES, STAGE_IDS } from "../../services/leads/stages.js";
+import { createLeadAction, moveStageAction } from "../../app/actions/leads.js";
+import s from "./CRMBoard.module.css";
+
+const STAGE_COLOR = {
+  novo: "#8b949e",
+  contatado: "#1473e6",
+  sem_resposta: "#f59e0b",
+  com_resposta: "#0ea5a5",
+  proposta: "#6d5ce7",
+  proposta_rejeitada: "#ef4444",
+  negociacao: "#f2760c",
+  ganho: "#22c55e",
+  perdido: "#ef4444",
+};
+
+const GRADE_LABEL = { A: "Quente", B: "Morno", C: "Em análise", D: "Frio" };
+
+function csvValue(value) {
+  const text = String(value ?? "");
+  return /[;\n\r\"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function isPossibleMobile(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  const local = digits.startsWith("55") ? digits.slice(2) : digits;
+  return /^\d{2}9\d{8}$/.test(local);
+}
+
+function whatsappUrl(lead) {
+  const raw = lead.whatsapp || (isPossibleMobile(lead.phone) ? lead.phone : "");
+  let digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (!digits.startsWith("55")) digits = `55${digits}`;
+  return `https://wa.me/${digits}`;
+}
+
+export default function CRMBoard({ initialLeads = [] }) {
+  const router = useRouter();
+  const [leads, setLeads] = useState(initialLeads);
+  const [search, setSearch] = useState("");
+  const [quick, setQuick] = useState("all");
+  const [sort, setSort] = useState("recent");
+  const [dragOver, setDragOver] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [form, setForm] = useState({ name: "", segment: "", city: "", location: "", phone: "" });
+
+  useEffect(() => setLeads(initialLeads), [initialLeads]);
+
+  const visible = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("pt-BR");
+    const filtered = leads.filter(lead => {
+      if (query) {
+        const haystack = [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("pt-BR");
+        if (!haystack.includes(query)) return false;
+      }
+      if (quick === "no-site" && lead.site && !lead.weakSite) return false;
+      if (quick === "hot" && lead.grade !== "A") return false;
+      if (quick === "warm" && lead.grade !== "B") return false;
+      if (quick === "score" && Number(lead.score || 0) < 50) return false;
+      if (quick === "phone" && !lead.phone && !lead.whatsapp) return false;
+      return true;
+    });
+
+    return filtered.sort((a, b) => {
+      if (sort === "score") return Number(b.score || 0) - Number(a.score || 0);
+      if (sort === "name") return String(a.name).localeCompare(String(b.name), "pt-BR");
+      return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+    });
+  }, [leads, quick, search, sort]);
+
+  const byStage = useMemo(() => {
+    const grouped = Object.fromEntries(STAGE_IDS.map(id => [id, []]));
+    for (const lead of visible) {
+      if (grouped[lead.stage]) grouped[lead.stage].push(lead);
+    }
+    return grouped;
+  }, [visible]);
+
+  async function moveLead(leadId, stage) {
+    const previous = leads;
+    setLeads(current => current.map(lead => lead.id === leadId ? { ...lead, stage } : lead));
+    try {
+      await moveStageAction(leadId, stage);
+      router.refresh();
+    } catch (error) {
+      setLeads(previous);
+      setNotice(`Erro ao mover lead: ${error.message}`);
+    }
+  }
+
+  async function createLead(event) {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      const created = await createLeadAction({
+        ...form,
+        source: "Manual",
+        stage: "novo",
+        score: 10,
+        grade: "D",
+        weakSite: true,
+      });
+      setLeads(current => [created, ...current]);
+      setForm({ name: "", segment: "", city: "", location: "", phone: "" });
+      setCreating(false);
+      router.refresh();
+    } catch (error) {
+      setNotice(`Erro ao criar lead: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function exportCsv() {
+    const header = ["Nome", "Categoria", "Cidade", "Estado", "Telefone", "WhatsApp", "Site", "Score", "Nota", "Etapa"];
+    const rows = leads.map(lead => [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp, lead.site, lead.score, lead.grade, lead.stage]);
+    const content = [header, ...rows].map(row => row.map(csvValue).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `leadflow-crm-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
+  return <main className={s.page}>
+    <header className={s.header}>
+      <div>
+        <h1>CRM</h1>
+        <p>Filtre, priorize e gerencie o contato com cada lead.</p>
+      </div>
+    </header>
+
+    <section className={s.toolbar}>
+      <input className={s.search} value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, categoria, cidade ou telefone..." />
+      <div className={s.toolbarRow}>
+        <div className={s.quickFilters}>
+          {[
+            ["all", "Todos"],
+            ["no-site", "Sem site próprio"],
+            ["hot", "Nota A (Quente)"],
+            ["warm", "Nota B (Morno)"],
+            ["score", "Score 50+"],
+            ["phone", "Com telefone"],
+          ].map(([value, label]) => <button key={value} className={quick === value ? s.quickActive : ""} onClick={() => setQuick(value)}>{label}</button>)}
+        </div>
+        <div className={s.actions}>
+          <button className={s.primary} onClick={() => setCreating(true)}>+ Criar lead</button>
+          <button onClick={exportCsv}>Exportar</button>
+          <select value={sort} onChange={event => setSort(event.target.value)}>
+            <option value="recent">Ordenar: mais recentes</option>
+            <option value="score">Ordenar: maior score</option>
+            <option value="name">Ordenar: nome</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    {notice && <div className={s.notice}>{notice}</div>}
+    <div className={s.counter}>{visible.length} lead{visible.length === 1 ? "" : "s"}</div>
+
+    <section className={s.board}>
+      {STAGES.map(stage => <div
+        key={stage.id}
+        className={`${s.column} ${dragOver === stage.id ? s.dragOver : ""}`}
+        onDragOver={event => { event.preventDefault(); setDragOver(stage.id); }}
+        onDragLeave={() => setDragOver(current => current === stage.id ? "" : current)}
+        onDrop={event => {
+          event.preventDefault();
+          setDragOver("");
+          const id = event.dataTransfer.getData("text/plain");
+          if (id) moveLead(id, stage.id);
+        }}
+      >
+        <div className={s.columnHeader}>
+          <span className={s.stageDot} style={{ background: STAGE_COLOR[stage.id] }} />
+          <strong>{stage.label}</strong>
+          <span>{byStage[stage.id]?.length || 0}</span>
+        </div>
+        <small className={s.columnSub}>{stage.sub}</small>
+        <div className={s.columnBody}>
+          {(byStage[stage.id] || []).length === 0
+            ? <div className={s.empty}>Sem leads</div>
+            : byStage[stage.id].map(lead => {
+              const wa = whatsappUrl(lead);
+              return <article
+                key={lead.id}
+                className={s.card}
+                draggable
+                onDragStart={event => event.dataTransfer.setData("text/plain", lead.id)}
+                onClick={() => router.push(`/crm/${lead.id}`)}
+              >
+                <div className={s.cardTop}>
+                  <span className={`${s.score} ${s[`grade${lead.grade}`]}`}>{lead.score}</span>
+                  <span className={`${s.temperature} ${s[`grade${lead.grade}`]}`}>{GRADE_LABEL[lead.grade] || lead.grade}</span>
+                  <button aria-label={`Abrir ${lead.name}`} onClick={event => { event.stopPropagation(); router.push(`/crm/${lead.id}`); }}>›</button>
+                </div>
+                <h2 title={lead.name}>{lead.name}</h2>
+                <p>{lead.segment || "Sem categoria"} · {[lead.city, lead.location].filter(Boolean).join(", ") || "Local não informado"}</p>
+                <div className={s.cardActions}>
+                  {lead.phone ? <a href={`tel:${lead.phone}`} onClick={event => event.stopPropagation()}>Ligar</a> : <span>Sem telefone</span>}
+                  {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>{lead.whatsapp ? "WhatsApp" : "Testar WhatsApp"}</a> : <span>Sem WhatsApp</span>}
+                </div>
+              </article>;
+            })}
+        </div>
+      </div>)}
+    </section>
+
+    {creating && <div className={s.modalBackdrop} onMouseDown={() => !saving && setCreating(false)}>
+      <form className={s.modal} onSubmit={createLead} onMouseDown={event => event.stopPropagation()}>
+        <div className={s.modalHead}><div><h2>Criar lead</h2><p>Cadastre manualmente uma oportunidade no CRM.</p></div><button type="button" onClick={() => setCreating(false)}>×</button></div>
+        <label><span>Nome da empresa</span><input autoFocus required value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} /></label>
+        <div className={s.formGrid}>
+          <label><span>Categoria</span><input value={form.segment} onChange={event => setForm(current => ({ ...current, segment: event.target.value }))} /></label>
+          <label><span>Telefone</span><input value={form.phone} onChange={event => setForm(current => ({ ...current, phone: event.target.value }))} /></label>
+          <label><span>Cidade</span><input value={form.city} onChange={event => setForm(current => ({ ...current, city: event.target.value }))} /></label>
+          <label><span>Estado</span><input maxLength={40} value={form.location} onChange={event => setForm(current => ({ ...current, location: event.target.value }))} /></label>
+        </div>
+        <div className={s.modalActions}><button type="button" onClick={() => setCreating(false)}>Cancelar</button><button className={s.primary} disabled={saving}>{saving ? "Salvando..." : "Criar lead"}</button></div>
+      </form>
+    </div>}
+  </main>;
+}
