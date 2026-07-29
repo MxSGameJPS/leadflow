@@ -54,7 +54,10 @@ export function classifyWebsite(url) {
 export function normalizePhoneDigits(phone, country = "BR") {
   let digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return null;
-  if (country === "BR" && !digits.startsWith("55")) digits = `55${digits}`;
+  if (country === "BR") {
+    if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+    else if ((digits.length !== 12 && digits.length !== 13) || !digits.startsWith("55")) return null;
+  }
   return digits;
 }
 
