@@ -27,7 +27,21 @@ export default function Board({ initialLeads }) {
 
   function notify(m) { setToast(m); clearTimeout(window.__lf_t); window.__lf_t = setTimeout(() => setToast(""), 2600); }
   function patchLocal(id, patch) { setLeads(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l)); }
-  async function run(fn, id, patch, msg) { if (patch) patchLocal(id, patch); try { await fn(); } catch (e) { notify("Erro: " + e.message); } router.refresh(); if (msg) notify(msg); }
+  async function run(fn, id, patch, msg) {
+    const before = id ? leads.find(l => l.id === id) : null;
+    if (patch) patchLocal(id, patch);
+    try {
+      await fn();
+      router.refresh();
+      if (msg) notify(msg);
+      return true;
+    } catch (e) {
+      if (before) patchLocal(id, before);
+      router.refresh();
+      notify("Erro: " + e.message);
+      return false;
+    }
+  }
 
   const open = leads.find(l => l.id === openId) || null;
   const segs = useMemo(() => [...new Set(leads.map(l => l.segment).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")), [leads]);
@@ -66,7 +80,25 @@ export default function Board({ initialLeads }) {
 
   async function onFile(e) { const file = e.target.files[0]; if (!file) return; const buf = await file.arrayBuffer(); const text = decodeSmart(buf); try { const res = await A.importTextAction(text, file.name); router.refresh(); notify("Importado: " + res.added + " novos, " + res.updated + " atualizados"); } catch (err) { notify("Falha: " + err.message); } e.target.value = ""; }
   function exportJson() { const blob = new Blob([JSON.stringify(leads, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "leadflow_backup_" + today + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); notify("Backup exportado"); }
-  async function clearAll() { if (!leads.length) { notify("Já está vazio"); return; } if (!confirm("Apagar TODOS os " + leads.length + " leads?")) return; setLeads([]); await A.clearAllAction(); router.refresh(); notify("Quadro limpo"); }
+  async function clearAll() {
+    if (!leads.length) { notify("Já está vazio"); return; }
+    const confirmation = window.prompt("Esta ação apagará TODOS os " + leads.length + " leads.\n\nDigite APAGAR para confirmar:");
+    if (confirmation !== "APAGAR") { notify("Exclusão cancelada"); return; }
+
+    const snapshot = leads;
+    exportJson();
+    setLeads([]);
+    try {
+      await A.clearAllAction("APAGAR");
+      setOpenId(null);
+      router.refresh();
+      notify("Quadro limpo — backup exportado");
+    } catch (e) {
+      setLeads(snapshot);
+      router.refresh();
+      notify("Erro: " + e.message);
+    }
+  }
   async function advance(l) { const nx = l.stage === "negociacao" ? "ganho" : NEXT[l.stage]; if (!nx) return; await run(() => A.moveStageAction(l.id, nx), l.id, { stage: nx }, l.name + " → " + STAGES.find(x => x.id === nx).label); }
 
   return (
@@ -79,7 +111,7 @@ export default function Board({ initialLeads }) {
           <a className={s.btn + " " + s.btnGhost} href="/dashboard">Dashboard</a>
           <button className={s.btn + " " + s.btnGhost} onClick={toggleTheme}>Tema</button>
           <button className={s.btn + " " + s.btnGhost} onClick={exportJson}>Backup</button>
-          <label className={s.btn + " " + s.btnPrimary}>Importar CSV<input type="file" accept=".csv,.json" hidden onChange={onFile} /></label>
+          <label className={s.btn + " " + s.btnPrimary}>Importar CSV/JSON<input type="file" accept=".csv,.json" hidden onChange={onFile} /></label>
         </div>
         <div className={s.kpis}>{kpis.map(k => (<div key={k.l} className={s.kpi + (k.c ? " " + k.c : "")}><span className={s.kpiV}>{k.v}</span><span className={s.kpiL}>{k.l}</span></div>))}</div>
         <div className={s.filters}>
@@ -98,7 +130,7 @@ export default function Board({ initialLeads }) {
 
       <main className={s.board}>
         {!leads.length ? (
-          <div className={s.boardEmpty}><h3>Comece importando seus leads</h3><p>O quadro está vazio. Clique em <b>Importar CSV</b> e envie sua planilha (Google Maps ou Instagram em CSV/JSON).</p></div>
+          <div className={s.boardEmpty}><h3>Comece importando seus leads</h3><p>O quadro está vazio. Clique em <b>Importar CSV/JSON</b> e envie sua planilha do Google Maps ou Instagram.</p></div>
         ) : STAGES.map(stage => {
           const items = byStage[stage.id] || [];
           return (
@@ -177,11 +209,11 @@ function Drawer({ l, onClose, run, notify }) {
 
   return (<>
     <div className={s.scrim} onClick={onClose} />
-    <aside className={s.drawer}>
+    <aside className={s.drawer} aria-label={"Detalhes do lead " + l.name}>
       <div className={s.drawerHead}>
         <div className={s.grade} style={{ width: 34, height: 34, fontSize: 15, background: GBG[l.grade], color: GFILL[l.grade] }}>{l.grade}</div>
         <div style={{ flex: 1 }}><h2>{l.name}</h2><div className={s.locLine}>📍 {knownLoc ? l.location : "Local não informado"}</div></div>
-        <button className={s.closeX} onClick={onClose}>×</button>
+        <button className={s.closeX} onClick={onClose} aria-label="Fechar detalhes">×</button>
       </div>
       <div className={s.drawerBody}>
         <div className={s.scorebar}><span className={s.tag}>{l.source}</span><div className={s.track}><div className={s.fill} style={{ width: (l.score || 0) + "%", background: GFILL[l.grade] }} /></div><span className={s.num} style={{ color: GFILL[l.grade] }}>{l.score}</span></div>
