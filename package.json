@@ -1,0 +1,23 @@
+{
+  "name": "leadflow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "seed": "node prisma/seed.js",
+    "migrate": "prisma migrate dev --name init",
+    "test": "node tests/services.test.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "6.2.1",
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "prisma": "6.2.1"
+  }
+}
