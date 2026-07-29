@@ -9,7 +9,9 @@
     "start": "next start -p 3100",
     "seed": "node prisma/seed.js",
     "migrate": "prisma migrate dev --name init",
-    "test": "node tests/services.test.mjs"
+    "test:services": "node tests/services.test.mjs",
+    "test:repo": "node tests/repo.test.mjs",
+    "test": "npm run test:services && npm run test:repo"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",
