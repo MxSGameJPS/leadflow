@@ -11,5 +11,6 @@ export async function saveLeadWorkspaceAction(leadId, patch) {
   const saved = await saveLeadWorkspace(lead.id, patch || {});
   revalidatePath(`/crm/${lead.id}`);
   revalidatePath("/agendamentos");
+  revalidatePath("/cobrancas");
   return saved;
 }
