@@ -1,9 +1,9 @@
 import { listLeads } from "../../repositories/leadRepository.js";
-import Board from "../../components/Board/Board.jsx";
+import LeadList from "../../components/LeadList/LeadList.jsx";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage() {
   const leads = await listLeads();
-  return <Board initialLeads={leads} />;
+  return <LeadList initialLeads={leads} />;
 }
