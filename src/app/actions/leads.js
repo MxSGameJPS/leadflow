@@ -11,6 +11,7 @@ function refresh() {
   revalidatePath("/leads");
   revalidatePath("/crm");
   revalidatePath("/agendamentos");
+  revalidatePath("/cobrancas");
 }
 
 export async function createLeadAction(data) { const r = await repo.createLead(data); refresh(); return r; }
