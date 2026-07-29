@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { decodeSmart } from "../../services/imports/parseLeads.js";
+import { buildPlacesCsv, placesCsvFilename } from "../../services/exports/placeResultsCsv.js";
 import { importTextAction } from "../../app/actions/leads.js";
 import { addPlacesToCrmAction, listCitiesAction, searchPlacesAction } from "../../app/actions/places.js";
 import s from "./LeadList.module.css";
@@ -52,6 +53,7 @@ function whatsappLink(phone) {
 
 function ResultCard({ item, checked, onToggle, onAdd, busy }) {
   const wa = item.possibleWhatsApp ? whatsappLink(item.phone) : null;
+
   return <article className={`${s.resultCard} ${checked ? s.resultSelected : ""}`}>
     <div className={s.resultTop}>
       <button type="button" className={s.check} aria-label={`Selecionar ${item.name}`} onClick={onToggle}>{checked ? "✓" : ""}</button>
@@ -199,6 +201,24 @@ export default function LeadList({ initialLeads = [] }) {
     setSelected(current => current.size === places.length ? new Set() : new Set(places.map(item => item.placeId)));
   }
 
+  function exportPlaces(items, scope) {
+    try {
+      const csv = buildPlacesCsv(items, filters);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = placesCsvFilename(filters, scope);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setPlacesNotice(`${items.length} leads exportados em CSV${scope === "selecionados" ? " a partir da seleção" : " a partir da busca"}.`);
+    } catch (error) {
+      setPlacesNotice("Erro ao exportar: " + error.message);
+    }
+  }
+
   async function sendPlacesToCrm(items) {
     const ids = items.map(item => item.placeId);
     setAddingIds(current => new Set([...current, ...ids]));
@@ -246,7 +266,7 @@ export default function LeadList({ initialLeads = [] }) {
 
   return <main className={s.page}>
     <header className={s.header}>
-      <div><h1>Buscar Leads</h1><p>Encontre empresas automaticamente no Google Places e envie as oportunidades para o CRM.</p></div>
+      <div><h1>Buscar Leads</h1><p>Encontre empresas automaticamente no Google Places, exporte os resultados e envie as oportunidades para o CRM.</p></div>
       <div className={s.actions}>
         <a href="/crm">Abrir CRM</a>
         <label className={s.secondary}>{busy ? "Importando…" : "Importar CSV/JSON"}<input type="file" accept=".csv,.json" hidden disabled={busy} onChange={importFile} /></label>
@@ -275,7 +295,12 @@ export default function LeadList({ initialLeads = [] }) {
     {places.length > 0 && <section className={s.resultsSection}>
       <div className={s.resultsHeader}>
         <div><strong>{places.length}</strong><span>resultados</span><strong className={s.opportunityNumber}>{withoutOwnSite}</strong><span>sem site próprio</span></div>
-        <div><button type="button" onClick={toggleAllPlaces}>{selected.size === places.length ? "Limpar seleção" : "Selecionar todos"}</button><button type="button" className={s.sendSelected} disabled={!selectedItems.length || selectedItems.some(item => addingIds.has(item.placeId))} onClick={() => sendPlacesToCrm(selectedItems)}>Enviar selecionados ({selectedItems.length})</button></div>
+        <div>
+          <button type="button" onClick={toggleAllPlaces}>{selected.size === places.length ? "Limpar seleção" : "Selecionar todos"}</button>
+          <button type="button" onClick={() => exportPlaces(places, "todos")}>Exportar CSV ({places.length})</button>
+          <button type="button" disabled={!selectedItems.length} onClick={() => exportPlaces(selectedItems, "selecionados")}>Exportar selecionados ({selectedItems.length})</button>
+          <button type="button" className={s.sendSelected} disabled={!selectedItems.length || selectedItems.some(item => addingIds.has(item.placeId))} onClick={() => sendPlacesToCrm(selectedItems)}>Enviar selecionados ({selectedItems.length})</button>
+        </div>
       </div>
       <div className={s.resultsGrid}>{places.map(item => <ResultCard key={item.placeId} item={item} checked={selected.has(item.placeId)} onToggle={() => togglePlace(item.placeId)} onAdd={() => sendPlacesToCrm([item])} busy={addingIds.has(item.placeId)} />)}</div>
     </section>}
