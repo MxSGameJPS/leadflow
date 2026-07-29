@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 const PROJECT_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -34,7 +34,7 @@ export async function createSiteProject(input = {}) {
   const now = new Date().toISOString();
   const project = normalizeProject({
     ...input,
-    id: `prj_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`,
+    id: `prj_${Date.now()}_${randomBytes(3).toString("hex")}`,
     createdAt: now,
     updatedAt: now,
   });
