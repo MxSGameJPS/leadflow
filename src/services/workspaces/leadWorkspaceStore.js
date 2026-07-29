@@ -10,11 +10,19 @@ const DEFAULT_WORKSPACE = Object.freeze({
     type: "Reunião",
     time: "09:00",
     notes: "",
+    status: "pending",
   },
   sale: {
     paymentTerms: "",
     meetingNotes: "",
     outcome: "open",
+    projectValue: 0,
+    paymentMethod: "Pix",
+    installments: 1,
+    paidInstallments: 0,
+    amountPaid: 0,
+    firstDueDate: "",
+    paymentStatus: "pending",
   },
 });
 
@@ -28,9 +36,24 @@ function cleanText(value, max = 6000) {
   return String(value ?? "").replace(/\u0000/g, "").slice(0, max);
 }
 
+function cleanInteger(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number.parseInt(String(value ?? "").replace(/[^\d-]/g, ""), 10);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function cleanDate(value) {
+  const date = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+}
+
 function normalizeWorkspace(input = {}) {
   const appointment = input.appointment && typeof input.appointment === "object" ? input.appointment : {};
   const sale = input.sale && typeof input.sale === "object" ? input.sale : {};
+  const installments = cleanInteger(sale.installments, DEFAULT_WORKSPACE.sale.installments, 1, 120);
+  const paidInstallments = cleanInteger(sale.paidInstallments, DEFAULT_WORKSPACE.sale.paidInstallments, 0, installments);
+  const projectValue = cleanInteger(sale.projectValue, DEFAULT_WORKSPACE.sale.projectValue, 0);
+  const amountPaid = cleanInteger(sale.amountPaid, DEFAULT_WORKSPACE.sale.amountPaid, 0, projectValue || Number.MAX_SAFE_INTEGER);
 
   return {
     callScript: cleanText(input.callScript),
@@ -39,11 +62,19 @@ function normalizeWorkspace(input = {}) {
       type: cleanText(appointment.type || DEFAULT_WORKSPACE.appointment.type, 80),
       time: /^\d{2}:\d{2}$/.test(String(appointment.time || "")) ? String(appointment.time) : DEFAULT_WORKSPACE.appointment.time,
       notes: cleanText(appointment.notes, 2000),
+      status: ["pending", "completed", "cancelled"].includes(appointment.status) ? appointment.status : DEFAULT_WORKSPACE.appointment.status,
     },
     sale: {
       paymentTerms: cleanText(sale.paymentTerms, 1000),
       meetingNotes: cleanText(sale.meetingNotes, 5000),
       outcome: ["open", "won", "lost"].includes(sale.outcome) ? sale.outcome : "open",
+      projectValue,
+      paymentMethod: cleanText(sale.paymentMethod || DEFAULT_WORKSPACE.sale.paymentMethod, 80),
+      installments,
+      paidInstallments,
+      amountPaid,
+      firstDueDate: cleanDate(sale.firstDueDate),
+      paymentStatus: ["pending", "partial", "paid", "overdue"].includes(sale.paymentStatus) ? sale.paymentStatus : DEFAULT_WORKSPACE.sale.paymentStatus,
     },
     updatedAt: input.updatedAt || null,
   };
