@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { setFollowUpAction } from "../../app/actions/leads.js";
+import { createAppointmentAction, updateAppointmentStatusAction } from "../../app/actions/appointments.js";
 import { saveLeadWorkspaceAction } from "../../app/actions/workspaces.js";
 import s from "./AppointmentsList.module.css";
 
@@ -34,12 +34,14 @@ function sameMonth(a, b) {
 
 function eventData(item) {
   return {
-    id: item.lead.id,
-    date: item.lead.followUpAt,
-    time: item.workspace.appointment?.time || "09:00",
-    type: item.workspace.appointment?.type || "Follow-up",
-    notes: item.workspace.appointment?.notes || "",
-    status: item.workspace.appointment?.status || "pending",
+    id: item.appointment.id,
+    leadId: item.lead.id,
+    date: item.appointment.date,
+    time: item.appointment.time || "09:00",
+    type: item.appointment.type || "Follow-up",
+    notes: item.appointment.notes || "",
+    status: item.appointment.status || "pending",
+    storage: item.storage || "store",
     lead: item.lead,
   };
 }
@@ -69,15 +71,17 @@ export default function AppointmentsList({ appointments = [], leads = [] }) {
 
   const weekStart = useMemo(() => startOfWeek(fromIso(selectedDay)), [selectedDay]);
   const weekEnd = useMemo(() => { const date = new Date(weekStart); date.setDate(date.getDate() + 6); return date; }, [weekStart]);
+  const currentWeekStart = useMemo(() => startOfWeek(today), [today]);
+  const currentWeekEnd = useMemo(() => { const date = new Date(currentWeekStart); date.setDate(date.getDate() + 6); return date; }, [currentWeekStart]);
   const stats = useMemo(() => {
     const todayCount = events.filter(event => event.date === todayIso && event.status === "pending").length;
     const weekCount = events.filter(event => {
       const date = fromIso(event.date);
-      return date >= weekStart && date <= weekEnd && event.status === "pending";
+      return date >= currentWeekStart && date <= currentWeekEnd && event.status === "pending";
     }).length;
     const pending = events.filter(event => event.status === "pending").length;
     return { todayCount, weekCount, pending };
-  }, [events, todayIso, weekStart, weekEnd]);
+  }, [events, todayIso, currentWeekStart, currentWeekEnd]);
 
   const monthDays = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1, 12);
@@ -117,8 +121,7 @@ export default function AppointmentsList({ appointments = [], leads = [] }) {
     setBusy("save");
     setNotice("");
     try {
-      await setFollowUpAction(form.leadId, form.date);
-      await saveLeadWorkspaceAction(form.leadId, { appointment: { type: form.type, time: form.time, notes: form.notes, status: "pending" } });
+      await createAppointmentAction(form);
       setModal(false);
       setSelectedDay(form.date);
       setCursor(new Date(fromIso(form.date).getFullYear(), fromIso(form.date).getMonth(), 1, 12));
@@ -134,10 +137,12 @@ export default function AppointmentsList({ appointments = [], leads = [] }) {
   async function complete(event) {
     setBusy(event.id);
     setNotice("");
+    const nextStatus = event.status === "completed" ? "pending" : "completed";
     try {
-      await saveLeadWorkspaceAction(event.id, { appointment: { status: event.status === "completed" ? "pending" : "completed" } });
+      if (event.storage === "legacy") await saveLeadWorkspaceAction(event.leadId, { appointment: { status: nextStatus } });
+      else await updateAppointmentStatusAction(event.id, nextStatus);
       router.refresh();
-      setNotice(event.status === "completed" ? "Agendamento reaberto." : "Agendamento concluído.");
+      setNotice(nextStatus === "pending" ? "Agendamento reaberto." : "Agendamento concluído.");
     } catch (error) {
       setNotice(`Erro: ${error.message}`);
     } finally {
@@ -146,8 +151,8 @@ export default function AppointmentsList({ appointments = [], leads = [] }) {
   }
 
   function renderEvent(event, compact = false) {
-    return <article key={`${event.id}-${event.date}`} className={`${s.event} ${event.status === "completed" ? s.eventDone : ""}`}>
-      <a href={`/crm/${event.id}`}><strong>{event.time} · {event.type}</strong><span>{event.lead.name}</span>{!compact && event.notes && <small>{event.notes}</small>}</a>
+    return <article key={event.id} className={`${s.event} ${event.status === "completed" ? s.eventDone : ""}`}>
+      <a href={`/crm/${event.leadId}`}><strong>{event.time} · {event.type}</strong><span>{event.lead.name}</span>{!compact && event.notes && <small>{event.notes}</small>}</a>
       {!compact && <button disabled={busy === event.id} onClick={() => complete(event)}>{event.status === "completed" ? "Reabrir" : "Concluir"}</button>}
     </article>;
   }
