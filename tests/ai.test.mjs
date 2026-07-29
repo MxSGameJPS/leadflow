@@ -107,6 +107,13 @@ try {
   t("prompt contém lead", prompt.prompt.includes("Mercado Silva"));
   t("prompt exige fatos reais", prompt.systemPrompt.includes("Não invente"));
 
+  const callPrompt = buildLeadMessagePrompt({
+    kind: "call",
+    lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos" },
+  });
+  t("prompt aceita roteiro de ligação", callPrompt.kind === "call");
+  t("roteiro de ligação pede perguntas abertas", callPrompt.prompt.includes("perguntas abertas"));
+
   const leadMessage = await generateLeadMessage({
     kind: "followup",
     lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos" },
