@@ -4,6 +4,7 @@ import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/mes
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
 import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
+import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
 
 let pass = 0, fail = 0;
@@ -37,6 +38,10 @@ t("parsed nome", parsed[0].name === "Bar do Ze");
 t("parsed whatsapp", parsed[0].whatsapp === "5547999999999");
 t("parsed location por DDD", /DDD 47|Joinville/.test(parsed[0].location));
 t("parsed grade calculado", ["A", "B", "C", "D"].includes(parsed[0].grade));
+
+t("IBGE mapeia RS para 43", getIbgeStateId("rs") === 43);
+const normalizedCities = normalizeIbgeCities([{ nome: "Santa Maria" }, { nome: "Dois Irmãos" }, { nome: "Santa Maria" }, { nome: "" }]);
+t("IBGE ordena e remove cidades duplicadas", normalizedCities.join("|") === "Dois Irmãos|Santa Maria");
 
 t("classifica Instagram como presença fraca", classifyWebsite("https://www.instagram.com/exemplo").weak === true);
 t("classifica domínio próprio", classifyWebsite("https://exemplo.com.br").hasOwnSite === true);
