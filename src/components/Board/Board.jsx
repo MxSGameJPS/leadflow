@@ -9,6 +9,7 @@ import { BRL, fmtDate, fmtDateShort, todayStr, plusDays } from "../../services/l
 import { locShort, UNKNOWN_LOC } from "../../services/leads/location.js";
 import { decodeSmart } from "../../services/imports/parseLeads.js";
 import * as A from "../../app/actions/leads.js";
+import * as AI from "../../app/actions/ai.js";
 
 const STAGE_DOT = { novo: "var(--accent)", contatado: "var(--gC)", sem_resposta: "var(--warn)", com_resposta: "#0ea5a5", proposta: "#7c5cff", proposta_rejeitada: "var(--danger)", negociacao: "var(--accent)", ganho: "var(--won)", perdido: "var(--lost)" };
 const GBG = { A: "var(--gA-bg)", B: "var(--gB-bg)", C: "var(--gC-bg)", D: "var(--gD-bg)" };
@@ -25,7 +26,7 @@ export default function Board({ initialLeads }) {
   useEffect(() => { setLeads(initialLeads || []); }, [initialLeads]);
   useEffect(() => { const t = localStorage.getItem("leadflow_theme"); if (t) document.documentElement.setAttribute("data-theme", t); }, []);
 
-  function notify(m) { setToast(m); clearTimeout(window.__lf_t); window.__lf_t = setTimeout(() => setToast(""), 2600); }
+  function notify(m) { setToast(m); clearTimeout(window.__lf_t); window.__lf_t = setTimeout(() => setToast(""), 3200); }
   function patchLocal(id, patch) { setLeads(ls => ls.map(l => l.id === id ? { ...l, ...patch } : l)); }
   async function run(fn, id, patch, msg) {
     const before = id ? leads.find(l => l.id === id) : null;
@@ -109,6 +110,7 @@ export default function Board({ initialLeads }) {
           <div className={s.search}><input placeholder="Buscar nome, segmento, local…" value={f.search} onChange={e => setF({ ...f, search: e.target.value })} /></div>
           <div className={s.spacer} />
           <a className={s.btn + " " + s.btnGhost} href="/dashboard">Dashboard</a>
+          <a className={s.btn + " " + s.btnGhost} href="/configuracoes/ia">IA</a>
           <button className={s.btn + " " + s.btnGhost} onClick={toggleTheme}>Tema</button>
           <button className={s.btn + " " + s.btnGhost} onClick={exportJson}>Backup</button>
           <label className={s.btn + " " + s.btnPrimary}>Importar CSV/JSON<input type="file" accept=".csv,.json" hidden onChange={onFile} /></label>
@@ -194,10 +196,31 @@ function Drawer({ l, onClose, run, notify }) {
   const [msg, setMsg] = useState(buildMessages(l)[msgKindForStage(l.stage)]);
   const [val, setVal] = useState(l.proposalValue || 0);
   const [notes, setNotes] = useState(l.notes || "");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiInfo, setAiInfo] = useState("");
   const knownLoc = l.location && l.location !== UNKNOWN_LOC;
   const showFu = ["proposta_rejeitada", "sem_resposta", "perdido"].includes(l.stage);
 
-  useEffect(() => { setMsg(buildMessages(l)[kind]); }, [kind, l]);
+  useEffect(() => {
+    setMsg(buildMessages(l)[kind]);
+    setAiInfo("");
+  }, [kind, l.id]);
+
+  async function generateWithAI() {
+    setAiBusy(true);
+    setAiInfo("");
+    try {
+      const result = await AI.generateLeadMessageAction({ lead: l, kind, currentMessage: msg });
+      setMsg(result.text);
+      setAiInfo(`Gerada por ${result.providerName}${result.model ? " · " + result.model : ""} · ${result.elapsedMs} ms`);
+      notify("Mensagem gerada com IA — revise antes de enviar");
+    } catch (error) {
+      setAiInfo("Falha: " + error.message);
+      notify("IA: " + error.message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   const contacts = [];
   if (l.whatsapp) contacts.push(<a key="wa" className={s.wa} href={waFor(l, kind)} target="_blank" rel="noopener">WhatsApp</a>);
@@ -235,9 +258,14 @@ function Drawer({ l, onClose, run, notify }) {
 
         <div className={s.field}><label>Mensagem de WhatsApp</label>
           <div className={s.tabs}>{[["initial", "1º contato"], ["followup", "Follow-up"], ["recovery", "Recuperar"]].map(([k, lab]) => (<button key={k} className={kind === k ? s.tabActive : ""} onClick={() => setKind(k)}>{lab}</button>))}</div>
-          <textarea className={s.msg} value={msg} onChange={e => setMsg(e.target.value)} />
-          <div className={s.row}><button className={s.miniBtn} onClick={() => { navigator.clipboard.writeText(msg); notify("Mensagem copiada"); }}>Copiar</button>{l.whatsapp && <button className={s.miniBtn + " " + s.wa} onClick={() => { window.open("https://wa.me/" + l.whatsapp + "?text=" + encodeURIComponent(msg), "_blank", "noopener"); if (l.stage === "novo") run(() => A.moveStageAction(l.id, "contatado"), l.id, { stage: "contatado" }, "Movido p/ Contatado"); }}>Enviar no WhatsApp</button>}</div>
-          <div className={s.hint}>Personalize antes de enviar.</div>
+          <textarea className={s.msg} value={msg} onChange={e => { setMsg(e.target.value); setAiInfo(""); }} />
+          <div className={s.row}>
+            <button className={s.miniBtn} onClick={generateWithAI} disabled={aiBusy}>{aiBusy ? "Gerando com IA…" : "Gerar com IA"}</button>
+            <button className={s.miniBtn} onClick={() => { navigator.clipboard.writeText(msg); notify("Mensagem copiada"); }}>Copiar</button>
+            {l.whatsapp && <button className={s.miniBtn + " " + s.wa} onClick={() => { window.open("https://wa.me/" + l.whatsapp + "?text=" + encodeURIComponent(msg), "_blank", "noopener"); if (l.stage === "novo") run(() => A.moveStageAction(l.id, "contatado"), l.id, { stage: "contatado" }, "Movido p/ Contatado"); }}>Enviar no WhatsApp</button>}
+          </div>
+          {aiInfo && <div className={s.hint}>{aiInfo}</div>}
+          <div className={s.hint}>Revise e personalize antes de enviar. Configure o provedor em <a href="/configuracoes/ia">Inteligência Artificial</a>.</div>
         </div>
 
         <div className={s.field}><label>Valor da proposta</label><div className={s.valInput}><span style={{ fontFamily: "var(--mono)", fontWeight: 700, color: "var(--muted)" }}>R$</span><input inputMode="numeric" value={val} onChange={e => setVal(e.target.value.replace(/\D/g, ""))} onBlur={() => run(() => A.setProposalValueAction(l.id, val), l.id, { proposalValue: parseInt(val, 10) || 0 })} /></div></div>
