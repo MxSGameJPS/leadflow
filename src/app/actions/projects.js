@@ -17,6 +17,13 @@ export async function createSiteProjectAction(input = {}) {
   const name = lead?.name || String(input.name || "").trim();
   if (!name) throw new Error("Informe o nome do negócio.");
 
+  const leadDescription = [
+    lead?.problem,
+    lead?.offer,
+    lead?.bio,
+    lead?.instagram ? `Instagram do negócio: ${lead.instagram}` : "",
+  ].filter(Boolean).join("\n");
+
   const generated = await generateSiteFolder({
     name,
     segment: lead?.segment || input.segment,
@@ -26,9 +33,10 @@ export async function createSiteProjectAction(input = {}) {
     placeId: lead?.externalId || "",
     mapsLink: lead?.mapsLink || (mode === "google" ? input.source : ""),
     existingWebsite: lead?.site || "",
+    instagram: lead?.instagram || "",
     rating: lead?.googleRating || "",
     reviews: lead?.googleReviews || "",
-    description: mode === "lead" ? [lead?.problem, lead?.offer, lead?.bio].filter(Boolean).join("\n") : input.source,
+    description: mode === "lead" ? leadDescription : input.source,
     template: input.template,
   });
 
@@ -38,7 +46,7 @@ export async function createSiteProjectAction(input = {}) {
     segment: lead?.segment || input.segment,
     city: lead?.city || lead?.location || input.city,
     mode,
-    source: mode === "lead" ? (lead?.site || lead?.mapsLink || lead?.problem || "Dados do CRM") : input.source,
+    source: mode === "lead" ? (lead?.instagram || lead?.site || lead?.mapsLink || lead?.problem || "Dados do CRM") : input.source,
     template: input.template,
     status: "ready",
     folderPath: generated.folderPath,
