@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getLead, setLanding } from "../../repositories/leadRepository.js";
 import { createSiteProject, deleteSiteProject } from "../../services/projects/projectStore.js";
-import { generateSiteFolder } from "../../services/projects/siteGenerator.js";
+import { generateSiteFolder } from "../../services/projects/siteGeneratorV2.js";
 
 export async function createSiteProjectAction(input = {}) {
   const mode = ["lead", "describe", "google"].includes(input.mode) ? input.mode : "lead";
