@@ -17,6 +17,7 @@ function refresh() {
 export async function createLeadAction(data) { const r = await repo.createLead(data); refresh(); return r; }
 export async function updateLeadAction(id, patch) { const r = await repo.updateLead(id, patch); refresh(); return r; }
 export async function deleteLeadAction(id) { await repo.deleteLead(id); refresh(); }
+export async function deleteLeadsAction(ids) { const r = await repo.deleteLeads(ids); refresh(); return r; }
 export async function moveStageAction(id, stage) { await repo.moveStage(id, stage); refresh(); }
 export async function setLandingAction(id, status) { await repo.setLanding(id, status); refresh(); }
 export async function setGradeAction(id, grade) { await repo.setGrade(id, grade); refresh(); }
