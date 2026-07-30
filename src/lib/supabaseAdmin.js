@@ -6,12 +6,12 @@ function supabaseUrl() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
 }
 
-export function isSupabaseConfigured() {
-  return Boolean(supabaseUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
 export function shouldUseSupabase() {
   return String(process.env.LEADFLOW_DATA_PROVIDER || "local").trim().toLowerCase() === "supabase";
+}
+
+export function isSupabaseConfigured() {
+  return shouldUseSupabase() && Boolean(supabaseUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 export function getSupabaseAdmin() {
