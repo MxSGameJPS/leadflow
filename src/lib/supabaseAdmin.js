@@ -10,7 +10,15 @@ export function isSupabaseConfigured() {
   return Boolean(supabaseUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+export function shouldUseSupabase() {
+  return String(process.env.LEADFLOW_DATA_PROVIDER || "local").trim().toLowerCase() === "supabase";
+}
+
 export function getSupabaseAdmin() {
+  if (!shouldUseSupabase()) {
+    throw new Error("O Supabase está desativado. Defina LEADFLOW_DATA_PROVIDER=supabase para ativá-lo.");
+  }
+
   const url = supabaseUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
