@@ -6,6 +6,7 @@ const WORKSPACE_DIR = path.join(process.cwd(), "data", "lead-workspaces");
 const DEFAULT_WORKSPACE = Object.freeze({
   callScript: "",
   whatsappMessage: "",
+  previewUrl: "",
   appointment: {
     type: "Reunião",
     time: "09:00",
@@ -36,6 +37,18 @@ function cleanText(value, max = 6000) {
   return String(value ?? "").replace(/\u0000/g, "").slice(0, max);
 }
 
+function cleanUrl(value) {
+  const raw = cleanText(value, 1000).trim();
+  if (!raw) return "";
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function cleanInteger(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
   const number = Number.parseInt(String(value ?? "").replace(/[^\d-]/g, ""), 10);
   if (!Number.isFinite(number)) return fallback;
@@ -58,6 +71,7 @@ function normalizeWorkspace(input = {}) {
   return {
     callScript: cleanText(input.callScript),
     whatsappMessage: cleanText(input.whatsappMessage),
+    previewUrl: cleanUrl(input.previewUrl),
     appointment: {
       type: cleanText(appointment.type || DEFAULT_WORKSPACE.appointment.type, 80),
       time: /^\d{2}:\d{2}$/.test(String(appointment.time || "")) ? String(appointment.time) : DEFAULT_WORKSPACE.appointment.time,
