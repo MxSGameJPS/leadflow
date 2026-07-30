@@ -3,6 +3,8 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 const PROJECT_DIR = path.join(process.cwd(), "data", "projects");
+const GENERATED_ROOT = path.resolve(process.cwd(), "generated-sites");
+const DELETABLE_STATUSES = new Set(["draft", "building"]);
 
 function clean(value, max = 3000) {
   return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, max);
@@ -34,6 +36,27 @@ function fileForProject(id) {
   return path.join(PROJECT_DIR, `${safe}.json`);
 }
 
+async function readSiteProject(id) {
+  try {
+    const raw = await fs.readFile(fileForProject(id), "utf8");
+    return normalizeProject(JSON.parse(raw));
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error("Projeto não encontrado.");
+    if (error instanceof SyntaxError) throw new Error("O arquivo deste projeto está corrompido.");
+    throw error;
+  }
+}
+
+function resolveGeneratedFolder(folderPath) {
+  if (!folderPath) return null;
+  const target = path.resolve(process.cwd(), folderPath);
+  const insideGeneratedRoot = target.startsWith(`${GENERATED_ROOT}${path.sep}`);
+  if (!insideGeneratedRoot || target === GENERATED_ROOT) {
+    throw new Error("A pasta do projeto está fora do diretório permitido.");
+  }
+  return target;
+}
+
 export async function createSiteProject(input = {}) {
   const now = new Date().toISOString();
   const project = normalizeProject({
@@ -45,6 +68,18 @@ export async function createSiteProject(input = {}) {
 
   await fs.mkdir(PROJECT_DIR, { recursive: true });
   await fs.writeFile(fileForProject(project.id), JSON.stringify(project, null, 2), "utf8");
+  return project;
+}
+
+export async function deleteSiteProject(id) {
+  const project = await readSiteProject(id);
+  if (!DELETABLE_STATUSES.has(project.status)) {
+    throw new Error("Somente projetos em rascunho ou em construção podem ser excluídos por esta ação.");
+  }
+
+  const generatedFolder = resolveGeneratedFolder(project.folderPath);
+  if (generatedFolder) await fs.rm(generatedFolder, { recursive: true, force: true });
+  await fs.unlink(fileForProject(project.id));
   return project;
 }
 
