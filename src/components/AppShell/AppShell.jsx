@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/projetos", icon: "◇", label: "Meus projetos" },
   { href: "/cobrancas", icon: "R$", label: "Cobrar clientes" },
   { href: "/criar-site", icon: "+", label: "Criar site" },
+  { href: "/perfil", icon: "◉", label: "Perfil" },
 ];
 
 export default function AppShell({ children }) {
