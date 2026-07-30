@@ -25,6 +25,10 @@ function csvValue(value) {
   return /[;\n\r\"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function normalizeFilterValue(value) {
+  return String(value || "").trim().toLocaleLowerCase("pt-BR");
+}
+
 function isPossibleMobile(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   const local = digits.startsWith("55") ? digits.slice(2) : digits;
@@ -44,6 +48,8 @@ export default function CRMBoard({ initialLeads = [] }) {
   const [leads, setLeads] = useState(initialLeads);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [search, setSearch] = useState("");
+  const [nicheFilter, setNicheFilter] = useState("all");
+  const [gradeFilter, setGradeFilter] = useState("all");
   const [quick, setQuick] = useState("all");
   const [sort, setSort] = useState("recent");
   const [dragOver, setDragOver] = useState("");
@@ -60,6 +66,19 @@ export default function CRMBoard({ initialLeads = [] }) {
     setSelectedIds(current => new Set([...current].filter(id => availableIds.has(id))));
   }, [initialLeads]);
 
+  const nicheOptions = useMemo(() => {
+    const grouped = new Map();
+    for (const lead of leads) {
+      const label = String(lead.segment || "").trim();
+      if (!label) continue;
+      const value = normalizeFilterValue(label);
+      const current = grouped.get(value);
+      if (current) current.count++;
+      else grouped.set(value, { value, label, count: 1 });
+    }
+    return [...grouped.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [leads]);
+
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
     const filtered = leads.filter(lead => {
@@ -70,11 +89,12 @@ export default function CRMBoard({ initialLeads = [] }) {
           .toLocaleLowerCase("pt-BR");
         if (!haystack.includes(query)) return false;
       }
+      if (nicheFilter !== "all" && normalizeFilterValue(lead.segment) !== nicheFilter) return false;
+      if (gradeFilter !== "all" && lead.grade !== gradeFilter) return false;
       if (quick === "no-site" && lead.site && !lead.weakSite) return false;
-      if (quick === "hot" && lead.grade !== "A") return false;
-      if (quick === "warm" && lead.grade !== "B") return false;
       if (quick === "score" && Number(lead.score || 0) < 50) return false;
       if (quick === "phone" && !lead.phone && !lead.whatsapp) return false;
+      if (quick === "whatsapp" && !lead.whatsapp && !isPossibleMobile(lead.phone)) return false;
       return true;
     });
 
@@ -83,7 +103,7 @@ export default function CRMBoard({ initialLeads = [] }) {
       if (sort === "name") return String(a.name).localeCompare(String(b.name), "pt-BR");
       return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
     });
-  }, [leads, quick, search, sort]);
+  }, [leads, nicheFilter, gradeFilter, quick, search, sort]);
 
   const byStage = useMemo(() => {
     const grouped = Object.fromEntries(STAGE_IDS.map(id => [id, []]));
@@ -95,10 +115,23 @@ export default function CRMBoard({ initialLeads = [] }) {
 
   const selectedCount = selectedIds.size;
   const allVisibleSelected = visible.length > 0 && visible.every(lead => selectedIds.has(lead.id));
+  const activeFilterCount = [
+    Boolean(search.trim()),
+    nicheFilter !== "all",
+    gradeFilter !== "all",
+    quick !== "all",
+  ].filter(Boolean).length;
 
   function showNotice(message, kind = "error") {
     setNoticeKind(kind);
     setNotice(message);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setNicheFilter("all");
+    setGradeFilter("all");
+    setQuick("all");
   }
 
   function toggleLeadSelection(leadId) {
@@ -223,29 +256,58 @@ export default function CRMBoard({ initialLeads = [] }) {
     <header className={s.header}>
       <div>
         <h1>CRM</h1>
-        <p>Filtre, priorize e gerencie o contato com cada lead.</p>
+        <p>Combine nicho, nota, oportunidade e busca para priorizar os leads certos.</p>
       </div>
     </header>
 
     <section className={s.toolbar}>
-      <input className={s.search} value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, categoria, cidade ou telefone..." />
+      <input className={s.search} value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, nicho, cidade ou telefone..." />
+
+      <div className={s.filterBar} aria-label="Filtros combináveis do CRM">
+        <label className={s.filterField}>
+          <span>Nicho</span>
+          <select value={nicheFilter} onChange={event => setNicheFilter(event.target.value)}>
+            <option value="all">Todos os nichos</option>
+            {nicheOptions.map(option => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}
+          </select>
+        </label>
+
+        <label className={s.filterField}>
+          <span>Nota</span>
+          <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value)}>
+            <option value="all">Todas as notas</option>
+            <option value="A">Nota A · Quente</option>
+            <option value="B">Nota B · Morno</option>
+            <option value="C">Nota C · Em análise</option>
+            <option value="D">Nota D · Frio</option>
+          </select>
+        </label>
+
+        <label className={s.filterField}>
+          <span>Oportunidade</span>
+          <select value={quick} onChange={event => setQuick(event.target.value)}>
+            <option value="all">Todas</option>
+            <option value="no-site">Sem site próprio</option>
+            <option value="score">Score 50+</option>
+            <option value="phone">Com telefone</option>
+            <option value="whatsapp">WhatsApp testável</option>
+          </select>
+        </label>
+
+        {activeFilterCount > 0 && <button className={s.clearFilters} type="button" onClick={clearFilters}>Limpar filtros ({activeFilterCount})</button>}
+      </div>
+
       <div className={s.toolbarRow}>
-        <div className={s.quickFilters}>
-          {[
-            ["all", "Todos"],
-            ["no-site", "Sem site próprio"],
-            ["hot", "Nota A (Quente)"],
-            ["warm", "Nota B (Morno)"],
-            ["score", "Score 50+"],
-            ["phone", "Com telefone"],
-          ].map(([value, label]) => <button key={value} type="button" className={quick === value ? s.quickActive : ""} onClick={() => setQuick(value)}>{label}</button>)}
+        <div className={s.filterSummary}>
+          <strong>{visible.length}</strong>
+          <span>de {leads.length} leads correspondem aos filtros</span>
         </div>
         <div className={s.actions}>
           <button type="button" onClick={toggleVisibleSelection} disabled={!visible.length || deleting}>{allVisibleSelected ? "Desmarcar exibidos" : "Selecionar exibidos"}</button>
           <button type="button" className={s.dangerAction} onClick={removeSelectedLeads} disabled={!selectedCount || deleting}>{deleting ? "Excluindo..." : `Excluir selecionados (${selectedCount})`}</button>
           <button type="button" className={s.primary} onClick={() => setCreating(true)} disabled={deleting}>+ Criar lead</button>
           <button type="button" onClick={exportCsv}>Exportar</button>
-          <select value={sort} onChange={event => setSort(event.target.value)}>
+          <select value={sort} onChange={event => setSort(event.target.value)} aria-label="Ordenar leads">
             <option value="recent">Ordenar: mais recentes</option>
             <option value="score">Ordenar: maior score</option>
             <option value="name">Ordenar: nome</option>
@@ -256,7 +318,7 @@ export default function CRMBoard({ initialLeads = [] }) {
 
     {notice && <div className={`${s.notice} ${noticeKind === "success" ? s.noticeSuccess : ""}`}>{notice}</div>}
     <div className={s.counter}>
-      {visible.length} lead{visible.length === 1 ? "" : "s"}
+      {visible.length} lead{visible.length === 1 ? "" : "s"} exibido{visible.length === 1 ? "" : "s"}
       {selectedCount > 0 && <span className={s.selectionCount}> · {selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>}
     </div>
 
