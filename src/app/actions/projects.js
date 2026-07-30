@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getLead, setLanding } from "../../repositories/leadRepository.js";
-import { createSiteProject } from "../../services/projects/projectStore.js";
+import { createSiteProject, deleteSiteProject } from "../../services/projects/projectStore.js";
 import { generateSiteFolder } from "../../services/projects/siteGenerator.js";
 
 export async function createSiteProjectAction(input = {}) {
@@ -52,4 +52,12 @@ export async function createSiteProjectAction(input = {}) {
   revalidatePath("/criar-site");
   if (lead) revalidatePath(`/crm/${lead.id}`);
   return project;
+}
+
+export async function deleteSiteProjectAction(id) {
+  const project = await deleteSiteProject(String(id || ""));
+  revalidatePath("/projetos");
+  revalidatePath("/criar-site");
+  if (project.leadId) revalidatePath(`/crm/${project.leadId}`);
+  return { id: project.id };
 }
