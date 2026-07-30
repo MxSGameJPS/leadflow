@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
+import { getProfessionalProfile } from "../../services/profile/profileStore.js";
 import {
   listProviderModels,
   listProvidersPublic,
@@ -38,5 +39,6 @@ export async function listModelsAction(id) {
 }
 
 export async function generateLeadMessageAction(payload) {
-  return generateLeadMessage(payload || {});
+  const profile = await getProfessionalProfile();
+  return generateLeadMessage({ ...(payload || {}), profile });
 }
