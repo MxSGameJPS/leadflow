@@ -1,3 +1,4 @@
+import ProjectDeleteButton from "../ProjectDeleteButton/ProjectDeleteButton.jsx";
 import s from "./ProjectsList.module.css";
 
 const STATUS = {
@@ -16,6 +17,8 @@ const TEMPLATE = {
   booking: "Serviços / agendamento",
 };
 
+const DELETABLE = new Set(["draft", "building"]);
+
 export default function ProjectsList({ projects = [] }) {
   return <main className={s.page}>
     <header className={s.header}>
@@ -29,7 +32,10 @@ export default function ProjectsList({ projects = [] }) {
         <dl><div><dt>Modelo</dt><dd>{TEMPLATE[project.template] || project.template}</dd></div><div><dt>Origem</dt><dd>{project.mode === "lead" ? "Lead do CRM" : project.mode === "google" ? "Link do Google" : "Descrição manual"}</dd></div><div><dt>Conteúdo</dt><dd>{project.aiUsed ? "IA + validação estrutural" : "Estrutura profissional de segurança"}</dd></div><div><dt>Imagens</dt><dd>{project.imageCount || 0} obtidas</dd></div><div><dt>Atualizado</dt><dd>{new Date(project.updatedAt).toLocaleString("pt-BR")}</dd></div></dl>
         {project.folderPath && <div className={s.folder}><span>Pasta do projeto</span><code>{project.folderPath}</code><small>Abra esta pasta na IDE e execute: npm install && npm run dev</small></div>}
         {project.warning && <div className={s.warning}>{project.warning}</div>}
-        <div className={s.actions}>{project.leadId && <a href={`/crm/${project.leadId}`}>Abrir lead</a>}<a href={`/criar-site${project.leadId ? `?lead=${project.leadId}` : ""}`}>Gerar nova versão</a></div>
+        <div className={s.actions}>
+          <div className={s.navigationActions}>{project.leadId && <a href={`/crm/${project.leadId}`}>Abrir lead</a>}<a href={`/criar-site${project.leadId ? `?lead=${project.leadId}` : ""}`}>Gerar nova versão</a></div>
+          {DELETABLE.has(project.status) && <ProjectDeleteButton projectId={project.id} projectName={project.name} />}
+        </div>
       </article>)}</section>}
   </main>;
 }
