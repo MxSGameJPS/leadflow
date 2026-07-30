@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES, STAGE_IDS } from "../../services/leads/stages.js";
-import { createLeadAction, moveStageAction } from "../../app/actions/leads.js";
+import { createLeadAction, deleteLeadAction, deleteLeadsAction, moveStageAction } from "../../app/actions/leads.js";
 import s from "./CRMBoard.module.css";
 
 const STAGE_COLOR = {
@@ -42,16 +42,23 @@ function whatsappUrl(lead) {
 export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [search, setSearch] = useState("");
   const [quick, setQuick] = useState("all");
   const [sort, setSort] = useState("recent");
   const [dragOver, setDragOver] = useState("");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState("error");
   const [form, setForm] = useState({ name: "", segment: "", city: "", location: "", phone: "" });
 
-  useEffect(() => setLeads(initialLeads), [initialLeads]);
+  useEffect(() => {
+    setLeads(initialLeads);
+    const availableIds = new Set(initialLeads.map(lead => lead.id));
+    setSelectedIds(current => new Set([...current].filter(id => availableIds.has(id))));
+  }, [initialLeads]);
 
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
@@ -86,6 +93,35 @@ export default function CRMBoard({ initialLeads = [] }) {
     return grouped;
   }, [visible]);
 
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = visible.length > 0 && visible.every(lead => selectedIds.has(lead.id));
+
+  function showNotice(message, kind = "error") {
+    setNoticeKind(kind);
+    setNotice(message);
+  }
+
+  function toggleLeadSelection(leadId) {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  }
+
+  function toggleVisibleSelection() {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        for (const lead of visible) next.delete(lead.id);
+      } else {
+        for (const lead of visible) next.add(lead.id);
+      }
+      return next;
+    });
+  }
+
   async function moveLead(leadId, stage) {
     const previous = leads;
     setLeads(current => current.map(lead => lead.id === leadId ? { ...lead, stage } : lead));
@@ -94,7 +130,7 @@ export default function CRMBoard({ initialLeads = [] }) {
       router.refresh();
     } catch (error) {
       setLeads(previous);
-      setNotice(`Erro ao mover lead: ${error.message}`);
+      showNotice(`Erro ao mover lead: ${error.message}`);
     }
   }
 
@@ -117,9 +153,57 @@ export default function CRMBoard({ initialLeads = [] }) {
       setCreating(false);
       router.refresh();
     } catch (error) {
-      setNotice(`Erro ao criar lead: ${error.message}`);
+      showNotice(`Erro ao criar lead: ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removeLead(lead) {
+    const confirmed = window.confirm(`Excluir o lead "${lead.name}" do CRM? Esta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setNotice("");
+    try {
+      await deleteLeadAction(lead.id);
+      setLeads(current => current.filter(item => item.id !== lead.id));
+      setSelectedIds(current => {
+        const next = new Set(current);
+        next.delete(lead.id);
+        return next;
+      });
+      showNotice(`Lead "${lead.name}" excluído com sucesso.`, "success");
+      router.refresh();
+    } catch (error) {
+      showNotice(`Erro ao excluir lead: ${error.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function removeSelectedLeads() {
+    const ids = [...selectedIds].filter(id => leads.some(lead => lead.id === id));
+    if (!ids.length) return;
+
+    const label = ids.length === 1 ? "1 lead selecionado" : `${ids.length} leads selecionados`;
+    const confirmed = window.confirm(`Excluir ${label} do CRM? Esta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setNotice("");
+    try {
+      const result = await deleteLeadsAction(ids);
+      const removedIds = new Set(ids);
+      setLeads(current => current.filter(lead => !removedIds.has(lead.id)));
+      setSelectedIds(new Set());
+      const removed = Number(result?.count || ids.length);
+      showNotice(`${removed} lead${removed === 1 ? "" : "s"} excluído${removed === 1 ? "" : "s"} com sucesso.`, "success");
+      router.refresh();
+    } catch (error) {
+      showNotice(`Erro ao excluir leads: ${error.message}`);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -154,11 +238,13 @@ export default function CRMBoard({ initialLeads = [] }) {
             ["warm", "Nota B (Morno)"],
             ["score", "Score 50+"],
             ["phone", "Com telefone"],
-          ].map(([value, label]) => <button key={value} className={quick === value ? s.quickActive : ""} onClick={() => setQuick(value)}>{label}</button>)}
+          ].map(([value, label]) => <button key={value} type="button" className={quick === value ? s.quickActive : ""} onClick={() => setQuick(value)}>{label}</button>)}
         </div>
         <div className={s.actions}>
-          <button className={s.primary} onClick={() => setCreating(true)}>+ Criar lead</button>
-          <button onClick={exportCsv}>Exportar</button>
+          <button type="button" onClick={toggleVisibleSelection} disabled={!visible.length || deleting}>{allVisibleSelected ? "Desmarcar exibidos" : "Selecionar exibidos"}</button>
+          <button type="button" className={s.dangerAction} onClick={removeSelectedLeads} disabled={!selectedCount || deleting}>{deleting ? "Excluindo..." : `Excluir selecionados (${selectedCount})`}</button>
+          <button type="button" className={s.primary} onClick={() => setCreating(true)} disabled={deleting}>+ Criar lead</button>
+          <button type="button" onClick={exportCsv}>Exportar</button>
           <select value={sort} onChange={event => setSort(event.target.value)}>
             <option value="recent">Ordenar: mais recentes</option>
             <option value="score">Ordenar: maior score</option>
@@ -168,8 +254,11 @@ export default function CRMBoard({ initialLeads = [] }) {
       </div>
     </section>
 
-    {notice && <div className={s.notice}>{notice}</div>}
-    <div className={s.counter}>{visible.length} lead{visible.length === 1 ? "" : "s"}</div>
+    {notice && <div className={`${s.notice} ${noticeKind === "success" ? s.noticeSuccess : ""}`}>{notice}</div>}
+    <div className={s.counter}>
+      {visible.length} lead{visible.length === 1 ? "" : "s"}
+      {selectedCount > 0 && <span className={s.selectionCount}> · {selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>}
+    </div>
 
     <section className={s.board}>
       {STAGES.map(stage => <div
@@ -195,17 +284,36 @@ export default function CRMBoard({ initialLeads = [] }) {
             ? <div className={s.empty}>Sem leads</div>
             : byStage[stage.id].map(lead => {
               const wa = whatsappUrl(lead);
+              const selected = selectedIds.has(lead.id);
               return <article
                 key={lead.id}
-                className={s.card}
-                draggable
+                className={`${s.card} ${selected ? s.cardSelected : ""}`}
+                draggable={!deleting}
                 onDragStart={event => event.dataTransfer.setData("text/plain", lead.id)}
                 onClick={() => router.push(`/crm/${lead.id}`)}
               >
                 <div className={s.cardTop}>
+                  <input
+                    className={s.selectBox}
+                    type="checkbox"
+                    checked={selected}
+                    aria-label={`Selecionar ${lead.name}`}
+                    onClick={event => event.stopPropagation()}
+                    onChange={() => toggleLeadSelection(lead.id)}
+                  />
                   <span className={`${s.score} ${s[`grade${lead.grade}`]}`}>{lead.score}</span>
                   <span className={`${s.temperature} ${s[`grade${lead.grade}`]}`}>{GRADE_LABEL[lead.grade] || lead.grade}</span>
-                  <button aria-label={`Abrir ${lead.name}`} onClick={event => { event.stopPropagation(); router.push(`/crm/${lead.id}`); }}>›</button>
+                  <div className={s.cardTopActions}>
+                    <button
+                      type="button"
+                      className={s.deleteCard}
+                      aria-label={`Excluir ${lead.name}`}
+                      title="Excluir lead"
+                      disabled={deleting}
+                      onClick={event => { event.stopPropagation(); removeLead(lead); }}
+                    >Excluir</button>
+                    <button type="button" aria-label={`Abrir ${lead.name}`} onClick={event => { event.stopPropagation(); router.push(`/crm/${lead.id}`); }}>›</button>
+                  </div>
                 </div>
                 <h2 title={lead.name}>{lead.name}</h2>
                 <p>{lead.segment || "Sem categoria"} · {[lead.city, lead.location].filter(Boolean).join(", ") || "Local não informado"}</p>
