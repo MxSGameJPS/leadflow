@@ -72,6 +72,18 @@ export async function deleteLead(id) {
   return prisma.lead.delete({ where: { id } });
 }
 
+export async function deleteLeads(ids) {
+  if (!Array.isArray(ids)) throw new Error("A exclusão em massa deve receber uma lista de leads.");
+
+  const uniqueIds = [...new Set(ids
+    .filter(id => typeof id === "string")
+    .map(id => id.trim())
+    .filter(Boolean))];
+
+  if (!uniqueIds.length) return { count: 0 };
+  return prisma.lead.deleteMany({ where: { id: { in: uniqueIds } } });
+}
+
 export async function clearAll() {
   return prisma.lead.deleteMany({});
 }
