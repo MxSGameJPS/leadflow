@@ -82,8 +82,13 @@ try {
   t("stats withWhatsapp 2", st.withWhatsapp === 2);
   t("stats total 2", st.total === 2);
 
+  const gamma = await repo.createLead({ id: "test_c", name: "Gamma Café", score: 20 });
+  const bulk = await repo.deleteLeads([beta.id, gamma.id, beta.id, ""]);
+  t("bulk delete remove ids únicos", bulk.count === 2);
+  t("bulk delete -> 1", (await repo.stats()).total === 1);
+
   await repo.deleteLead(alpha.id);
-  t("delete -> 1", (await repo.stats()).total === 1);
+  t("delete -> 0", (await repo.stats()).total === 0);
 
   await repo.clearAll();
   t("cleanup -> 0", (await repo.stats()).total === 0);
