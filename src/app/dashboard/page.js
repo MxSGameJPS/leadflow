@@ -1,18 +1,28 @@
-import { stats as getStats } from "../../repositories/leadRepository.js";
+import { listLeads, stats as getStats } from "../../repositories/leadRepository.js";
 import { BRL } from "../../services/leads/format.js";
+import { isPossibleWhatsApp } from "../../services/places/googlePlaces.js";
 import styles from "./dashboard.module.css";
 
 export const dynamic = "force-dynamic";
 
 const pct = (value, base) => base > 0 ? Math.round((value / base) * 100) : 0;
 
+function hasWhatsappAvailable(lead) {
+  return Boolean(lead.whatsapp || isPossibleWhatsApp(lead.phone, "BR"));
+}
+
 export default async function DashboardPage() {
-  let s = null, err = null;
-  try { s = await getStats(); } catch (e) { err = e.message; }
+  let s = null, leads = [], err = null;
+  try {
+    [s, leads] = await Promise.all([getStats(), listLeads()]);
+  } catch (e) {
+    err = e.message;
+  }
 
   if (err) return <main className={styles.page}><div className={styles.err}>Erro ao ler o banco: {err}</div></main>;
 
   const total = s.total;
+  const whatsappAvailable = leads.filter(hasWhatsappAvailable).length;
   const newLeads = s.byStage.novo || 0;
   const approached = Math.max(0, total - newLeads);
   const scheduled = 0;
@@ -31,7 +41,7 @@ export default async function DashboardPage() {
 
   const recommendations = [];
   if (total === 0) recommendations.push({ level: "info", title: "Importe sua primeira base", text: "Abra Leads e envie um CSV ou JSON para começar a operação." });
-  if (total > 0 && s.withWhatsapp === 0) recommendations.push({ level: "danger", title: "Nenhum WhatsApp encontrado", text: `Os ${total} leads atuais não possuem WhatsApp. O CSV trouxe nomes e oportunidades, mas não trouxe dados de contato.` });
+  if (total > 0 && whatsappAvailable === 0) recommendations.push({ level: "danger", title: "Nenhum WhatsApp disponível", text: `Os ${total} leads atuais não possuem WhatsApp confirmado nem celular compatível para teste.` });
   else if (s.withoutContact > 0) recommendations.push({ level: "warn", title: "Base com contatos incompletos", text: `${s.withoutContact} leads não possuem WhatsApp, telefone, e-mail ou Instagram.` });
   if (s.followupDue > 0) recommendations.push({ level: "warn", title: "Follow-ups vencidos", text: `${s.followupDue} leads precisam ser retomados hoje.` });
   if (s.active > 0 && converted === 0) recommendations.push({ level: "info", title: "Pipeline em andamento", text: `${s.active} leads estão sendo trabalhados. Registre propostas e próximos passos no CRM.` });
@@ -61,7 +71,7 @@ export default async function DashboardPage() {
             <p><b className={styles.orangeText}>Taxa de follow-up</b> — muitos leads aqui podem indicar pipeline parado.</p>
             <p><b className={styles.redText}>Taxa de perdidos</b> — ajuda a revisar script, oferta e qualidade da base.</p>
           </div>
-          <div className={styles.totalBox}><span>Total de leads</span><div className={styles.donut} style={{ "--fill": `${pct(s.withWhatsapp, Math.max(total, 1)) * 3.6}deg` }}><strong>{total}</strong></div><small>{s.withWhatsapp} com WhatsApp</small></div>
+          <div className={styles.totalBox}><span>Total de leads</span><div className={styles.donut} style={{ "--fill": `${pct(whatsappAvailable, Math.max(total, 1)) * 3.6}deg` }}><strong>{total}</strong></div><small>{whatsappAvailable} com WhatsApp ou celular testável</small></div>
         </div>
       </section>
 
@@ -79,7 +89,7 @@ export default async function DashboardPage() {
       </div>
 
       <section className={styles.kpis}>
-        <div><span>Com WhatsApp</span><strong>{s.withWhatsapp}</strong></div>
+        <div><span>Com WhatsApp</span><strong>{whatsappAvailable}</strong></div>
         <div><span>Sem contato</span><strong>{s.withoutContact}</strong></div>
         <div><span>Em aberto</span><strong>{s.active}</strong></div>
         <div><span>Pipeline</span><strong>{BRL(s.pipeline)}</strong></div>
