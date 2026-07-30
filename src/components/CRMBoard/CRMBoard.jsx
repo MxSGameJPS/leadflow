@@ -197,7 +197,7 @@ export default function CRMBoard({ initialLeads = [] }) {
       const removedIds = new Set(ids);
       setLeads(current => current.filter(lead => !removedIds.has(lead.id)));
       setSelectedIds(new Set());
-      const removed = Number(result?.count || ids.length);
+      const removed = Number(result?.count ?? ids.length);
       showNotice(`${removed} lead${removed === 1 ? "" : "s"} excluído${removed === 1 ? "" : "s"} com sucesso.`, "success");
       router.refresh();
     } catch (error) {
