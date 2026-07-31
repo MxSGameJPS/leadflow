@@ -1,15 +1,44 @@
+import { createRequire } from "node:module";
 import { assertPublicWebsiteUrl, normalizeWebsiteUrl } from "./siteAuditService.js";
 import { saveGeneratedScreenshot } from "./assetStore.js";
 
 const SCREENSHOT_TIMEOUT_MS = 30_000;
+const require = createRequire(import.meta.url);
+
+export function resolveChromiumExport(playwrightModule) {
+  const chromium = playwrightModule?.chromium
+    || playwrightModule?.default?.chromium
+    || playwrightModule?.default?.default?.chromium
+    || null;
+  return chromium && typeof chromium.launch === "function" ? chromium : null;
+}
 
 async function loadChromium() {
+  let importError = null;
+  let requireError = null;
+
   try {
-    const playwright = await import(/* webpackIgnore: true */ "playwright");
-    return playwright.chromium;
-  } catch {
-    throw new Error("O navegador de captura ainda não foi instalado. Execute npm run install:browser.");
+    const playwright = await import("playwright");
+    const chromium = resolveChromiumExport(playwright);
+    if (chromium) return chromium;
+  } catch (error) {
+    importError = error;
   }
+
+  try {
+    const playwright = require("playwright");
+    const chromium = resolveChromiumExport(playwright);
+    if (chromium) return chromium;
+  } catch (error) {
+    requireError = error;
+  }
+
+  const details = [importError?.message, requireError?.message].filter(Boolean).join(" | ");
+  throw new Error([
+    "O Playwright foi localizado, mas o Chromium não ficou disponível para execução.",
+    "Execute npm run install:browser e reinicie completamente o servidor Next.",
+    details ? `Detalhe: ${details}` : "O módulo carregado não expôs chromium.launch.",
+  ].join(" "));
 }
 
 async function createSafeRouter(context) {
@@ -31,7 +60,14 @@ async function createSafeRouter(context) {
 }
 
 async function captureViewport(browser, leadId, url, config) {
-  const context = await browser.newContext({ viewport: config.viewport, deviceScaleFactor: 1, isMobile: Boolean(config.isMobile), hasTouch: Boolean(config.isMobile), userAgent: config.userAgent, ignoreHTTPSErrors: false });
+  const context = await browser.newContext({
+    viewport: config.viewport,
+    deviceScaleFactor: 1,
+    isMobile: Boolean(config.isMobile),
+    hasTouch: Boolean(config.isMobile),
+    userAgent: config.userAgent,
+    ignoreHTTPSErrors: false,
+  });
   await createSafeRouter(context);
   const page = await context.newPage();
   try {
@@ -51,16 +87,26 @@ export async function captureWebsiteScreenshots(leadId, websiteUrl) {
   await assertPublicWebsiteUrl(normalized);
   const chromium = await loadChromium();
   let browser;
-  try { browser = await chromium.launch({ headless: true }); }
-  catch (error) { throw new Error(`O navegador de captura não está disponível. Execute npm run install:browser. Detalhe: ${error.message}`); }
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (error) {
+    throw new Error(`O Chromium do Playwright não pôde ser iniciado. Execute npm run install:browser e reinicie o servidor. Detalhe: ${error.message}`);
+  }
+
   try {
     const assets = [];
     assets.push(await captureViewport(browser, leadId, normalized.toString(), {
-      kind: "site-desktop", label: "Captura automática do site — desktop", viewport: { width: 1440, height: 1000 }, isMobile: false,
+      kind: "site-desktop",
+      label: "Captura automática do site — desktop",
+      viewport: { width: 1440, height: 1000 },
+      isMobile: false,
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36 LeadFlow/1.0",
     }));
     assets.push(await captureViewport(browser, leadId, normalized.toString(), {
-      kind: "site-mobile", label: "Captura automática do site — celular", viewport: { width: 390, height: 844 }, isMobile: true,
+      kind: "site-mobile",
+      label: "Captura automática do site — celular",
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1 LeadFlow/1.0",
     }));
     return assets;
