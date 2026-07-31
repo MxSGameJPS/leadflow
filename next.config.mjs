@@ -5,7 +5,6 @@ const nextConfig = {
       bodySizeLimit: "50mb",
     },
   },
-  serverExternalPackages: ["playwright"],
 };
 
 export default nextConfig;
