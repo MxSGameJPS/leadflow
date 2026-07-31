@@ -11,7 +11,7 @@
     "start": "next start",
     "seed": "node prisma/seed.js",
     "migrate": "prisma migrate dev --name init",
-    "install:browser": "playwright install chromium",
+    "install:browser": "npm install --no-save --package-lock=false playwright@1.62.0 && npx playwright install chromium",
     "test:services": "node tests/services.test.mjs",
     "test:repo": "node tests/repo.test.mjs",
     "test:ai": "node tests/ai.test.mjs",
@@ -24,7 +24,6 @@
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "next": "15.1.6",
-    "playwright": "^1.54.1",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
