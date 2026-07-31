@@ -1,5 +1,8 @@
 import { inspectWebsiteHtml } from "../src/services/consulting/siteAuditService.js";
-import { buildConsultingAuditPrompt } from "../src/services/ai/consultingAuditService.js";
+import {
+  buildConsultingAuditPrompt,
+  parseConsultingAuditResponse,
+} from "../src/services/ai/consultingAuditService.js";
 
 let pass = 0;
 let fail = 0;
@@ -61,6 +64,47 @@ test("prompt inclui empresa", prompt.prompt.includes("Restaurante Exemplo"));
 test("prompt impede invenções", prompt.systemPrompt.includes("Não invente"));
 test("prompt inclui preço", prompt.prompt.includes("R$ 50,00") || prompt.prompt.includes("R$ 50,00"));
 test("prompt limita análise do Instagram", prompt.prompt.includes("Não afirme que visualizou"));
+test("mensagem vem antes do relatório", prompt.prompt.indexOf("[[MENSAGEM_WHATSAPP]]") < prompt.prompt.indexOf("[[RELATORIO]]"));
+
+const validJson = parseConsultingAuditResponse(JSON.stringify({
+  overallScore: 78,
+  executiveSummary: "Resumo válido.",
+  report: "Relatório válido.",
+  whatsappMessage: "Mensagem válida.",
+}));
+test("aceita JSON válido legado", validJson.overallScore === 78 && validJson.report === "Relatório válido.");
+
+const fencedJson = parseConsultingAuditResponse(`\`\`\`json
+{"overallScore":81,"executiveSummary":"Resumo","report":"Relatório","whatsappMessage":"Olá"}
+\`\`\``);
+test("aceita JSON dentro de markdown", fencedJson.overallScore === 81 && fencedJson.whatsappMessage === "Olá");
+
+const marked = parseConsultingAuditResponse(`[[SCORE]]
+74
+[[RESUMO]]
+Resumo da análise.
+[[MENSAGEM_WHATSAPP]]
+Olá, preparei uma análise.
+[[RELATORIO]]
+1. DIAGNÓSTICO
+Relatório completo.
+[[FIM]]`);
+test("interpreta resposta delimitada", marked.overallScore === 74 && marked.report.includes("Relatório completo"));
+test("resposta completa não é marcada como recuperada", marked.recovered === false);
+
+const truncatedMarkers = parseConsultingAuditResponse(`[[SCORE]]
+66
+[[RESUMO]]
+Resumo parcial.
+[[MENSAGEM_WHATSAPP]]
+Mensagem preservada.
+[[RELATORIO]]
+Relatório interrompido pelo limite de tokens`);
+test("aproveita resposta delimitada truncada", truncatedMarkers.report.includes("interrompido") && truncatedMarkers.whatsappMessage === "Mensagem preservada.");
+test("identifica recuperação de resposta truncada", truncatedMarkers.recovered === true);
+
+const truncatedJson = parseConsultingAuditResponse(`{"overallScore":59,"executiveSummary":"Resumo","report":"Linha 1\\nLinha 2 sem fechamento`);
+test("recupera relatório de JSON truncado", truncatedJson.overallScore === 59 && truncatedJson.report.includes("Linha 2"));
 
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
