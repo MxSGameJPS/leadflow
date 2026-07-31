@@ -10,6 +10,7 @@ function refresh() {
   revalidatePath("/dashboard");
   revalidatePath("/leads");
   revalidatePath("/crm");
+  revalidatePath("/consultoria");
   revalidatePath("/agendamentos");
   revalidatePath("/cobrancas");
 }
