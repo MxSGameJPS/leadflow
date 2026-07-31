@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { CONSULTING_STAGE_IDS } from "../consulting/stages.js";
 
 const WORKSPACE_DIR = path.join(process.cwd(), "data", "lead-workspaces");
 
@@ -24,6 +25,27 @@ const DEFAULT_WORKSPACE = Object.freeze({
     amountPaid: 0,
     firstDueDate: "",
     paymentStatus: "pending",
+  },
+  consulting: {
+    stage: "novo",
+    status: "pending",
+    websiteUrl: "",
+    instagramUrl: "",
+    instagramNotes: "",
+    auditSnapshot: "",
+    overallScore: 0,
+    executiveSummary: "",
+    report: "",
+    whatsappMessage: "",
+    priceCents: 5000,
+    paymentStatus: "pending",
+    soldAt: "",
+    deliveredAt: "",
+    lastAnalyzedAt: "",
+    providerId: "",
+    providerName: "",
+    model: "",
+    warning: "",
   },
 });
 
@@ -60,9 +82,17 @@ function cleanDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
 }
 
+function cleanTimestamp(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
 function normalizeWorkspace(input = {}) {
   const appointment = input.appointment && typeof input.appointment === "object" ? input.appointment : {};
   const sale = input.sale && typeof input.sale === "object" ? input.sale : {};
+  const consulting = input.consulting && typeof input.consulting === "object" ? input.consulting : {};
   const installments = cleanInteger(sale.installments, DEFAULT_WORKSPACE.sale.installments, 1, 120);
   const paidInstallments = cleanInteger(sale.paidInstallments, DEFAULT_WORKSPACE.sale.paidInstallments, 0, installments);
   const projectValue = cleanInteger(sale.projectValue, DEFAULT_WORKSPACE.sale.projectValue, 0);
@@ -89,6 +119,27 @@ function normalizeWorkspace(input = {}) {
       amountPaid,
       firstDueDate: cleanDate(sale.firstDueDate),
       paymentStatus: ["pending", "partial", "paid", "overdue"].includes(sale.paymentStatus) ? sale.paymentStatus : DEFAULT_WORKSPACE.sale.paymentStatus,
+    },
+    consulting: {
+      stage: CONSULTING_STAGE_IDS.includes(consulting.stage) ? consulting.stage : DEFAULT_WORKSPACE.consulting.stage,
+      status: ["pending", "ready", "reviewed", "sent", "sold", "delivered"].includes(consulting.status) ? consulting.status : DEFAULT_WORKSPACE.consulting.status,
+      websiteUrl: cleanUrl(consulting.websiteUrl),
+      instagramUrl: cleanUrl(consulting.instagramUrl),
+      instagramNotes: cleanText(consulting.instagramNotes, 6000),
+      auditSnapshot: cleanText(consulting.auditSnapshot, 40_000),
+      overallScore: cleanInteger(consulting.overallScore, DEFAULT_WORKSPACE.consulting.overallScore, 0, 100),
+      executiveSummary: cleanText(consulting.executiveSummary, 5000),
+      report: cleanText(consulting.report, 35_000),
+      whatsappMessage: cleanText(consulting.whatsappMessage, 5000),
+      priceCents: cleanInteger(consulting.priceCents, DEFAULT_WORKSPACE.consulting.priceCents, 0, 10_000_000),
+      paymentStatus: ["pending", "paid", "refunded"].includes(consulting.paymentStatus) ? consulting.paymentStatus : DEFAULT_WORKSPACE.consulting.paymentStatus,
+      soldAt: cleanTimestamp(consulting.soldAt),
+      deliveredAt: cleanTimestamp(consulting.deliveredAt),
+      lastAnalyzedAt: cleanTimestamp(consulting.lastAnalyzedAt),
+      providerId: cleanText(consulting.providerId, 180),
+      providerName: cleanText(consulting.providerName, 180),
+      model: cleanText(consulting.model, 180),
+      warning: cleanText(consulting.warning, 1200),
     },
     updatedAt: input.updatedAt || null,
   };
@@ -117,6 +168,7 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
     ...patch,
     appointment: { ...current.appointment, ...(patch.appointment || {}) },
     sale: { ...current.sale, ...(patch.sale || {}) },
+    consulting: { ...current.consulting, ...(patch.consulting || {}) },
     updatedAt: new Date().toISOString(),
   });
 
