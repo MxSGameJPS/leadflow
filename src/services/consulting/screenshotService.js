@@ -5,10 +5,10 @@ const SCREENSHOT_TIMEOUT_MS = 30_000;
 
 async function loadChromium() {
   try {
-    const playwright = await import("playwright");
+    const playwright = await import(/* webpackIgnore: true */ "playwright");
     return playwright.chromium;
   } catch {
-    throw new Error("O Playwright não está instalado. Execute npm install e depois npm run install:browser.");
+    throw new Error("O navegador de captura ainda não foi instalado. Execute npm run install:browser.");
   }
 }
 
