@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "clean:next": "node scripts/clean-next.mjs",
-    "dev": "npm run clean:next && next dev",
+    "dev": "next dev",
     "dev:fast": "next dev",
     "build": "next build",
     "start": "next start",
