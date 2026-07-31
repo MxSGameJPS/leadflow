@@ -1,6 +1,7 @@
 import { inspectWebsiteHtml } from "../src/services/consulting/siteAuditService.js";
 import { buildConsultingDiagnosisPrompt, buildConsultingReportPrompt } from "../src/services/ai/consultingAuditService.js";
 import { normalizeConsultingStage } from "../src/services/consulting/stages.js";
+import { resolveChromiumExport } from "../src/services/consulting/screenshotService.js";
 import { resolveCommercialTrack, trackIncludes } from "../src/services/leads/commercialTrack.js";
 
 let pass = 0;
@@ -37,6 +38,11 @@ test("nota A entra em projetos por padrão", resolveCommercialTrack({ grade: "A"
 test("track manual independe da nota", resolveCommercialTrack({ grade: "D" }, { commercialTrack: "both" }) === "both");
 test("both aparece nos dois CRMs", trackIncludes("both", "projects") && trackIncludes("both", "consulting"));
 test("migra etapa antiga para kanban simples", normalizeConsultingStage("relatorio_pronto") === "diagnostico" && normalizeConsultingStage("vendido") === "cliente");
+
+const fakeChromium = { launch() {} };
+test("aceita chromium como exportação ESM", resolveChromiumExport({ chromium: fakeChromium }) === fakeChromium);
+test("aceita chromium dentro do default CommonJS", resolveChromiumExport({ default: { chromium: fakeChromium } }) === fakeChromium);
+test("rejeita módulo sem chromium.launch", resolveChromiumExport({ default: {} }) === null);
 
 const diagnosisPrompt = buildConsultingDiagnosisPrompt({
   lead: { name: "Restaurante Exemplo", segment: "Restaurante", grade: "C", score: 35 },
