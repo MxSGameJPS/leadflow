@@ -29,6 +29,7 @@ if (push.status !== 0) {
 }
 
 const repo = await import("../src/repositories/leadRepository.js");
+const contacts = await import("../src/repositories/contactTrackingRepository.js");
 const { prisma } = await import("../src/lib/prisma.js");
 
 let pass = 0, fail = 0;
@@ -44,6 +45,12 @@ try {
   const a = await repo.createLead({ id: "test_a", name: "Alpha Pizzaria", source: "Google Maps", grade: "A", score: 80, whatsapp: "5547999990001", weakSite: true, city: "Dois Irmãos" });
   t("create id", !!a.id);
   t("create stage novo (default)", a.stage === "novo");
+  t("novo lead sem contatos", a.contactCount === 0 && a.lastContactAt == null);
+
+  const firstContact = await contacts.recordContact(a.id, "initial");
+  t("registra primeiro contato", firstContact.contactCount === 1 && firstContact.lastContactKind === "initial" && firstContact.lastContactAt instanceof Date);
+  const secondContact = await contacts.recordContact(a.id, "followup");
+  t("incrementa contatos", secondContact.contactCount === 2 && secondContact.lastContactKind === "followup");
 
   t("moveStage contatado", (await repo.moveStage(a.id, "contatado")).stage === "contatado");
   t("setFollowUp", (await repo.setFollowUp(a.id, "2026-01-01")).followUpAt === "2026-01-01");
@@ -77,6 +84,7 @@ try {
   const alpha = (await repo.listLeads()).find(l => l.name === "Alpha Pizzaria");
   t("preserva stage apos import", alpha.stage === "contatado");
   t("preserva valor apos import", alpha.proposalValue === 2500);
+  t("preserva histórico de contato apos import", alpha.contactCount === 2 && alpha.lastContactKind === "followup" && alpha.lastContactAt != null);
 
   const st = await repo.stats();
   t("stats withWhatsapp 2", st.withWhatsapp === 2);
