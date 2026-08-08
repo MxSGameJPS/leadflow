@@ -257,7 +257,7 @@ function Drawer({ l, onClose, run, notify }) {
         </div>}
 
         <div className={s.field}><label>Mensagem de WhatsApp</label>
-          <div className={s.tabs}>{[["initial", "1º contato"], ["followup", "Follow-up"], ["recovery", "Recuperar"]].map(([k, lab]) => (<button key={k} className={kind === k ? s.tabActive : ""} onClick={() => setKind(k)}>{lab}</button>))}</div>
+          <div className={s.tabs}>{[["initial", "1º contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([k, lab]) => (<button key={k} className={kind === k ? s.tabActive : ""} onClick={() => setKind(k)}>{lab}</button>))}</div>
           <textarea className={s.msg} value={msg} onChange={e => { setMsg(e.target.value); setAiInfo(""); }} />
           <div className={s.row}>
             <button className={s.miniBtn} onClick={generateWithAI} disabled={aiBusy}>{aiBusy ? "Gerando com IA…" : "Gerar com IA"}</button>
