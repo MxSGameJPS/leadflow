@@ -30,7 +30,9 @@ t("defaultLanding = todo", defaultLanding(lg) === "todo");
 const m = buildMessages(lg);
 t("msg initial cita nome", m.initial.includes("San Giovanni"));
 t("msg initial tem 4.7 estrela", m.initial.includes("4.7★"));
+t("msg última tentativa encerra sem insistir", m.last_attempt.includes("última mensagem") && m.last_attempt.includes("encerrar o contato"));
 t("waFor codifica wa.me", waFor(lg, "initial").startsWith("https://wa.me/5551999999999?text="));
+t("waFor aceita última tentativa", decodeURIComponent(waFor(lg, "last_attempt")).includes("última mensagem"));
 
 const csv = "Nome da empresa,Segmento,Telefone,Nota no Google\nBar do Ze,Bar,(47) 99999-9999,4.5\n";
 const parsed = parseLeads(csv, "x.csv");
