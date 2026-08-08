@@ -258,7 +258,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
 
       <div className={s.scriptCard}>
         <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>Usa seu Perfil, o Google do cliente, o nicho, o Instagram e a prévia disponível.</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer">Chamar no WhatsApp</a>}</div>
-        <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
+        <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
         <textarea value={whatsappMessage} onChange={event => setWhatsappMessage(event.target.value)} />
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "whatsapp"} onClick={() => generateAI("whatsapp")}>{busy === "whatsapp" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ whatsappMessage }, "Mensagem salva.")}>Salvar</button><button onClick={() => copy(whatsappMessage, "Mensagem copiada.")}>Copiar</button></div>
       </div>
