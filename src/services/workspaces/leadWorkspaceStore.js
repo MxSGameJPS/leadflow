@@ -4,6 +4,7 @@ import { normalizeConsultingStage } from "../consulting/stages.js";
 import { validateCommercialTrack } from "../leads/commercialTrack.js";
 
 const WORKSPACE_DIR = path.join(process.cwd(), "data", "lead-workspaces");
+const CONTACT_KINDS = new Set(["initial", "followup", "last_attempt", "recovery", "call", "whatsapp", "manual"]);
 const CONSULTING_STATUSES = new Set([
   "pending", "analyzing", "ready", "reviewed", "sent", "interested",
   "payment_pending", "paid", "delivered", "converted", "lost",
@@ -14,6 +15,9 @@ const DEFAULT_WORKSPACE = Object.freeze({
   callScript: "",
   whatsappMessage: "",
   previewUrl: "",
+  lastContactAt: "",
+  lastContactKind: "",
+  contactCount: 0,
   appointment: {
     type: "Reunião",
     time: "09:00",
@@ -104,6 +108,11 @@ function cleanBoolean(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+function cleanContactKind(value) {
+  const kind = String(value || "").trim().toLowerCase();
+  return CONTACT_KINDS.has(kind) ? kind : "";
+}
+
 function normalizeConsultingStatus(value, paymentStatus) {
   const raw = String(value || "").trim();
   if (raw === "sold") return "paid";
@@ -129,6 +138,9 @@ function normalizeWorkspace(input = {}) {
     callScript: cleanText(input.callScript),
     whatsappMessage: cleanText(input.whatsappMessage),
     previewUrl: cleanUrl(input.previewUrl),
+    lastContactAt: cleanTimestamp(input.lastContactAt),
+    lastContactKind: cleanContactKind(input.lastContactKind),
+    contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
     appointment: {
       type: cleanText(appointment.type || DEFAULT_WORKSPACE.appointment.type, 80),
       time: /^\d{2}:\d{2}$/.test(String(appointment.time || "")) ? String(appointment.time) : DEFAULT_WORKSPACE.appointment.time,
