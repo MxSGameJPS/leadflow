@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES, STAGE_IDS } from "../../services/leads/stages.js";
-import { createLeadAction, deleteLeadAction, deleteLeadsAction, moveStageAction } from "../../app/actions/leads.js";
+import { createLeadAction, deleteLeadAction, deleteLeadsAction, moveStageAction, recordContactAction } from "../../app/actions/leads.js";
 import s from "./CRMBoard.module.css";
 
 const STAGE_COLOR = {
@@ -43,6 +43,45 @@ function whatsappUrl(lead) {
   return `https://wa.me/${digits}`;
 }
 
+function contactAgeDays(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const contactDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.max(0, Math.floor((today - contactDay) / 86_400_000));
+}
+
+function lastContactLabel(lead) {
+  const days = contactAgeDays(lead.lastContactAt);
+  if (days == null) return "Nunca contatado";
+  if (days === 0) return "Hoje";
+  if (days === 1) return "Ontem";
+  if (days <= 15) return `Há ${days} dias`;
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(lead.lastContactAt));
+}
+
+function matchesContactFilter(lead, filter) {
+  if (filter === "all") return true;
+  const days = contactAgeDays(lead.lastContactAt);
+  if (filter === "never") return days == null;
+  if (days == null) return false;
+  if (filter === "today") return days === 0;
+  if (filter === "1-3") return days >= 1 && days <= 3;
+  if (filter === "4-7") return days >= 4 && days <= 7;
+  if (filter === "8-15") return days >= 8 && days <= 15;
+  if (filter === "16+") return days >= 16;
+  return true;
+}
+
+function nextWhatsappKind(lead) {
+  const count = Number(lead.contactCount || 0);
+  if (count <= 0) return "initial";
+  if (count === 1) return "followup";
+  return "last_attempt";
+}
+
 export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -51,6 +90,7 @@ export default function CRMBoard({ initialLeads = [] }) {
   const [nicheFilter, setNicheFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [quick, setQuick] = useState("all");
+  const [contactFilter, setContactFilter] = useState("all");
   const [sort, setSort] = useState("recent");
   const [dragOver, setDragOver] = useState("");
   const [creating, setCreating] = useState(false);
@@ -95,15 +135,28 @@ export default function CRMBoard({ initialLeads = [] }) {
       if (quick === "score" && Number(lead.score || 0) < 50) return false;
       if (quick === "phone" && !lead.phone && !lead.whatsapp) return false;
       if (quick === "whatsapp" && !lead.whatsapp && !isPossibleMobile(lead.phone)) return false;
+      if (!matchesContactFilter(lead, contactFilter)) return false;
       return true;
     });
 
     return filtered.sort((a, b) => {
       if (sort === "score") return Number(b.score || 0) - Number(a.score || 0);
       if (sort === "name") return String(a.name).localeCompare(String(b.name), "pt-BR");
+      if (sort === "contact-oldest") {
+        if (!a.lastContactAt && !b.lastContactAt) return Number(b.score || 0) - Number(a.score || 0);
+        if (!a.lastContactAt) return -1;
+        if (!b.lastContactAt) return 1;
+        return new Date(a.lastContactAt) - new Date(b.lastContactAt);
+      }
+      if (sort === "contact-newest") {
+        if (!a.lastContactAt && !b.lastContactAt) return 0;
+        if (!a.lastContactAt) return 1;
+        if (!b.lastContactAt) return -1;
+        return new Date(b.lastContactAt) - new Date(a.lastContactAt);
+      }
       return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
     });
-  }, [leads, nicheFilter, gradeFilter, quick, search, sort]);
+  }, [leads, nicheFilter, gradeFilter, quick, contactFilter, search, sort]);
 
   const byStage = useMemo(() => {
     const grouped = Object.fromEntries(STAGE_IDS.map(id => [id, []]));
@@ -120,6 +173,7 @@ export default function CRMBoard({ initialLeads = [] }) {
     nicheFilter !== "all",
     gradeFilter !== "all",
     quick !== "all",
+    contactFilter !== "all",
   ].filter(Boolean).length;
 
   function showNotice(message, kind = "error") {
@@ -132,6 +186,7 @@ export default function CRMBoard({ initialLeads = [] }) {
     setNicheFilter("all");
     setGradeFilter("all");
     setQuick("all");
+    setContactFilter("all");
   }
 
   function toggleLeadSelection(leadId) {
@@ -153,6 +208,24 @@ export default function CRMBoard({ initialLeads = [] }) {
       }
       return next;
     });
+  }
+
+  async function trackContact(lead, kind) {
+    const previous = leads;
+    const optimistic = {
+      lastContactAt: new Date().toISOString(),
+      lastContactKind: kind,
+      contactCount: Number(lead.contactCount || 0) + 1,
+    };
+    setLeads(current => current.map(item => item.id === lead.id ? { ...item, ...optimistic } : item));
+    try {
+      const saved = await recordContactAction(lead.id, kind);
+      setLeads(current => current.map(item => item.id === lead.id ? { ...item, ...saved } : item));
+      router.refresh();
+    } catch (error) {
+      setLeads(previous);
+      showNotice(`Não foi possível registrar o contato: ${error.message}`);
+    }
   }
 
   async function moveLead(leadId, stage) {
@@ -241,8 +314,8 @@ export default function CRMBoard({ initialLeads = [] }) {
   }
 
   function exportCsv() {
-    const header = ["Nome", "Categoria", "Cidade", "Estado", "Telefone", "WhatsApp", "Site", "Score", "Nota", "Etapa"];
-    const rows = leads.map(lead => [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp, lead.site, lead.score, lead.grade, lead.stage]);
+    const header = ["Nome", "Categoria", "Cidade", "Estado", "Telefone", "WhatsApp", "Site", "Score", "Nota", "Etapa", "Último contato", "Quantidade de contatos"];
+    const rows = leads.map(lead => [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp, lead.site, lead.score, lead.grade, lead.stage, lead.lastContactAt || "", lead.contactCount || 0]);
     const content = [header, ...rows].map(row => row.map(csvValue).join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a");
@@ -256,7 +329,7 @@ export default function CRMBoard({ initialLeads = [] }) {
     <header className={s.header}>
       <div>
         <h1>CRM</h1>
-        <p>Combine nicho, nota, oportunidade e busca para priorizar os leads certos.</p>
+        <p>Combine nicho, nota, oportunidade, último contato e busca para priorizar os leads certos.</p>
       </div>
     </header>
 
@@ -294,6 +367,19 @@ export default function CRMBoard({ initialLeads = [] }) {
           </select>
         </label>
 
+        <label className={s.filterField}>
+          <span>Último contato</span>
+          <select value={contactFilter} onChange={event => setContactFilter(event.target.value)}>
+            <option value="all">Qualquer data</option>
+            <option value="never">Nunca contatados</option>
+            <option value="today">Hoje</option>
+            <option value="1-3">Há 1–3 dias</option>
+            <option value="4-7">Há 4–7 dias</option>
+            <option value="8-15">Há 8–15 dias</option>
+            <option value="16+">Há mais de 15 dias</option>
+          </select>
+        </label>
+
         {activeFilterCount > 0 && <button className={s.clearFilters} type="button" onClick={clearFilters}>Limpar filtros ({activeFilterCount})</button>}
       </div>
 
@@ -309,6 +395,8 @@ export default function CRMBoard({ initialLeads = [] }) {
           <button type="button" onClick={exportCsv}>Exportar</button>
           <select value={sort} onChange={event => setSort(event.target.value)} aria-label="Ordenar leads">
             <option value="recent">Ordenar: mais recentes</option>
+            <option value="contact-oldest">Ordenar: contato mais antigo</option>
+            <option value="contact-newest">Ordenar: contato mais recente</option>
             <option value="score">Ordenar: maior score</option>
             <option value="name">Ordenar: nome</option>
           </select>
@@ -347,6 +435,7 @@ export default function CRMBoard({ initialLeads = [] }) {
             : byStage[stage.id].map(lead => {
               const wa = whatsappUrl(lead);
               const selected = selectedIds.has(lead.id);
+              const contactCount = Number(lead.contactCount || 0);
               return <article
                 key={lead.id}
                 className={`${s.card} ${selected ? s.cardSelected : ""}`}
@@ -379,9 +468,10 @@ export default function CRMBoard({ initialLeads = [] }) {
                 </div>
                 <h2 title={lead.name}>{lead.name}</h2>
                 <p>{lead.segment || "Sem categoria"} · {[lead.city, lead.location].filter(Boolean).join(", ") || "Local não informado"}</p>
+                <p>Último contato: {lastContactLabel(lead)}{contactCount > 0 ? ` · ${contactCount} contato${contactCount === 1 ? "" : "s"}` : ""}</p>
                 <div className={s.cardActions}>
-                  {lead.phone ? <a href={`tel:${lead.phone}`} onClick={event => event.stopPropagation()}>Ligar</a> : <span>Sem telefone</span>}
-                  {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>{lead.whatsapp ? "WhatsApp" : "Testar WhatsApp"}</a> : <span>Sem WhatsApp</span>}
+                  {lead.phone ? <a href={`tel:${lead.phone}`} onClick={event => { event.stopPropagation(); trackContact(lead, "call"); }}>Ligar</a> : <span>Sem telefone</span>}
+                  {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" onClick={event => { event.stopPropagation(); trackContact(lead, nextWhatsappKind(lead)); }}>{lead.whatsapp ? "WhatsApp" : "Testar WhatsApp"}</a> : <span>Sem WhatsApp</span>}
                 </div>
               </article>;
             })}
