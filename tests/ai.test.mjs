@@ -107,6 +107,15 @@ try {
   t("prompt contém lead", prompt.prompt.includes("Mercado Silva"));
   t("prompt exige fatos reais", prompt.systemPrompt.includes("Não invente"));
 
+  const lastAttemptPrompt = buildLeadMessagePrompt({
+    kind: "last_attempt",
+    lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos" },
+    currentMessage: "Vou encerrar o contato por aqui.",
+  });
+  t("prompt aceita última tentativa", lastAttemptPrompt.kind === "last_attempt");
+  t("última tentativa considera duas mensagens sem resposta", lastAttemptPrompt.prompt.includes("duas mensagens já foram enviadas"));
+  t("última tentativa evita pressão", lastAttemptPrompt.prompt.includes("não gere culpa") && lastAttemptPrompt.prompt.includes("não haverá nova insistência"));
+
   const callPrompt = buildLeadMessagePrompt({
     kind: "call",
     lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos" },
@@ -122,6 +131,14 @@ try {
   t("gera mensagem para lead", leadMessage.text.includes("mensagem gerada"));
   t("retorna modelo usado", leadMessage.model === "auto/reasoning:free");
   t("prompt de lead foi enviado", requests.at(-1).body.messages[1].content.includes("Mercado Silva"));
+
+  const lastAttemptMessage = await generateLeadMessage({
+    kind: "last_attempt",
+    lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos" },
+    currentMessage: "Vou encerrar o contato por aqui.",
+  });
+  t("gera última tentativa com IA", lastAttemptMessage.text.includes("mensagem gerada"));
+  t("envia contexto de última tentativa ao provedor", requests.at(-1).body.messages[1].content.includes("última tentativa após duas mensagens sem resposta"));
 
   await removeProvider(created.id);
   t("remove provedor", (await listProvidersPublic()).length === 0);
