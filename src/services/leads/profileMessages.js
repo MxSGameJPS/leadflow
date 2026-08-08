@@ -38,9 +38,13 @@ export function buildProfileMessages(lead, profile = {}, previewUrl = "") {
     ? `Oi${first ? `, ${first}` : ""}! Passando para compartilhar a prévia que preparei para a ${business}:\n${previewUrl}\n\nEla é uma proposta visual inicial, sem compromisso. Quando puder olhar, me diga o que achou.${ending}`
     : `Oi${first ? `, ${first}` : ""}! Passando novamente por aqui. Posso preparar e te enviar uma prévia visual para a ${business}, sem compromisso, para você avaliar com calma?${ending}`;
 
+  const last_attempt = previewUrl
+    ? `Oi${first ? `, ${first}` : ""}! Essa é minha última mensagem para não ficar insistindo. A prévia da ${business} continua disponível aqui:\n${previewUrl}\n\nSe isso não for prioridade agora, sem problema — encerro o contato por aqui. Se fizer sentido conversar mais adiante, posso deixar a porta aberta?${ending}`
+    : `Oi${first ? `, ${first}` : ""}! Essa é minha última mensagem para não ficar insistindo. Entrei em contato porque acredito que uma presença digital própria pode fazer sentido para a ${business}, mas entendo se não for prioridade agora.\n\nVou encerrar o contato por aqui. Posso deixar a porta aberta para conversarmos no futuro?${ending}`;
+
   const recovery = previewUrl
     ? `Oi${first ? `, ${first}` : ""}! Retomei nossa conversa porque a prévia da ${business} continua disponível aqui:\n${previewUrl}\n\nPosso ajustar a ideia com base no que vocês realmente precisam. O que você mudaria primeiro?${ending}`
     : `Oi${first ? `, ${first}` : ""}! Posso preparar uma versão visual mais enxuta, focada apenas no essencial para a ${business}. Posso te mostrar essa ideia sem compromisso?${ending}`;
 
-  return { initial, followup, recovery };
+  return { initial, followup, last_attempt, recovery };
 }
