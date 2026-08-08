@@ -75,13 +75,6 @@ function matchesContactFilter(lead, filter) {
   return true;
 }
 
-function nextWhatsappKind(lead) {
-  const count = Number(lead.contactCount || 0);
-  if (count <= 0) return "initial";
-  if (count === 1) return "followup";
-  return "last_attempt";
-}
-
 export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -471,7 +464,7 @@ export default function CRMBoard({ initialLeads = [] }) {
                 <p>Último contato: {lastContactLabel(lead)}{contactCount > 0 ? ` · ${contactCount} contato${contactCount === 1 ? "" : "s"}` : ""}</p>
                 <div className={s.cardActions}>
                   {lead.phone ? <a href={`tel:${lead.phone}`} onClick={event => { event.stopPropagation(); trackContact(lead, "call"); }}>Ligar</a> : <span>Sem telefone</span>}
-                  {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" onClick={event => { event.stopPropagation(); trackContact(lead, nextWhatsappKind(lead)); }}>{lead.whatsapp ? "WhatsApp" : "Testar WhatsApp"}</a> : <span>Sem WhatsApp</span>}
+                  {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" onClick={event => { event.stopPropagation(); if (lead.whatsapp) trackContact(lead, "whatsapp"); }}>{lead.whatsapp ? "WhatsApp" : "Testar WhatsApp"}</a> : <span>Sem WhatsApp</span>}
                 </div>
               </article>;
             })}
