@@ -31,11 +31,15 @@ export function buildMessages(l) {
     "Oi" + (fn ? (", " + fn) : "") + "! Passando de novo por aqui 👋\n\n" +
     "Sei que a rotina é corrida, então vou ser direto: consigo deixar " + nm + " com uma presença online profissional no ar ainda esta semana — e o primeiro passo não te custa nada. Eu monto a prévia, te mostro pronta, e você decide se faz sentido.\n\n" +
     "Prefere que eu te mande o exemplo por aqui ou te explique num áudio de 1 minuto?";
+  const last_attempt =
+    "Oi" + (fn ? (", " + fn) : "") + "! Essa é minha última mensagem para não ficar insistindo.\n\n" +
+    "Entrei em contato porque acredito que " + off + " pode fazer sentido para " + nm + ", mas entendo perfeitamente se isso não for prioridade agora.\n\n" +
+    "Vou encerrar o contato por aqui. Se fizer sentido conversar mais pra frente, posso deixar a porta aberta?";
   const recovery =
     "Oi" + (fn ? (", " + fn) : "") + "! Fiquei pensando no que conversamos.\n\n" +
     "Entendo total a cautela com investimento agora — e é justamente por isso que remontei a proposta pra fazer mais sentido: dá pra começar com um escopo enxuto (só o essencial pra você já captar cliente), em condição parcelada, e a gente evolui conforme o retorno aparece.\n\n" +
     "Assim você não trava o caixa e já para de perder venda pra quem tem site. Quer que eu te mande os números nesse novo formato?";
-  return { initial, followup, recovery };
+  return { initial, followup, last_attempt, recovery };
 }
 export function msgKindForStage(s) { if (s === "sem_resposta") return "followup"; if (s === "proposta_rejeitada" || s === "perdido") return "recovery"; return "initial"; }
-export function waFor(l, kind) { if (!l.whatsapp) return null; const m = buildMessages(l); const text = kind === "followup" ? m.followup : kind === "recovery" ? m.recovery : m.initial; return "https://wa.me/" + l.whatsapp + "?text=" + encodeURIComponent(text); }
+export function waFor(l, kind) { if (!l.whatsapp) return null; const m = buildMessages(l); const text = m[kind] || m.initial; return "https://wa.me/" + l.whatsapp + "?text=" + encodeURIComponent(text); }
