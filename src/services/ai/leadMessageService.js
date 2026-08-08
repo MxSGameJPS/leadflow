@@ -1,9 +1,10 @@
 import { generateWithDefaultProvider, generateWithProvider } from "./providerService.js";
 
-const KINDS = new Set(["initial", "followup", "recovery", "call"]);
+const KINDS = new Set(["initial", "followup", "last_attempt", "recovery", "call"]);
 const KIND_LABELS = {
   initial: "primeiro contato",
   followup: "follow-up após uma abordagem sem resposta",
+  last_attempt: "última tentativa após duas mensagens sem resposta",
   recovery: "recuperação de uma proposta rejeitada ou negociação encerrada",
   call: "roteiro de ligação comercial consultiva",
 };
@@ -66,9 +67,11 @@ export function buildLeadMessagePrompt({ lead: leadInput, profile: profileInput,
     ? "Apresente o profissional de modo natural, mencione que conheceu o negócio pelo perfil do Google quando houver dados do Google, reconheça algo verdadeiro da reputação ou do nicho, ofereça uma prévia visual sem compromisso e encerre com uma pergunta simples."
     : kind === "followup"
       ? "Considere que uma primeira mensagem já foi enviada e não houve resposta. Seja breve, educado e retome a oferta da prévia sem pressionar nem demonstrar culpa. Se já existir previewUrl, diga que a prévia ficou pronta e inclua o link."
-      : kind === "recovery"
-        ? "Considere que houve objeção, rejeição ou perda. Retome com respeito e valor concreto. Não invente desconto, parcelamento, prazo ou condição que não esteja nos dados. Se já existir previewUrl, use a prévia como motivo legítimo para retomar."
-        : "Crie um roteiro falado, curto e natural, com apresentação usando nome e profissão do perfil, menção ao perfil do Google quando houver dados, pergunta de diagnóstico, conexão com o nicho, oferta de uma prévia e encerramento com próximo passo simples.";
+      : kind === "last_attempt"
+        ? "Considere que duas mensagens já foram enviadas e nenhuma recebeu resposta. Esta é a última tentativa da sequência: seja muito breve, respeitoso e sem cobrança. Deixe claro de forma natural que você vai encerrar o contato por aqui para não insistir. Se existir previewUrl, pode deixar o link uma última vez. Termine com uma pergunta muito simples, preferencialmente que possa ser respondida com sim ou não, e deixe a porta aberta para um contato futuro."
+        : kind === "recovery"
+          ? "Considere que houve objeção, rejeição ou perda. Retome com respeito e valor concreto. Não invente desconto, parcelamento, prazo ou condição que não esteja nos dados. Se já existir previewUrl, use a prévia como motivo legítimo para retomar."
+          : "Crie um roteiro falado, curto e natural, com apresentação usando nome e profissão do perfil, menção ao perfil do Google quando houver dados, pergunta de diagnóstico, conexão com o nicho, oferta de uma prévia e encerramento com próximo passo simples.";
 
   const systemPrompt = isCall
     ? [
@@ -107,7 +110,9 @@ export function buildLeadMessagePrompt({ lead: leadInput, profile: profileInput,
     "",
     isCall
       ? "Regras finais: não cite cidade quando a localização estiver vazia ou aproximada; não prometa retorno financeiro; faça perguntas abertas e termine propondo mostrar uma prévia ou marcar um próximo passo."
-      : "Regras finais: a primeira linha deve soar humana; não prometa retorno financeiro; ofereça a prévia de modo leve; termine com uma pergunta fácil de responder; assine com o nome e a profissão do perfil quando preenchidos.",
+      : kind === "last_attempt"
+        ? "Regras finais: não gere culpa, urgência falsa ou pressão; não peça explicações pela falta de resposta; encerre com elegância e deixe claro que não haverá nova insistência nesta sequência."
+        : "Regras finais: a primeira linha deve soar humana; não prometa retorno financeiro; ofereça a prévia de modo leve; termine com uma pergunta fácil de responder; assine com o nome e a profissão do perfil quando preenchidos.",
   ].join("\n");
 
   return { systemPrompt, prompt, lead, profile, kind };
