@@ -57,6 +57,21 @@ function waLink(lead, message = "") {
   return `https://wa.me/${digits}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 }
 
+function formatLastContact(value, count = 0) {
+  if (!value) return "Nunca contatado";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nunca contatado";
+  const formatted = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+  const total = Number(count || 0);
+  return total > 0 ? `${formatted} · ${total} contato${total === 1 ? "" : "s"}` : formatted;
+}
+
 function defaultCallScript(lead, profile) {
   const location = [lead.city, lead.location].filter(Boolean).join(" / ");
   const intro = [profile?.name, profile?.profession].filter(Boolean).join(", ") || "trabalho com desenvolvimento de sites";
@@ -180,6 +195,22 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     setNotice(message);
   }
 
+  async function trackContact(contactKind) {
+    const optimistic = {
+      lastContactAt: new Date().toISOString(),
+      lastContactKind: contactKind,
+      contactCount: Number(lead.contactCount || 0) + 1,
+    };
+    setLead(current => ({ ...current, ...optimistic }));
+    try {
+      const saved = await LeadActions.recordContactAction(lead.id, contactKind);
+      setLead(current => ({ ...current, ...saved }));
+      router.refresh();
+    } catch (error) {
+      setNotice(`Erro ao registrar contato: ${error.message}`);
+    }
+  }
+
   async function saveAppointment(event) {
     event.preventDefault();
     setBusy("appointment");
@@ -232,6 +263,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
           ["Endereço", lead.address || "Não informado"],
           ["Avaliação", lead.googleRating ? `${lead.googleRating}/5 · ${lead.googleReviews || 0} avaliações` : "Sem avaliação"],
           ["Fonte", lead.source || "Não informada"],
+          ["Último contato", formatLastContact(lead.lastContactAt, lead.contactCount)],
         ].map(([label, value]) => <div className={s.infoRow} key={label}><span>{label}</span><strong>{value}</strong></div>)}
 
         <div className={s.infoRow}><span>Etapa</span><div className={s.stageButtons}>{STAGES.map(stage => <button key={stage.id} className={lead.stage === stage.id ? s.activePill : ""} onClick={() => mutateLead(() => LeadActions.moveStageAction(lead.id, stage.id), { stage: stage.id }, `Etapa alterada para ${stage.label}.`)}>{stage.label}</button>)}</div></div>
@@ -251,13 +283,13 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   function renderScripts() {
     return <section className={s.section}>
       <div className={s.scriptCard}>
-        <div className={s.cardHeading}><div><h3>Roteiro de ligação</h3><p>Use como guia; não precisa ler palavra por palavra.</p></div>{lead.phone && <a href={`tel:${lead.phone}`}>Ligar agora</a>}</div>
+        <div className={s.cardHeading}><div><h3>Roteiro de ligação</h3><p>Use como guia; não precisa ler palavra por palavra.</p></div>{lead.phone && <a href={`tel:${lead.phone}`} onClick={() => trackContact("call")}>Ligar agora</a>}</div>
         <textarea value={callScript} onChange={event => setCallScript(event.target.value)} />
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "call"} onClick={() => generateAI("call")}>{busy === "call" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ callScript }, "Roteiro salvo.")}>Salvar</button><button onClick={() => copy(callScript, "Roteiro copiado.")}>Copiar</button></div>
       </div>
 
       <div className={s.scriptCard}>
-        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>Usa seu Perfil, o Google do cliente, o nicho, o Instagram e a prévia disponível.</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer">Chamar no WhatsApp</a>}</div>
+        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>Usa seu Perfil, o Google do cliente, o nicho, o Instagram e a prévia disponível.</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={() => trackContact(kind)}>Chamar no WhatsApp</a>}</div>
         <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
         <textarea value={whatsappMessage} onChange={event => setWhatsappMessage(event.target.value)} />
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "whatsapp"} onClick={() => generateAI("whatsapp")}>{busy === "whatsapp" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ whatsappMessage }, "Mensagem salva.")}>Salvar</button><button onClick={() => copy(whatsappMessage, "Mensagem copiada.")}>Copiar</button></div>
