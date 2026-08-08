@@ -16,8 +16,9 @@
     "test:repo": "node tests/repo.test.mjs",
     "test:ai": "node tests/ai.test.mjs",
     "test:projects": "node tests/projects.test.mjs",
+    "test:workspaces": "node tests/workspaces.test.mjs",
     "test:consulting": "node tests/consulting.test.mjs",
-    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:consulting"
+    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:workspaces && npm run test:consulting"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",
