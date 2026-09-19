@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { listIbgeCities } from "../../services/locations/ibge.js";
-import { searchGooglePlaces } from "../../services/places/googlePlaces.js";
+import { searchPlaces } from "../../services/places/placeSearch.js";
 
 function refreshLeadViews() {
   revalidatePath("/dashboard");
@@ -15,7 +15,7 @@ export async function listCitiesAction(state) {
 }
 
 export async function searchPlacesAction(filters) {
-  return searchGooglePlaces(filters);
+  return searchPlaces(filters);
 }
 
 export async function addPlacesToCrmAction(items) {
@@ -28,7 +28,7 @@ export async function addPlacesToCrmAction(items) {
 
   const leads = items.map(item => ({
     externalId: item.placeId || item.externalId,
-    source: "Google Places",
+    source: item.source || "Google Maps",
     name: item.name,
     segment: item.segment,
     city: item.city,
@@ -37,6 +37,7 @@ export async function addPlacesToCrmAction(items) {
     score: item.score,
     grade: item.grade,
     phone: item.phone,
+    email: item.email,
     whatsapp: null,
     instagram: item.instagram,
     site: item.site,
@@ -49,8 +50,8 @@ export async function addPlacesToCrmAction(items) {
     mapsLink: item.mapsLink,
     stage: "novo",
     notes: item.possibleWhatsApp
-      ? "Celular encontrado no Google Places. Pode ter WhatsApp, mas ainda não foi confirmado."
-      : "Importado automaticamente do Google Places.",
+      ? "Celular encontrado no Google Maps. Pode ter WhatsApp, mas ainda não foi confirmado."
+      : "Importado automaticamente do Google Maps.",
   }));
 
   const result = await importLeads(leads);
