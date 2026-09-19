@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import * as repo from "../../repositories/leadRepository.js";
 import { parseLeads } from "../../services/imports/parseLeads.js";
+import { getLeadWorkspace, saveLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
 
 const MAX_IMPORT_SIZE = 5_000_000;
 const CLEAR_CONFIRMATION = "APAGAR";
@@ -25,6 +26,25 @@ export async function setGradeAction(id, grade) { await repo.setGrade(id, grade)
 export async function setFollowUpAction(id, date) { await repo.setFollowUp(id, date); refresh(); }
 export async function setProposalValueAction(id, value) { await repo.setProposalValue(id, value); refresh(); }
 export async function setNotesAction(id, notes) { await repo.setNotes(id, notes); refresh(); }
+
+export async function recordContactAction(id, kind = "manual") {
+  const lead = await repo.getLead(String(id || ""));
+  if (!lead) throw new Error("Lead não encontrado.");
+
+  const workspace = await getLeadWorkspace(lead.id);
+  const saved = await saveLeadWorkspace(lead.id, {
+    lastContactAt: new Date().toISOString(),
+    lastContactKind: kind,
+    contactCount: Number(workspace.contactCount || 0) + 1,
+  });
+  refresh();
+  return {
+    id: lead.id,
+    lastContactAt: saved.lastContactAt,
+    lastContactKind: saved.lastContactKind,
+    contactCount: saved.contactCount,
+  };
+}
 
 export async function clearAllAction(confirmation) {
   if (confirmation !== CLEAR_CONFIRMATION) {

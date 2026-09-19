@@ -9,6 +9,7 @@ export async function saveLeadWorkspaceAction(leadId, patch) {
   if (!lead) throw new Error("Lead não encontrado.");
 
   const saved = await saveLeadWorkspace(lead.id, patch || {});
+  revalidatePath("/crm");
   revalidatePath(`/crm/${lead.id}`);
   revalidatePath("/agendamentos");
   revalidatePath("/cobrancas");

@@ -18,9 +18,15 @@ export default async function LeadDetailPage({ params }) {
     getProfessionalProfile(),
   ]);
   const commercialTrack = resolveCommercialTrack(lead, workspace);
+  const leadWithContact = {
+    ...lead,
+    lastContactAt: workspace.lastContactAt || "",
+    lastContactKind: workspace.lastContactKind || "",
+    contactCount: Number(workspace.contactCount || 0),
+  };
 
   return <>
     <CommercialTrackSelector leadId={lead.id} grade={lead.grade} initialTrack={commercialTrack} />
-    <LeadWorkspace initialLead={lead} initialWorkspace={{ ...workspace, commercialTrack }} initialProfile={profile} />
+    <LeadWorkspace initialLead={leadWithContact} initialWorkspace={{ ...workspace, commercialTrack }} initialProfile={profile} />
   </>;
 }
