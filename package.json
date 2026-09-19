@@ -18,7 +18,11 @@
     "test:projects": "node tests/projects.test.mjs",
     "test:workspaces": "node tests/workspaces.test.mjs",
     "test:consulting": "node tests/consulting.test.mjs",
-    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:workspaces && npm run test:consulting"
+    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:workspaces && npm run test:consulting",
+    "scraper:up": "docker compose up -d google-maps-scraper",
+    "scraper:down": "docker compose down",
+    "scraper:logs": "docker compose logs -f google-maps-scraper",
+    "scraper:status": "docker compose ps google-maps-scraper"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",

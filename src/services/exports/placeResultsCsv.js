@@ -6,6 +6,7 @@ const HEADERS = [
   "País",
   "Bairro pesquisado",
   "Telefone",
+  "E-mail",
   "Possível WhatsApp",
   "Endereço",
   "Nota no Google",
@@ -43,6 +44,7 @@ export function buildPlacesCsv(items = [], filters = {}) {
     item.country || filters.country,
     filters.neighborhood,
     item.phone,
+    item.email,
     item.possibleWhatsApp ? "Sim — não confirmado" : "Não",
     item.address,
     item.googleRating,
@@ -56,7 +58,7 @@ export function buildPlacesCsv(items = [], filters = {}) {
     item.offer,
     item.mapsLink,
     item.placeId || item.externalId,
-    "Google Places",
+    item.source || "Google Maps",
   ]);
 
   return "\uFEFF" + [HEADERS, ...rows].map(row => row.map(csvCell).join(";")).join("\r\n");
