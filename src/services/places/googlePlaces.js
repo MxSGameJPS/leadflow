@@ -33,6 +33,18 @@ function clean(value) {
   return text || null;
 }
 
+function parseNumeric(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  let normalized = raw.replace(/\s/g, "");
+  if (/^\d{1,3}(?:[.,]\d{3})+$/.test(normalized)) normalized = normalized.replace(/[.,]/g, "");
+  else if (/^\d+,\d+$/.test(normalized)) normalized = normalized.replace(",", ".");
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function hostFromUrl(url) {
   try {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
@@ -102,8 +114,8 @@ export function normalizePlaceLead(place, filters, { source = "Google Maps", rea
   const site = clean(place.site);
   const address = clean(place.address);
   const presence = classifyWebsite(site);
-  const rating = Number.isFinite(Number(place.rating)) ? Number(place.rating) : null;
-  const reviews = Number.isFinite(Number(place.reviews)) ? Number(place.reviews) : null;
+  const rating = parseNumeric(place.rating);
+  const reviews = parseNumeric(place.reviews);
   const score = scorePlace({ phone, address, rating, reviews, presence, country: filters.country });
   const externalId = clean(place.externalId);
 
