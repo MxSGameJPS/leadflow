@@ -12,7 +12,7 @@ const FIELD_MASK = [
   "nextPageToken",
 ].join(",");
 
-const COUNTRY_NAMES = {
+export const COUNTRY_NAMES = {
   BR: "Brasil",
   PT: "Portugal",
   AO: "Angola",
@@ -97,37 +97,39 @@ function opportunityText(presence) {
   return `Usa apenas ${presence.type.toLowerCase()} — oportunidade para oferecer um site próprio.`;
 }
 
-export function normalizeGooglePlace(place, filters) {
-  const phone = clean(place.nationalPhoneNumber);
-  const site = clean(place.websiteUri);
-  const address = clean(place.formattedAddress);
+export function normalizePlaceLead(place, filters, { source = "Google Maps", reasonPrefix = "Encontrado automaticamente no Google Maps" } = {}) {
+  const phone = clean(place.phone);
+  const site = clean(place.site);
+  const address = clean(place.address);
   const presence = classifyWebsite(site);
   const rating = Number.isFinite(Number(place.rating)) ? Number(place.rating) : null;
-  const reviews = Number.isFinite(Number(place.userRatingCount)) ? Number(place.userRatingCount) : null;
+  const reviews = Number.isFinite(Number(place.reviews)) ? Number(place.reviews) : null;
   const score = scorePlace({ phone, address, rating, reviews, presence, country: filters.country });
+  const externalId = clean(place.externalId);
 
   return {
-    externalId: clean(place.id),
-    placeId: clean(place.id),
-    source: "Google Places",
-    name: clean(place.displayName?.text) || "Estabelecimento sem nome",
-    segment: clean(filters.category),
-    city: clean(filters.city),
-    location: clean(filters.state),
+    externalId,
+    placeId: externalId,
+    source,
+    name: clean(place.name) || "Estabelecimento sem nome",
+    segment: clean(place.segment) || clean(filters.category),
+    city: clean(place.city) || clean(filters.city),
+    location: clean(place.location) || clean(filters.state),
     address,
     phone,
+    email: clean(place.email),
     whatsapp: null,
     site,
     instagram: presence.type === "Instagram" ? site : null,
     weakSite: presence.weak,
     googleRating: rating === null ? null : String(rating),
     googleReviews: reviews === null ? null : String(reviews),
-    mapsLink: clean(place.googleMapsUri),
+    mapsLink: clean(place.mapsLink),
     score,
     grade: gradeFromOpportunityScore(score),
     stage: "novo",
     problem: opportunityText(presence),
-    reason: `Encontrado automaticamente no Google Places. Presença: ${presence.type}.`,
+    reason: reasonPrefix + ". Presença: " + presence.type + ".",
     offer: presence.hasOwnSite ? "Auditoria e reformulação de site" : "Site profissional próprio",
     presenceType: presence.type,
     hasOwnSite: presence.hasOwnSite,
@@ -135,7 +137,22 @@ export function normalizeGooglePlace(place, filters) {
   };
 }
 
-function validateFilters(input = {}) {
+export function normalizeGooglePlace(place, filters) {
+  return normalizePlaceLead({
+    externalId: place.id,
+    name: place.displayName?.text,
+    segment: filters.category,
+    city: filters.city,
+    location: filters.state,
+    address: place.formattedAddress,
+    phone: place.nationalPhoneNumber,
+    site: place.websiteUri,
+    rating: place.rating,
+    reviews: place.userRatingCount,
+    mapsLink: place.googleMapsUri,
+  }, filters, { source: "Google Maps", reasonPrefix: "Encontrado automaticamente pela Google Places API" });
+}
+export function validateFilters(input = {}) {
   const country = String(input.country || "BR").trim().toUpperCase();
   const state = String(input.state || "").trim().toUpperCase();
   const city = String(input.city || "").trim();
@@ -152,7 +169,7 @@ function validateFilters(input = {}) {
   return { country, state, city: city.slice(0, 120), neighborhood: neighborhood.slice(0, 120), category: category.slice(0, 120), count };
 }
 
-function buildTextQuery(filters) {
+export function buildTextQuery(filters) {
   const neighborhood = filters.neighborhood ? ` no bairro ${filters.neighborhood}` : "";
   return `${filters.category}${neighborhood} em ${filters.city}, ${filters.state}, ${COUNTRY_NAMES[filters.country]}`;
 }
@@ -215,5 +232,6 @@ export async function searchGooglePlaces(input, { fetchImpl = fetch } = {}) {
     count: collected.length,
     query: textQuery,
     filters,
+    provider: "google_places_api",
   };
 }
