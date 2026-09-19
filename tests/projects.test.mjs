@@ -8,7 +8,11 @@ const generatedRelative = `generated-sites/test-draft-${stamp}`;
 const generatedAbsolute = path.join(root, generatedRelative);
 const projectDir = path.join(root, "data", "projects");
 
-const { createSiteProject, deleteSiteProject } = await import("../src/services/projects/projectStore.js");
+const { createSiteProject, deleteSiteProject, getSiteProject } = await import("../src/services/projects/projectStore.js");
+const { parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
+
+assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
+assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
 
 const draft = await createSiteProject({
   name: `Rascunho teste ${stamp}`,
@@ -26,7 +30,12 @@ await assert.rejects(fs.access(generatedAbsolute));
 const ready = await createSiteProject({
   name: `Projeto pronto ${stamp}`,
   status: "ready",
+  effects: ["glass-header", "invalid-effect", "hover-lift"],
+  referenceImages: [{ fileName: "ref.jpg", label: "Referência", mimeType: "image/jpeg", size: 123 }],
 });
+const loadedReady = await getSiteProject(ready.id);
+assert.deepEqual(loadedReady.effects, ["glass-header", "hover-lift"]);
+assert.equal(loadedReady.referenceImages.length, 1);
 
 await assert.rejects(
   deleteSiteProject(ready.id),
