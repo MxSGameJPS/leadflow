@@ -20,8 +20,8 @@ const TABS = [
 
 const UNIVERSAL_OBJECTIONS = [
   ["Não tenho dinheiro / está caro", "Entendo. Antes de falar em valor, posso te perguntar o que precisaria acontecer para esse investimento fazer sentido? A ideia é começar pelo que resolve o problema principal, sem incluir coisa desnecessária."],
-  ["Estou ocupado / não tenho tempo", "Sem problema. Eu consigo resumir em dois minutos ou deixar uma prévia pronta para você olhar quando puder. Qual horário costuma ser mais tranquilo?"],
-  ["Manda por WhatsApp / e-mail", "Claro. Para eu não mandar algo genérico, me diz só uma coisa: hoje o que mais incomoda na presença digital do negócio? Aí envio algo direto ao ponto."],
+  ["Estou ocupado / não tenho tempo", "Sem problema. Eu já deixei uma prévia pronta para você olhar quando puder. Posso te mandar o link por aqui e você vê no horário que for mais tranquilo."],
+  ["Manda por WhatsApp / e-mail", "Claro. Eu já preparei uma prévia específica para o negócio. Vou te enviar o link junto com uma explicação curta para você avaliar quando puder."],
   ["Vou pensar / depois retorno", "Perfeito. O que você precisa avaliar para decidir: investimento, prazo, confiança na solução ou conversar com outra pessoa? Assim eu envio exatamente o que ajuda nessa decisão."],
   ["Já tenho quem cuida disso", "Ótimo, isso mostra que vocês valorizam o digital. Minha proposta não é substituir alguém sem necessidade; posso fazer uma análise objetiva e mostrar oportunidades que talvez ainda não estejam sendo trabalhadas."],
 ];
@@ -80,7 +80,7 @@ function defaultCallScript(lead, profile) {
     `\nCONTEXTO\nEncontrei o perfil da empresa no Google${location ? ` em ${location}` : ""}${lead.googleRating ? ` e vi a avaliação ${lead.googleRating}/5` : ""}.`,
     `\nDIAGNÓSTICO\nHoje vocês usam qual canal como principal para apresentar o negócio e receber novos contatos?`,
     `\nCONEXÃO\n${lead.problem || `Percebi uma oportunidade de criar uma presença digital mais clara para o nicho de ${lead.segment || "vocês"}.`}`,
-    `\nPRÓXIMO PASSO\nPosso preparar uma prévia visual sem compromisso e mostrar como a ideia poderia ficar. Faz sentido?`,
+    lead.previewUrl ? `\nPRÓXIMO PASSO\nEu já preparei uma prévia visual para vocês e deixei publicada aqui: ${lead.previewUrl}\nQueria te mostrar rapidamente a lógica da página e ouvir o que você achou.` : `\nPRÓXIMO PASSO\nEu já estou trabalhando em uma prévia visual específica para vocês. Assim que publicar, envio o link para você avaliar.`,
   ].join("\n");
 }
 
@@ -91,7 +91,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [tab, setTab] = useState("info");
   const [kind, setKind] = useState("initial");
   const initialMessages = buildProfileMessages(initialLead, initialProfile, initialWorkspace.previewUrl);
-  const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript(initialLead, initialProfile));
+  const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript({ ...initialLead, previewUrl: initialWorkspace.previewUrl }, initialProfile));
   const [whatsappMessage, setWhatsappMessage] = useState(initialWorkspace.whatsappMessage || initialMessages.initial);
   const [instagram, setInstagram] = useState(initialLead.instagram || "");
   const [previewUrl, setPreviewUrl] = useState(initialWorkspace.previewUrl || "");
@@ -110,7 +110,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
 
   const currentStage = useMemo(() => STAGES.find(item => item.id === lead.stage), [lead.stage]);
   const status = lead.stage === "ganho" ? "won" : lead.stage === "perdido" ? "lost" : "open";
-  const whatsapp = waLink(lead, whatsappMessage);
+  const whatsapp = kind === "initial" && !previewUrl ? null : waLink(lead, whatsappMessage);
 
   async function mutateLead(action, patch, success) {
     const before = lead;
@@ -289,7 +289,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
       </div>
 
       <div className={s.scriptCard}>
-        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>Usa seu Perfil, o Google do cliente, o nicho, o Instagram e a prévia disponível.</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={() => trackContact(kind)}>Chamar no WhatsApp</a>}</div>
+        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>{previewUrl ? "Primeiro contato já envia a prévia publicada para o lead." : "Publique a prévia e salve o link na aba Informações antes do primeiro contato."}</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={() => trackContact(kind)}>Chamar no WhatsApp</a>}</div>
         <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
         <textarea value={whatsappMessage} onChange={event => setWhatsappMessage(event.target.value)} />
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "whatsapp"} onClick={() => generateAI("whatsapp")}>{busy === "whatsapp" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ whatsappMessage }, "Mensagem salva.")}>Salvar</button><button onClick={() => copy(whatsappMessage, "Mensagem copiada.")}>Copiar</button></div>
@@ -309,7 +309,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     return <section className={s.section}>
       <div className={s.sitePanel}>
         <div><span className={s.siteIcon}>✦</span><h3>{lead.landingStatus === "none" ? "Nenhum site criado ainda" : `Status do projeto: ${lead.landingStatus}`}</h3><p>O Instagram cadastrado será enviado como referência para o criador.</p></div>
-        <a className={s.primaryLink} href={`/criar-site?lead=${lead.id}`}>Abrir no criador de sites</a>
+        <a className={s.primaryLink} href={`/criar-site?lead=${lead.id}`}>{lead.landingStatus === "done" || lead.landingStatus === "sent" ? "Editar site com IA" : "Criar site com IA"}</a>
       </div>
       <div className={s.scriptCard}><h3>Status da prévia</h3><div className={s.stageButtons}>{[["none", "Não iniciado"], ["todo", "A fazer"], ["done", "Prévia pronta"], ["sent", "Enviada"]].map(([value, label]) => <button key={value} className={lead.landingStatus === value ? s.activePill : ""} onClick={() => mutateLead(() => LeadActions.setLandingAction(lead.id, value), { landingStatus: value }, `Site: ${label}.`)}>{label}</button>)}</div>{previewUrl && <div className={s.currentSite}><span>Prévia publicada</span><a href={previewUrl} target="_blank" rel="noopener noreferrer">{previewUrl}</a></div>}{lead.site && <div className={s.currentSite}><span>Presença atual</span><a href={lead.site} target="_blank" rel="noopener noreferrer">{lead.site}</a></div>}</div>
     </section>;

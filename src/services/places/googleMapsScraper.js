@@ -35,6 +35,23 @@ function firstEmail(value) {
   return match?.[0] || null;
 }
 
+export function parseScraperImageUrls(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  const urls = [];
+  try {
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : [];
+    for (const item of list) {
+      const candidate = typeof item === "string" ? item : item?.image || item?.url;
+      if (/^https?:\/\//i.test(String(candidate || ""))) urls.push(String(candidate));
+    }
+  } catch {
+    for (const match of raw.matchAll(/https?:\/\/[^\s"',}]+/g)) urls.push(match[0]);
+  }
+  return [...new Set(urls)].slice(0, 12);
+}
+
 function stableExternalId(row) {
   return row.place_id || row.data_id || row.cid || row.link || [row.title, row.address].filter(Boolean).join("|") || null;
 }
@@ -86,7 +103,7 @@ export function parseScraperCsv(input = "") {
 }
 
 export function normalizeScraperPlace(row, filters) {
-  return normalizePlaceLead({
+  const lead = normalizePlaceLead({
     externalId: stableExternalId(row),
     name: row.title,
     segment: row.category || filters.category,
@@ -100,6 +117,7 @@ export function normalizeScraperPlace(row, filters) {
     reviews: row.review_count,
     mapsLink: row.link,
   }, filters, { source: "Google Maps", reasonPrefix: "Encontrado automaticamente no Google Maps via scraper local" });
+  return { ...lead, thumbnail: /^https?:\/\//i.test(String(row.thumbnail || "")) ? row.thumbnail : null, imageUrls: parseScraperImageUrls(row.images) };
 }
 
 async function geocode(filters, fetchImpl) {

@@ -55,6 +55,14 @@ export async function addPlacesToCrmAction(items) {
   }));
 
   const result = await importLeads(leads);
+  const { saveLeadAssetSeed } = await import("../../services/projects/leadAssetStore.js");
+  await Promise.all(items.map(item => saveLeadAssetSeed(item.placeId || item.externalId, {
+    thumbnail: item.thumbnail,
+    imageUrls: item.imageUrls,
+    site: item.site,
+    instagram: item.instagram,
+    mapsLink: item.mapsLink,
+  })));
   refreshLeadViews();
   return result;
 }

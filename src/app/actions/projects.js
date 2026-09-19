@@ -1,71 +1,12 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
-import { getLead, setLanding } from "../../repositories/leadRepository.js";
-import { createSiteProject, deleteSiteProject } from "../../services/projects/projectStore.js";
+import { getLead,setLanding } from "../../repositories/leadRepository.js";
+import { createSiteProject,deleteSiteProject,getSiteProject,updateSiteProject } from "../../services/projects/projectStore.js";
 import { generateSiteFolder } from "../../services/projects/siteGeneratorV2.js";
-
-export async function createSiteProjectAction(input = {}) {
-  const mode = ["lead", "describe", "google"].includes(input.mode) ? input.mode : "lead";
-  let lead = null;
-
-  if (mode === "lead") {
-    lead = await getLead(String(input.leadId || ""));
-    if (!lead) throw new Error("Selecione um lead existente.");
-  }
-
-  const name = lead?.name || String(input.name || "").trim();
-  if (!name) throw new Error("Informe o nome do negócio.");
-
-  const leadDescription = [
-    lead?.problem,
-    lead?.offer,
-    lead?.bio,
-    lead?.instagram ? `Instagram do negócio: ${lead.instagram}` : "",
-  ].filter(Boolean).join("\n");
-
-  const generated = await generateSiteFolder({
-    name,
-    segment: lead?.segment || input.segment,
-    city: lead?.city || lead?.location || input.city,
-    address: lead?.address || "",
-    phone: lead?.phone || lead?.whatsapp || "",
-    placeId: lead?.externalId || "",
-    mapsLink: lead?.mapsLink || (mode === "google" ? input.source : ""),
-    existingWebsite: lead?.site || "",
-    instagram: lead?.instagram || "",
-    rating: lead?.googleRating || "",
-    reviews: lead?.googleReviews || "",
-    description: mode === "lead" ? leadDescription : input.source,
-    template: input.template,
-  });
-
-  const project = await createSiteProject({
-    leadId: lead?.id || null,
-    name,
-    segment: lead?.segment || input.segment,
-    city: lead?.city || lead?.location || input.city,
-    mode,
-    source: mode === "lead" ? (lead?.instagram || lead?.site || lead?.mapsLink || lead?.problem || "Dados do CRM") : input.source,
-    template: input.template,
-    status: "ready",
-    folderPath: generated.folderPath,
-    aiUsed: generated.aiUsed,
-    warning: generated.warning,
-    imageCount: generated.imageCount,
-  });
-
-  if (lead) await setLanding(lead.id, "done");
-  revalidatePath("/projetos");
-  revalidatePath("/criar-site");
-  if (lead) revalidatePath(`/crm/${lead.id}`);
-  return project;
-}
-
-export async function deleteSiteProjectAction(id) {
-  const project = await deleteSiteProject(String(id || ""));
-  revalidatePath("/projetos");
-  revalidatePath("/criar-site");
-  if (project.leadId) revalidatePath(`/crm/${project.leadId}`);
-  return { id: project.id };
-}
+import { collectLeadAssetUrls } from "../../services/projects/assetCollector.js";
+function refreshProject(project){revalidatePath("/projetos");revalidatePath("/criar-site");revalidatePath("/preview-internal/"+project.id);if(project.leadId)revalidatePath("/crm/"+project.leadId)}
+function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("\n")}
+function generatorInputFor({lead,input,mode,assetUrls=[]}){return{name:lead?.name||String(input.name||"").trim(),segment:lead?.segment||input.segment,city:lead?.city||lead?.location||input.city,address:lead?.address||"",phone:lead?.phone||lead?.whatsapp||"",placeId:lead?.externalId||"",mapsLink:lead?.mapsLink||(mode==="google"?input.source:""),existingWebsite:lead?.site||"",instagram:lead?.instagram||"",rating:lead?.googleRating||"",reviews:lead?.googleReviews||"",description:mode==="lead"?leadDescription(lead):input.source,template:input.template||"landing",assetUrls}}
+export async function createSiteProjectAction(input={}){const mode=["lead","describe","google"].includes(input.mode)?input.mode:"lead";let lead=null;if(mode==="lead"){lead=await getLead(String(input.leadId||""));if(!lead)throw new Error("Selecione um lead existente.")}const name=lead?.name||String(input.name||"").trim();if(!name)throw new Error("Informe o nome do negócio.");const generatorInput=generatorInputFor({lead,input,mode,assetUrls:lead?await collectLeadAssetUrls(lead):[]});const instruction=String(input.instruction||"").trim();const generated=await generateSiteFolder({...generatorInput,instruction});const project=await createSiteProject({leadId:lead?.id||null,name,segment:generatorInput.segment,city:generatorInput.city,mode,source:mode==="lead"?(lead?.instagram||lead?.site||lead?.mapsLink||lead?.problem||"Dados do CRM"):input.source,template:generatorInput.template,status:"ready",folderPath:generated.folderPath,aiUsed:generated.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput,instructions:instruction?[instruction]:["Gerar landing page premium usando os dados verificados deste lead."],version:1});if(lead)await setLanding(lead.id,"done");refreshProject(project);return project}
+export async function refineSiteProjectAction(input={}){const project=await getSiteProject(String(input.projectId||""));const instruction=String(input.instruction||"").trim();if(!instruction)throw new Error("Descreva o que deseja alterar no site.");let generatorInput={...(project.generatorInput||{})};if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template},mode:"lead",assetUrls:await collectLeadAssetUrls(lead)})}const generated=await generateSiteFolder({...generatorInput,folderPath:project.folderPath,existingSiteData:project.siteData,instruction});const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:generated.aiUsed||project.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput,instructions:[...(project.instructions||[]),instruction],version:Number(project.version||1)+1});refreshProject(updated);return updated}
+export async function deleteSiteProjectAction(id){const project=await deleteSiteProject(String(id||""));revalidatePath("/projetos");revalidatePath("/criar-site");if(project.leadId)revalidatePath("/crm/"+project.leadId);return{id:project.id}}

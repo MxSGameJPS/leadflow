@@ -275,7 +275,7 @@ async function downloadPlacePhotos(place, publicDir) {
   return { images, attributions };
 }
 
-function buildAiPrompt(input) {
+function buildAiPrompt(input, currentSiteData = null, instruction = "") {
   const facts = {
     name: input.name,
     segment: input.segment,
@@ -289,6 +289,7 @@ function buildAiPrompt(input) {
     existingWebsite: input.existingWebsite,
     template: input.template,
     description: input.description,
+    requestedChanges: clean(instruction, 5000),
   };
 
   return {
@@ -325,10 +326,57 @@ function buildAiPrompt(input) {
           colors: { primary: "#000000", accent: "#000000", background: "#000000", surface: "#000000", text: "#000000", muted: "#000000" },
         },
       }, null, 2),
+      instruction ? "ALTERAÇÃO SOLICITADA PELO USUÁRIO:\n" + clean(instruction, 5000) : "",
+
+      currentSiteData ? "ESTADO ATUAL APROVADO DO SITE. Preserve o que não foi pedido para mudar:\n" + JSON.stringify(currentSiteData, null, 2) : "",
+
       "DADOS CONFIÁVEIS DO NEGÓCIO:",
+
       JSON.stringify(facts, null, 2),
     ].join("\n"),
   };
+}
+
+async function downloadExternalImages(urls, publicDir) {
+  const list = Array.isArray(urls) ? urls : [];
+  if (!list.length) return [];
+  const imageDir = path.join(publicDir, "images");
+  await fs.mkdir(imageDir, { recursive: true });
+  const images = [];
+  const seen = new Set();
+  for (const raw of list.slice(0, 8)) {
+    const url = safeUrl(raw);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Mozilla/5.0 LeadFlow Site Preview" } });
+      clearTimeout(timer);
+      if (!response.ok) continue;
+      const type = String(response.headers.get("content-type") || "").toLowerCase();
+      if (!type.startsWith("image/")) continue;
+      const length = Number(response.headers.get("content-length") || 0);
+      if (length > 10 * 1024 * 1024) continue;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length || buffer.length > 10 * 1024 * 1024) continue;
+      const extension = extensionFromType(type);
+      const fileName = "reference-" + (images.length + 1) + "." + extension;
+      await fs.writeFile(path.join(imageDir, fileName), buffer);
+      images.push("/images/" + fileName);
+    } catch {}
+  }
+  return images;
+}
+
+async function outputFolder(name, folderPath) {
+  const requested = clean(folderPath, 500);
+  if (!requested) return uniqueFolder(name);
+  const absolutePath = path.resolve(process.cwd(), requested);
+  if (!absolutePath.startsWith(GENERATED_ROOT + path.sep) || absolutePath === GENERATED_ROOT) throw new Error("A pasta existente do projeto é inválida.");
+  await fs.mkdir(path.join(absolutePath, "app"), { recursive: true });
+  await fs.mkdir(path.join(absolutePath, "public"), { recursive: true });
+  return { folderName: path.basename(absolutePath), absolutePath };
 }
 
 async function uniqueFolder(name) {
@@ -497,7 +545,7 @@ Antes de entregar, valide 320px, 768px, 1024px e 1440px, foco por teclado e pref
 export async function generateSiteFolder(input = {}) {
   const name = clean(input.name, 220);
   if (!name) throw new Error("Informe o nome do negócio.");
-  const folder = await uniqueFolder(name);
+  const folder = await outputFolder(name, input.folderPath);
   const publicDir = path.join(folder.absolutePath, "public");
   await fs.mkdir(path.join(folder.absolutePath, "app"), { recursive: true });
   await fs.mkdir(publicDir, { recursive: true });
@@ -521,9 +569,9 @@ export async function generateSiteFolder(input = {}) {
 
   let aiUsed = false;
   let aiWarning = "";
-  let spec = fallbackSpec(placeData);
+  let spec = input.existingSiteData ? normalizeSpec(input.existingSiteData, placeData) : fallbackSpec(placeData);
   try {
-    const result = await generateWithDefaultProvider(buildAiPrompt(placeData));
+    const result = await generateWithDefaultProvider(buildAiPrompt(placeData, input.existingSiteData, input.instruction));
     spec = normalizeSpec(parseAiJson(result.text), placeData);
     aiUsed = true;
   } catch (error) {
@@ -532,6 +580,7 @@ export async function generateSiteFolder(input = {}) {
   }
 
   const media = await downloadPlacePhotos(place, publicDir);
+  const externalImages = await downloadExternalImages(input.assetUrls, publicDir);
   const siteData = {
     ...spec,
     segment: placeData.segment,
@@ -544,7 +593,7 @@ export async function generateSiteFolder(input = {}) {
     mapsLink: placeData.mapsLink,
     existingWebsite: placeData.existingWebsite,
     hours: placeData.openingHours,
-    images: media.images,
+    images: [...media.images, ...externalImages].slice(0, 8),
     attributions: media.attributions,
   };
 
@@ -580,5 +629,5 @@ export async function generateSiteFolder(input = {}) {
     fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nLanding page premium gerada pelo LeadFlow.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Direção visual específica para o nicho\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
   ]);
 
-  return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: media.images.length, designDirection: siteData.design.direction };
+  return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, siteData };
 }
