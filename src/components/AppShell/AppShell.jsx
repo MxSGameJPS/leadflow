@@ -47,6 +47,8 @@ export default function AppShell({ children }) {
     if (theme) document.documentElement.setAttribute("data-theme", theme);
   }, []);
 
+  if (pathname.startsWith("/preview-internal/")) return children;
+
   return (
     <div className={s.shell + (collapsed ? " " + s.collapsed : "")}>
       <aside className={s.sidebar}>

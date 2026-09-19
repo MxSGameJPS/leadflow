@@ -155,9 +155,21 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     try {
       const normalizedInstagram = instagram.trim() || null;
       const updatedLead = await LeadActions.updateLeadAction(lead.id, { instagram: normalizedInstagram });
-      const savedWorkspace = await persistWorkspace({ previewUrl }, "Instagram e link da prévia salvos.");
+      const leadForScripts = { ...lead, instagram: updatedLead?.instagram ?? normalizedInstagram, previewUrl };
+      const refreshedMessages = buildProfileMessages(leadForScripts, initialProfile, previewUrl);
+      const refreshedCallScript = defaultCallScript(leadForScripts, initialProfile);
+      const savedWorkspace = await persistWorkspace({
+        previewUrl,
+        whatsappMessage: refreshedMessages.initial,
+        callScript: refreshedCallScript,
+      }, "Instagram, link da prévia e roteiros atualizados.");
       setLead(current => ({ ...current, instagram: updatedLead?.instagram ?? normalizedInstagram }));
-      if (savedWorkspace) setPreviewUrl(savedWorkspace.previewUrl || "");
+      if (savedWorkspace) {
+        setPreviewUrl(savedWorkspace.previewUrl || "");
+        setKind("initial");
+        setWhatsappMessage(savedWorkspace.whatsappMessage || refreshedMessages.initial);
+        setCallScript(savedWorkspace.callScript || refreshedCallScript);
+      }
       router.refresh();
     } catch (error) {
       setNotice(`Erro: ${error.message}`);
