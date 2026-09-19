@@ -28,10 +28,10 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[notice,setNotice]=useState("");
   const[activeProject,setActiveProject]=useState(project);
   const[device,setDevice]=useState("desktop");
-  const[effects,setEffects]=useState(project?.effects?.length?project.effects:DEFAULT_EFFECTS);
+  const[effects,setEffects]=useState(project&&Array.isArray(project.effects)?project.effects:DEFAULT_EFFECTS);
   const[pendingReferences,setPendingReferences]=useState([]);
 
-  useEffect(()=>{setActiveProject(project);setEffects(project?.effects?.length?project.effects:DEFAULT_EFFECTS);setPendingReferences([])},[project]);
+  useEffect(()=>{setActiveProject(project);setEffects(project&&Array.isArray(project.effects)?project.effects:DEFAULT_EFFECTS);setPendingReferences([])},[project]);
   const selectedLead=useMemo(()=>leads.find(lead=>lead.id===leadId)||null,[leadId,leads]);
   const effectsChanged=activeProject?signature(effects)!==signature(activeProject.effects||[]):false;
   const canRefine=Boolean(instruction.trim()||pendingReferences.length||effectsChanged);
