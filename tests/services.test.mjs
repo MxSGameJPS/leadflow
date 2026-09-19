@@ -6,6 +6,7 @@ import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
+import { depthForCount, normalizeScraperPlace, parseScraperCsv } from "../src/services/places/googleMapsScraper.js";
 import { buildPlacesCsv, placesCsvFilename } from "../src/services/exports/placeResultsCsv.js";
 
 let pass = 0, fail = 0;
@@ -66,11 +67,24 @@ t("normaliza Place ID", place.externalId === "ChIJteste");
 t("normaliza possível WhatsApp sem confirmar", place.possibleWhatsApp === true && place.whatsapp === null);
 t("normaliza presença fraca", place.weakSite === true && place.hasOwnSite === false);
 t("normaliza score e nota", place.score >= 80 && place.grade === "A");
+t("fonte normalizada como Google Maps", place.source === "Google Maps");
 
-const exportedCsv = buildPlacesCsv([{ ...place, placeId: place.externalId, name: "=EMPRESA TESTE" }], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante", neighborhood: "Centro" });
+const scraperRows = parseScraperCsv('title,phone,emails,website,category,address,review_rating,review_count,link,place_id\n"Restaurante, Scraper","(55) 99944-3944","contato@teste.com; financeiro@teste.com",https://teste.com,Restaurante,"Rua B, 20",4.7,220,https://maps.google.com/?cid=2,ChIJscraper\n');
+t("parser do scraper preserva campos entre aspas", scraperRows.length === 1 && scraperRows[0].title === "Restaurante, Scraper" && scraperRows[0].address === "Rua B, 20");
+const scrapedPlace = normalizeScraperPlace(scraperRows[0], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante" });
+t("scraper normaliza place id", scrapedPlace.placeId === "ChIJscraper");
+t("scraper captura primeiro email", scrapedPlace.email === "contato@teste.com");
+t("scraper mantém fonte Google Maps", scrapedPlace.source === "Google Maps");
+const previousDepth = process.env.GOOGLE_MAPS_SCRAPER_DEPTH;
+delete process.env.GOOGLE_MAPS_SCRAPER_DEPTH;
+t("profundidade cresce com quantidade", depthForCount(20) === 5 && depthForCount(40) === 6 && depthForCount(60) === 7);
+if (previousDepth == null) delete process.env.GOOGLE_MAPS_SCRAPER_DEPTH; else process.env.GOOGLE_MAPS_SCRAPER_DEPTH = previousDepth;
+
+const exportedCsv = buildPlacesCsv([{ ...place, email: "contato@teste.com", placeId: place.externalId, name: "=EMPRESA TESTE" }], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante", neighborhood: "Centro" });
 t("export CSV inclui BOM para Excel", exportedCsv.charCodeAt(0) === 0xFEFF);
 t("export CSV separa por ponto e vírgula", exportedCsv.includes(";"));
 t("export CSV identifica WhatsApp como não confirmado", exportedCsv.includes("Sim — não confirmado"));
+t("export CSV inclui email", exportedCsv.includes("contato@teste.com"));
 t("export CSV neutraliza fórmula de planilha", exportedCsv.includes("'=EMPRESA TESTE"));
 t("nome do arquivo inclui categoria e cidade", placesCsvFilename({ category: "Restaurante", city: "Santa Maria" }, "selecionados", new Date("2026-07-29T12:00:00Z")) === "leadflow_restaurante_santa-maria_selecionados_2026-07-29.csv");
 
