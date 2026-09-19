@@ -66,6 +66,7 @@ function ResultCard({ item, checked, onToggle, onAdd, busy }) {
 
     <div className={s.resultDetails}>
       <p><b>Telefone</b><span>{item.phone || "Não encontrado"}</span>{item.possibleWhatsApp && <em>Possível WhatsApp</em>}</p>
+      <p><b>E-mail</b><span>{item.email || "Não encontrado"}</span></p>
       <p><b>Local</b><span>{[item.city, item.location].filter(Boolean).join(" / ")}</span></p>
       <p><b>Endereço</b><span>{item.address || "Não informado"}</span></p>
       <p><b>Google</b><span>{item.googleRating ? `${item.googleRating} ★ · ${item.googleReviews || 0} avaliações` : "Sem avaliação"}</span></p>
@@ -76,6 +77,7 @@ function ResultCard({ item, checked, onToggle, onAdd, busy }) {
     <div className={s.resultActions}>
       <button type="button" onClick={onAdd} disabled={busy}>{busy ? "Enviando…" : "Enviar para CRM"}</button>
       {wa && <a href={wa} target="_blank" rel="noopener noreferrer">Testar WhatsApp</a>}
+      {item.email && <a href={"mailto:" + item.email}>E-mail</a>}
       {item.site && <a href={item.site} target="_blank" rel="noopener noreferrer">Abrir presença</a>}
       {item.mapsLink && <a href={item.mapsLink} target="_blank" rel="noopener noreferrer">Maps</a>}
     </div>
@@ -151,7 +153,7 @@ export default function LeadList({ initialLeads = [] }) {
     if (contact === "no-site" && item.site && !item.weakSite) return false;
     if (search) {
       const q = search.toLocaleLowerCase("pt-BR");
-      const text = [item.name, item.segment, item.city, item.location, item.phone, item.whatsapp, item.site].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
+      const text = [item.name, item.segment, item.city, item.location, item.phone, item.whatsapp, item.email, item.site].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
       if (!text.includes(q)) return false;
     }
     return true;
@@ -266,7 +268,7 @@ export default function LeadList({ initialLeads = [] }) {
 
   return <main className={s.page}>
     <header className={s.header}>
-      <div><h1>Buscar Leads</h1><p>Encontre empresas automaticamente no Google Places, exporte os resultados e envie as oportunidades para o CRM.</p></div>
+      <div><h1>Buscar Leads</h1><p>Encontre empresas automaticamente no Google Maps, exporte os resultados e envie as oportunidades para o CRM.</p></div>
       <div className={s.actions}>
         <a href="/crm">Abrir CRM</a>
         <label className={s.secondary}>{busy ? "Importando…" : "Importar CSV/JSON"}<input type="file" accept=".csv,.json" hidden disabled={busy} onChange={importFile} /></label>
@@ -287,7 +289,7 @@ export default function LeadList({ initialLeads = [] }) {
         <button className={s.searchButton} type="submit" disabled={searching || !filters.city.trim() || cityDisabled}>{searching ? "Buscando…" : "Buscar"}</button>
       </form>
       {citiesError && filters.country === "BR" && <div className={s.cityError}>Não foi possível carregar as cidades pelo IBGE: {citiesError}</div>}
-      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>Cidades do Brasil: API pública do IBGE · Leads: Google Places.</small></div>
+      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>Cidades do Brasil: API pública do IBGE · Leads: scraper local do Google Maps.</small></div>
     </section>
 
     {placesNotice && <div className={placesNotice.startsWith("Erro") ? s.error : s.notice}>{placesNotice}</div>}
@@ -332,7 +334,7 @@ export default function LeadList({ initialLeads = [] }) {
             <td><strong>{lead.name}</strong><small>{lead.source || "Importação"}</small></td>
             <td><span>{lead.city || lead.location || "Não informado"}</span><small>{lead.segment || "Sem segmento"}</small></td>
             <td><span className={`${s.grade} ${s["grade" + lead.grade]}`}>{lead.grade}</span><b className={s.score}>{lead.score}</b></td>
-            <td>{lead.whatsapp ? <><b>{lead.whatsapp}</b><small>WhatsApp confirmado</small></> : lead.phone ? <><b>{lead.phone}</b><small>Telefone</small></> : <span className={s.missing}>Não encontrado</span>}</td>
+            <td>{lead.whatsapp ? <><b>{lead.whatsapp}</b><small>WhatsApp confirmado</small></> : lead.phone ? <><b>{lead.phone}</b><small>Telefone</small></> : lead.email ? <><b>{lead.email}</b><small>E-mail</small></> : <span className={s.missing}>Não encontrado</span>}</td>
             <td>{lead.site ? <><a href={/^https?:/.test(lead.site) ? lead.site : "http://" + lead.site} target="_blank" rel="noopener noreferrer">Abrir presença</a><small>{lead.weakSite ? "Presença de terceiros ou fraca" : "Site próprio"}</small></> : lead.instagram ? <a href={lead.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : <span className={s.missing}>Sem site/rede</span>}</td>
             <td><span className={s.stage}>{STAGE_LABEL[lead.stage] || lead.stage}</span></td>
             <td><div className={s.rowActions}>{lead.mapsLink && <a href={lead.mapsLink} target="_blank" rel="noopener noreferrer">Maps</a>}<a href="/crm">CRM</a></div></td>
