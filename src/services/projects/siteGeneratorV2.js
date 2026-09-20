@@ -693,6 +693,8 @@ export async function generateSiteFolder(input = {}) {
     images: [...media.images, ...externalImages].slice(0, 8),
     attributions: media.attributions,
     effects: normalizeEffects(input.effects),
+    skillMode: skillRouting.mode,
+    skills: skillRouting.skills,
   };
 
   const packageJson = {
