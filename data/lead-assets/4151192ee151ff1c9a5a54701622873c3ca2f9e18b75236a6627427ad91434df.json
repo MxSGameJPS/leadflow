@@ -1,0 +1,10 @@
+{
+  "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=TOU3pJhthKuFJDzPyszPNg&cb_client=search.gws-prod.gps&w=408&h=240&yaw=281.45108&pitch=0&thumbfov=100",
+  "imageUrls": [
+    "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=TOU3pJhthKuFJDzPyszPNg&cb_client=maps_sv.tactile.gps&w=224&h=298&yaw=281.45108&pitch=0&thumbfov=100"
+  ],
+  "site": "https://www.cootitta.com.br/",
+  "instagram": "",
+  "mapsLink": "https://www.google.com/maps/place/Cootitta/data=!4m7!3m6!1s0x95189b28761260ef:0x3e2aad8603b2b8e6!8m2!3d-29.5037583!4d-50.1086149!16s%2Fg%2F11wr0bds6p!19sChIJ72ASdiibGJUR5riyA4atKj4?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDkxNi4wIJJjKgBIAVAD&rclk=1",
+  "updatedAt": "2026-09-20T17:25:44.841Z"
+}

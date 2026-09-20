@@ -1,0 +1,10 @@
+{
+  "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=NzV7ptjA5t7Baqw4IOYOXw&cb_client=search.gws-prod.gps&w=408&h=240&yaw=354.96487&pitch=0&thumbfov=100",
+  "imageUrls": [
+    "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=NzV7ptjA5t7Baqw4IOYOXw&cb_client=maps_sv.tactile.gps&w=224&h=298&yaw=354.96487&pitch=0&thumbfov=100"
+  ],
+  "site": "",
+  "instagram": "",
+  "mapsLink": "https://www.google.com/maps/place/Hilmar+Derli+Zamboni/data=!4m7!3m6!1s0x95194672bdce713f:0x10bb71bd4c3c8745!8m2!3d-29.5813385!4d-51.0861361!16s%2Fg%2F1tdcsq17!19sChIJP3HOvXJGGZURRYc8TL1xuxA?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDkxNi4wIJJjKgBIAVAD&rclk=1",
+  "updatedAt": "2026-09-20T17:24:15.781Z"
+}

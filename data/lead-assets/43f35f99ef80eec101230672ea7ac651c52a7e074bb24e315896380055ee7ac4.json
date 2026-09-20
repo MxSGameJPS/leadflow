@@ -1,0 +1,10 @@
+{
+  "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=WK0lkb_5KyU9Cz_qFu_cNA&cb_client=search.gws-prod.gps&w=408&h=240&yaw=142.71597&pitch=0&thumbfov=100",
+  "imageUrls": [
+    "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=WK0lkb_5KyU9Cz_qFu_cNA&cb_client=maps_sv.tactile.gps&w=224&h=298&yaw=142.71597&pitch=0&thumbfov=100"
+  ],
+  "site": "",
+  "instagram": "",
+  "mapsLink": "https://www.google.com/maps/place/BARBEARIA+DO+PT/data=!4m7!3m6!1s0x95030b3c8d19f449:0xde1f62fad40c3cb9!8m2!3d-29.634637!4d-49.943783!16s%2Fg%2F11hmp8h201!19sChIJSfQZjTwLA5URuTwM1PpiH94?authuser=0&hl=pt-BR&g_ep=EgoyMDI2MDkxNi4wIJJjKgBIAVAD&rclk=1",
+  "updatedAt": "2026-09-20T17:31:50.108Z"
+}
