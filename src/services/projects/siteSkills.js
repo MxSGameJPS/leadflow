@@ -1,6 +1,7 @@
 const SKILL_DEFINITIONS = [
   {
     id: "creative-web-director",
+    auto: "core",
     label: "Design Premium",
     shortLabel: "Design",
     description: "Direção visual, composição, tipografia, motion e acabamento autoral.",
@@ -13,6 +14,7 @@ const SKILL_DEFINITIONS = [
   },
   {
     id: "brand-system-architect",
+    auto: "core",
     label: "Branding",
     shortLabel: "Marca",
     description: "Traduz o negócio em paleta, tipografia, linguagem e sistema visual coerente.",
@@ -25,6 +27,7 @@ const SKILL_DEFINITIONS = [
   },
   {
     id: "seo-content-engine",
+    auto: "core",
     label: "SEO",
     shortLabel: "SEO",
     description: "Estrutura intenção local, headings, title, meta description e conteúdo encontrável.",
@@ -37,6 +40,7 @@ const SKILL_DEFINITIONS = [
   },
   {
     id: "conversion-director",
+    auto: "core",
     label: "Conversão",
     shortLabel: "Conversão",
     description: "Organiza hero, prova, benefícios e CTAs para reduzir atrito e gerar contato.",
@@ -49,6 +53,7 @@ const SKILL_DEFINITIONS = [
   },
   {
     id: "screenshot-to-ui-blueprint",
+    auto: "reference",
     label: "Referência Visual",
     shortLabel: "Referência",
     description: "Interpreta prints e referências sem copiar marcas, textos ou identidade de terceiros.",
@@ -61,6 +66,7 @@ const SKILL_DEFINITIONS = [
   },
   {
     id: "organizacao-padrao-saulo",
+    auto: "core",
     label: "Padrão Saulo",
     shortLabel: "Organização",
     description: "Mantém exportação em JavaScript, sem Tailwind/TypeScript e com estrutura previsível.",
@@ -137,5 +143,5 @@ export function buildSiteSkillsSystemPrompt(skillIds = []) {
 }
 
 export function siteSkillsPublicList() {
-  return SITE_SKILLS.map(({ id, label, shortLabel, description }) => ({ id, label, shortLabel, description }));
+  return SITE_SKILLS.map(({ id, auto, label, shortLabel, description }) => ({ id, auto, label, shortLabel, description }));
 }
