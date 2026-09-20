@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES, STAGE_IDS } from "../../services/leads/stages.js";
 import { createLeadAction, deleteLeadAction, deleteLeadsAction, moveStageAction, recordContactAction } from "../../app/actions/leads.js";
@@ -27,6 +27,14 @@ function csvValue(value) {
 
 function normalizeFilterValue(value) {
   return String(value || "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function cityLabel(lead) {
+  return String(lead?.city || "").trim() || "Sem cidade";
+}
+
+function cityKey(lead) {
+  return normalizeFilterValue(cityLabel(lead)) || "__sem_cidade";
 }
 
 function isPossibleMobile(phone) {
@@ -79,6 +87,7 @@ export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [cityFolder, setCityFolder] = useState("all");
   const [search, setSearch] = useState("");
   const [nicheFilter, setNicheFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
@@ -91,6 +100,9 @@ export default function CRMBoard({ initialLeads = [] }) {
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState("error");
+  const [boardScrollWidth, setBoardScrollWidth] = useState(0);
+  const boardRef = useRef(null);
+  const topScrollRef = useRef(null);
   const [form, setForm] = useState({ name: "", segment: "", city: "", location: "", phone: "" });
 
   useEffect(() => {
@@ -98,6 +110,38 @@ export default function CRMBoard({ initialLeads = [] }) {
     const availableIds = new Set(initialLeads.map(lead => lead.id));
     setSelectedIds(current => new Set([...current].filter(id => availableIds.has(id))));
   }, [initialLeads]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("leadflow_crm_city_folder");
+    if (saved) setCityFolder(saved);
+  }, []);
+
+  const cityFolders = useMemo(() => {
+    const grouped = new Map();
+    for (const lead of leads) {
+      const key = cityKey(lead);
+      const label = cityLabel(lead);
+      const current = grouped.get(key);
+      if (current) current.count += 1;
+      else grouped.set(key, { key, label, count: 1 });
+    }
+    return [...grouped.values()].sort((a, b) => {
+      if (a.label === "Sem cidade") return 1;
+      if (b.label === "Sem cidade") return -1;
+      return a.label.localeCompare(b.label, "pt-BR");
+    });
+  }, [leads]);
+
+  useEffect(() => {
+    if (cityFolder === "all") return;
+    if (!cityFolders.some(folder => folder.key === cityFolder)) setCityFolder("all");
+  }, [cityFolder, cityFolders]);
+
+  function selectCityFolder(value) {
+    setCityFolder(value);
+    window.localStorage.setItem("leadflow_crm_city_folder", value);
+    setSelectedIds(new Set());
+  }
 
   const nicheOptions = useMemo(() => {
     const grouped = new Map();
@@ -115,6 +159,7 @@ export default function CRMBoard({ initialLeads = [] }) {
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
     const filtered = leads.filter(lead => {
+      if (cityFolder !== "all" && cityKey(lead) !== cityFolder) return false;
       if (query) {
         const haystack = [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp]
           .filter(Boolean)
@@ -149,7 +194,7 @@ export default function CRMBoard({ initialLeads = [] }) {
       }
       return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
     });
-  }, [leads, nicheFilter, gradeFilter, quick, contactFilter, search, sort]);
+  }, [leads, cityFolder, nicheFilter, gradeFilter, quick, contactFilter, search, sort]);
 
   const byStage = useMemo(() => {
     const grouped = Object.fromEntries(STAGE_IDS.map(id => [id, []]));
@@ -158,6 +203,30 @@ export default function CRMBoard({ initialLeads = [] }) {
     }
     return grouped;
   }, [visible]);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const updateWidth = () => setBoardScrollWidth(board.scrollWidth);
+    updateWidth();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateWidth) : null;
+    observer?.observe(board);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [visible.length, cityFolder]);
+
+  function syncFromTop(event) {
+    if (boardRef.current) boardRef.current.scrollLeft = event.currentTarget.scrollLeft;
+  }
+
+  function syncFromBoard(event) {
+    if (topScrollRef.current && topScrollRef.current.scrollLeft !== event.currentTarget.scrollLeft) {
+      topScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    }
+  }
 
   const selectedCount = selectedIds.size;
   const allVisibleSelected = visible.length > 0 && visible.every(lead => selectedIds.has(lead.id));
@@ -322,9 +391,20 @@ export default function CRMBoard({ initialLeads = [] }) {
     <header className={s.header}>
       <div>
         <h1>CRM</h1>
-        <p>Combine nicho, nota, oportunidade, último contato e busca para priorizar os leads certos.</p>
+        <p>Organize a prospecção por cidade e acompanhe cada oportunidade em um quadro estilo Trello.</p>
       </div>
     </header>
+
+    <section className={s.cityFolders} aria-label="Pastas por cidade">
+      <button type="button" className={cityFolder === "all" ? s.folderActive : ""} onClick={() => selectCityFolder("all")}>
+        <span className={s.folderIcon}>▰</span>
+        <span><strong>Todas as cidades</strong><small>{leads.length} leads</small></span>
+      </button>
+      {cityFolders.map(folder => <button type="button" key={folder.key} className={cityFolder === folder.key ? s.folderActive : ""} onClick={() => selectCityFolder(folder.key)}>
+        <span className={s.folderIcon}>▰</span>
+        <span><strong>{folder.label}</strong><small>{folder.count} lead{folder.count === 1 ? "" : "s"}</small></span>
+      </button>)}
+    </section>
 
     <section className={s.toolbar}>
       <input className={s.search} value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar por nome, nicho, cidade ou telefone..." />
@@ -400,10 +480,15 @@ export default function CRMBoard({ initialLeads = [] }) {
     {notice && <div className={`${s.notice} ${noticeKind === "success" ? s.noticeSuccess : ""}`}>{notice}</div>}
     <div className={s.counter}>
       {visible.length} lead{visible.length === 1 ? "" : "s"} exibido{visible.length === 1 ? "" : "s"}
+      {cityFolder !== "all" && <span> · pasta {cityFolders.find(folder => folder.key === cityFolder)?.label || "Cidade"}</span>}
       {selectedCount > 0 && <span className={s.selectionCount}> · {selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>}
     </div>
 
-    <section className={s.board}>
+    <div className={s.topScrollbar} ref={topScrollRef} onScroll={syncFromTop} aria-label="Rolagem horizontal do quadro">
+      <div style={{ width: Math.max(boardScrollWidth, 1) }} />
+    </div>
+
+    <section className={s.board} ref={boardRef} onScroll={syncFromBoard}>
       {STAGES.map(stage => <div
         key={stage.id}
         className={`${s.column} ${dragOver === stage.id ? s.dragOver : ""}`}
