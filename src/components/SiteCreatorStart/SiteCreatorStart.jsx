@@ -2,6 +2,7 @@
 import { useEffect,useMemo,useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearSiteReferenceImagesAction,createSiteProjectAction,refineSiteProjectAction } from "../../app/actions/projects.js";
+import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
 import s from "./SiteCreatorStart.module.css";
 
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
@@ -20,7 +21,7 @@ const VISUAL_REFERENCE_PATTERN=/(refer[eê]ncia|print|screenshot|imagem|layout|i
 function readFile(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({dataUrl:String(reader.result||""),label:file.name,size:file.size});reader.onerror=()=>reject(reader.error||new Error("Falha ao ler imagem."));reader.readAsDataURL(file)})}
 function signature(value=[]){return JSON.stringify([...value].sort())}
 
-export default function SiteCreatorStart({leads=[],initialLeadId="",project=null,skillOptions=[]}){
+export default function SiteCreatorStart({leads=[],initialLeadId="",project=null}){
   const router=useRouter();
   const[leadId,setLeadId]=useState(initialLeadId||leads[0]?.id||"");
   const[template,setTemplate]=useState("landing");
