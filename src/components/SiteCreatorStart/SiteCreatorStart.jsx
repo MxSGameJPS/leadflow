@@ -16,7 +16,6 @@ const EFFECT_OPTIONS=[
   {id:"cta-pulse",label:"CTA em destaque",description:"Pulso sutil nos principais botões."},
   {id:"smooth-scroll",label:"Rolagem suave",description:"Navegação entre âncoras com transição suave."},
 ];
-const VISUAL_REFERENCE_PATTERN=/(refer[eê]ncia|print|screenshot|imagem|layout|inspir|parecid|visual|interface|ui\b)/i;
 
 function readFile(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({dataUrl:String(reader.result||""),label:file.name,size:file.size});reader.onerror=()=>reject(reader.error||new Error("Falha ao ler imagem."));reader.readAsDataURL(file)})}
 function signature(value=[]){return JSON.stringify([...value].sort())}
@@ -24,7 +23,7 @@ function signature(value=[]){return JSON.stringify([...value].sort())}
 export default function SiteCreatorStart({leads=[],initialLeadId="",project=null}){
   const router=useRouter();
   const[leadId,setLeadId]=useState(initialLeadId||leads[0]?.id||"");
-  const[template,setTemplate]=useState("landing");
+  const[template,setTemplate]=useState(project?.template||"landing");
   const[instruction,setInstruction]=useState("");
   const[busy,setBusy]=useState("");
   const[notice,setNotice]=useState("");
@@ -37,6 +36,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
 
   useEffect(()=>{
     setActiveProject(project);
+    setTemplate(project?.template||"landing");
     setEffects(project&&Array.isArray(project.effects)?project.effects:DEFAULT_EFFECTS);
     setSkillMode(project?.skillMode==="manual"?"manual":"auto");
     setSelectedSkills(Array.isArray(project?.skills)?project.skills:[]);
@@ -44,8 +44,14 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   },[project]);
 
   const selectedLead=useMemo(()=>leads.find(lead=>lead.id===leadId)||null,[leadId,leads]);
-  const hasVisualReference=Boolean(pendingReferences.length||activeProject?.referenceImages?.length||VISUAL_REFERENCE_PATTERN.test(instruction));
-  const autoSkillIds=useMemo(()=>skillOptions.filter(option=>option.auto==="core"||(option.auto==="reference"&&hasVisualReference)).map(option=>option.id),[skillOptions,hasVisualReference]);
+  const routedReferences=useMemo(()=>[...pendingReferences,...(activeProject?.referenceImages||[])],[pendingReferences,activeProject?.referenceImages]);
+  const autoRouting=useMemo(()=>resolveSiteSkills({
+    mode:"auto",
+    instruction,
+    referenceImages:routedReferences,
+    phase:activeProject?"refine":"create",
+  }),[instruction,routedReferences,activeProject]);
+  const autoSkillIds=autoRouting.skills;
   const activeSkillIds=skillMode==="auto"?autoSkillIds:selectedSkills;
   const effectsChanged=activeProject?signature(effects)!==signature(activeProject.effects||[]):false;
   const skillsChanged=activeProject?(skillMode!==(activeProject.skillMode||"auto")||(skillMode==="manual"&&signature(selectedSkills)!==signature(activeProject.skills||[]))):false;
@@ -69,7 +75,11 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   async function createProject(event){
     event.preventDefault();if(!leadId)return;setBusy("create");setNotice("");
     try{
-      const created=await createSiteProjectAction({mode:"lead",leadId,template,instruction,effects,skillMode,skills:skillMode==="auto"?autoSkillIds:selectedSkills,referenceImages:pendingReferences});
+      const created=await createSiteProjectAction({
+        mode:"lead",leadId,template,instruction,effects,skillMode,
+        skills:skillMode==="auto"?autoSkillIds:selectedSkills,
+        referenceImages:pendingReferences,
+      });
       setActiveProject(created);setEffects(created.effects||[]);setSkillMode(created.skillMode||"auto");setSelectedSkills(created.skills||[]);setPendingReferences([]);setInstruction("");
       router.push("/criar-site?lead="+encodeURIComponent(leadId)+"&project="+encodeURIComponent(created.id));router.refresh();
     }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
@@ -78,7 +88,11 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   async function refine(event){
     event.preventDefault();if(!activeProject||!canRefine)return;setBusy("refine");setNotice("");
     try{
-      const updated=await refineSiteProjectAction({projectId:activeProject.id,instruction,effects,skillMode,skills:skillMode==="auto"?autoSkillIds:selectedSkills,referenceImages:pendingReferences});
+      const updated=await refineSiteProjectAction({
+        projectId:activeProject.id,instruction,effects,skillMode,
+        skills:skillMode==="auto"?autoSkillIds:selectedSkills,
+        referenceImages:pendingReferences,
+      });
       setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
     }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
   }
@@ -97,11 +111,15 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
         <button type="button" className={skillMode==="manual"?s.modeActive:""} onClick={()=>changeSkillMode("manual")}>Manual</button>
       </div>
     </div>
-    <div className={s.skillSummary}><span>{activeSkillIds.length} skill(s) ativa(s)</span><b>{skillMode==="auto"?"Roteamento inteligente":"Seleção manual"}</b></div>
-    <div className={s.skillGrid}>{skillOptions.map(option=>{
+    <div className={s.skillSummary}>
+      <span>{activeSkillIds.length} skill(s) ativa(s)</span>
+      <b>{skillMode==="auto"?"Roteamento inteligente":"Seleção manual"}</b>
+      {skillMode==="auto"&&<small>{autoRouting.reason}</small>}
+    </div>
+    <div className={s.skillGrid}>{SITE_SKILL_OPTIONS.map(option=>{
       const active=activeSkillIds.includes(option.id);
       return <button type="button" key={option.id} disabled={skillMode==="auto"} className={active?s.skillActive:s.skillOption} onClick={()=>toggleSkill(option.id)}>
-        <span>{active?"✓":"+"}</span><strong>{option.label}</strong><small>{option.description}</small>{option.auto==="reference"&&skillMode==="auto"&&!active&&<em>Ativa com referência visual</em>}
+        <span>{active?"✓":"+"}</span><strong>{option.label}</strong><small>{option.description}</small>{option.auto==="reference"&&skillMode==="auto"&&!active&&<em>Ativa quando o pedido usa referência visual</em>}
       </button>;
     })}</div>
   </section>;
@@ -151,7 +169,10 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
         {activeProject.warning&&<div className={s.warning}>{activeProject.warning}</div>}
         {notice&&<div className={notice.startsWith("Erro")?s.error:s.success}>{notice}</div>}
       </aside>
-      <section className={s.previewPanel}><div className={s.previewToolbar}><div><button className={device==="desktop"?s.active:""} onClick={()=>setDevice("desktop")}>Desktop</button><button className={device==="tablet"?s.active:""} onClick={()=>setDevice("tablet")}>Tablet</button><button className={device==="mobile"?s.active:""} onClick={()=>setDevice("mobile")}>Mobile</button></div><a href={previewSrc} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a></div><div className={s.canvas}><div className={s["device-"+device]}><iframe key={previewSrc} title={"Prévia de "+activeProject.name} src={previewSrc}/></div></div></section>
+      <section className={s.previewPanel}>
+        <div className={s.previewToolbar}><div><button className={device==="desktop"?s.active:""} onClick={()=>setDevice("desktop")}>Desktop</button><button className={device==="tablet"?s.active:""} onClick={()=>setDevice("tablet")}>Tablet</button><button className={device==="mobile"?s.active:""} onClick={()=>setDevice("mobile")}>Mobile</button></div><a href={previewSrc} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a></div>
+        <div className={s.canvas}><div className={s["device-"+device]}><iframe key={previewSrc} title={"Prévia de "+activeProject.name} src={previewSrc}/></div></div>
+      </section>
     </section>
   </main>;
 }
