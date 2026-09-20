@@ -21,6 +21,13 @@ assert.ok(autoSkills.skills.includes("creative-web-director"));
 assert.ok(autoSkills.skills.includes("seo-content-engine"));
 assert.ok(autoSkills.skills.includes("screenshot-to-ui-blueprint"));
 
+const focusedSeoSkills = resolveSiteSkills({ mode: "auto", phase: "refine", instruction: "Melhore apenas o SEO, title e meta description" });
+assert.deepEqual(focusedSeoSkills.skills, ["seo-content-engine"]);
+
+const focusedVisualSkills = resolveSiteSkills({ mode: "auto", phase: "refine", instruction: "Deixe o hero mais premium" });
+assert.ok(focusedVisualSkills.skills.includes("creative-web-director"));
+assert.ok(focusedVisualSkills.skills.includes("conversion-director"));
+
 const manualSkills = resolveSiteSkills({ mode: "manual", selectedSkills: ["conversion-director", "invalid-skill"] });
 assert.deepEqual(manualSkills.skills, ["conversion-director"]);
 
