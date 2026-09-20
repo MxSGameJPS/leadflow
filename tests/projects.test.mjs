@@ -10,9 +10,19 @@ const projectDir = path.join(root, "data", "projects");
 
 const { createSiteProject, deleteSiteProject, getSiteProject } = await import("../src/services/projects/projectStore.js");
 const { parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
+const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
 assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
+
+const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
+assert.equal(autoSkills.mode, "auto");
+assert.ok(autoSkills.skills.includes("creative-web-director"));
+assert.ok(autoSkills.skills.includes("seo-content-engine"));
+assert.ok(autoSkills.skills.includes("screenshot-to-ui-blueprint"));
+
+const manualSkills = resolveSiteSkills({ mode: "manual", selectedSkills: ["conversion-director", "invalid-skill"] });
+assert.deepEqual(manualSkills.skills, ["conversion-director"]);
 
 const draft = await createSiteProject({
   name: `Rascunho teste ${stamp}`,
@@ -32,10 +42,14 @@ const ready = await createSiteProject({
   status: "ready",
   effects: ["glass-header", "invalid-effect", "hover-lift"],
   referenceImages: [{ fileName: "ref.jpg", label: "Referência", mimeType: "image/jpeg", size: 123 }],
+  skillMode: "manual",
+  skills: ["brand-system-architect", "invalid-skill", "conversion-director"],
 });
 const loadedReady = await getSiteProject(ready.id);
 assert.deepEqual(loadedReady.effects, ["glass-header", "hover-lift"]);
 assert.equal(loadedReady.referenceImages.length, 1);
+assert.equal(loadedReady.skillMode, "manual");
+assert.deepEqual(loadedReady.skills, ["brand-system-architect", "conversion-director"]);
 
 await assert.rejects(
   deleteSiteProject(ready.id),
