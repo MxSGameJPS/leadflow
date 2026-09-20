@@ -14,6 +14,8 @@ try {
   assert.equal(empty.lastContactKind, "");
   assert.equal(empty.contactCount, 0);
   assert.deepEqual(empty.strategyMap, { nodes: [], edges: [] });
+  assert.equal(empty.objectionAssistant.conversation, "");
+  assert.equal(empty.objectionAssistant.tone, "natural");
 
   const first = await saveLeadWorkspace(leadId, {
     lastContactAt: "2026-08-08T13:00:00.000Z",
@@ -50,6 +52,19 @@ try {
         { id: "invalida", from: "lead", to: "nao_existe" },
       ],
     },
+    objectionAssistant: {
+      conversation: "CLIENTE: Achei caro.",
+      tone: "consultative",
+      objective: "negotiate",
+      objectionType: "Preço",
+      interestLevel: "médio",
+      interpretation: "Existe interesse, mas o valor virou barreira.",
+      response: "Entendo. Posso te explicar o que está incluído?",
+      nextStep: "Entender qual parte do investimento gerou dúvida.",
+      lastAnalyzedAt: "2026-09-20T18:00:00.000Z",
+      providerName: "Teste",
+      model: "modelo-teste",
+    },
   });
   assert.equal(sanitized.lastContactKind, "");
   assert.equal(sanitized.contactCount, 0);
@@ -57,6 +72,9 @@ try {
   assert.equal(sanitized.strategyMap.edges.length, 1);
   assert.equal(sanitized.strategyMap.edges[0].from, "lead");
   assert.equal(sanitized.strategyMap.edges[0].to, "contato");
+  assert.equal(sanitized.objectionAssistant.objectionType, "Preço");
+  assert.equal(sanitized.objectionAssistant.interestLevel, "médio");
+  assert.equal(sanitized.objectionAssistant.objective, "negotiate");
 
   console.log("Testes de workspace passaram.");
 } finally {

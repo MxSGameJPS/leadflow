@@ -107,6 +107,10 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   });
   const [sale, setSale] = useState(initialWorkspace.sale || { paymentTerms: "", meetingNotes: "", outcome: "open" });
   const [expanded, setExpanded] = useState("");
+  const [objectionConversation, setObjectionConversation] = useState(initialWorkspace.objectionAssistant?.conversation || "");
+  const [objectionTone, setObjectionTone] = useState(initialWorkspace.objectionAssistant?.tone || "natural");
+  const [objectionObjective, setObjectionObjective] = useState(initialWorkspace.objectionAssistant?.objective || "understand");
+  const [objectionAnalysis, setObjectionAnalysis] = useState(initialWorkspace.objectionAssistant || {});
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -261,6 +265,44 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     }
   }
 
+  async function analyzeObjection(alternative = false) {
+    if (objectionConversation.trim().length < 8) {
+      setNotice("Cole as mensagens trocadas com o cliente antes de analisar.");
+      return;
+    }
+    setBusy("objection-ai");
+    setNotice("");
+    try {
+      const result = await AIActions.analyzeLeadConversationAction({
+        leadId: lead.id,
+        conversation: objectionConversation,
+        tone: objectionTone,
+        objective: objectionObjective,
+        previousResponse: alternative ? objectionAnalysis.response || "" : "",
+      });
+      const objectionAssistant = {
+        conversation: objectionConversation,
+        tone: objectionTone,
+        objective: objectionObjective,
+        objectionType: result.objectionType,
+        interestLevel: result.interestLevel,
+        interpretation: result.interpretation,
+        response: result.response,
+        nextStep: result.nextStep,
+        lastAnalyzedAt: new Date().toISOString(),
+        providerName: result.providerName || "",
+        model: result.model || "",
+      };
+      setObjectionAnalysis(objectionAssistant);
+      await persistWorkspace({ objectionAssistant });
+      setNotice(`Conversa analisada por ${result.providerName || "IA"}${result.model ? ` · ${result.model}` : ""}.`);
+    } catch (error) {
+      setNotice(`IA: ${error.message}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
   function selectMessageKind(value) {
     setKind(value);
     setWhatsappMessage(buildProfileMessages({ ...lead, instagram }, initialProfile, previewUrl)[value]);
@@ -327,10 +369,46 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
 
   function renderObjections() {
     const groups = [["Objeções universais", UNIVERSAL_OBJECTIONS], ["Objeções de site", SITE_OBJECTIONS]];
-    return <section className={s.section}>{groups.map(([title, items]) => <div key={title} className={s.objectionGroup}><h3>{title}</h3>{items.map(([question, answer]) => {
-      const key = `${title}-${question}`;
-      return <article className={s.objection} key={key}><button onClick={() => setExpanded(expanded === key ? "" : key)}><strong>“{question}”</strong><span>{expanded === key ? "−" : "+"}</span></button>{expanded === key && <div><p>{answer}</p><button onClick={() => copy(answer, "Resposta copiada.")}>Copiar resposta</button></div>}</article>;
-    })}</div>)}</section>;
+    const interestLabel = { baixo: "Baixo", "médio": "Médio", alto: "Alto", incerto: "Incerto" };
+    return <section className={s.section}>
+      <div className={s.objectionAssistant}>
+        <div className={s.assistantHeader}>
+          <div><span className={s.aiBadge}>✦ IA</span><h3>Assistente de conversa</h3><p>Cole as mensagens trocadas com o cliente. A IA considera o contexto deste lead e sugere a resposta mais adequada para este momento.</p></div>
+        </div>
+
+        <label className={s.conversationField}>
+          <span>Conversa com o cliente</span>
+          <textarea value={objectionConversation} onChange={event => setObjectionConversation(event.target.value)} placeholder={"EU: Oi, preparei uma prévia para vocês...\n\nCLIENTE: Vi aqui. Ficou legal, mas agora não sei se preciso de um site..."} />
+        </label>
+
+        <div className={s.assistantControls}>
+          <label><span>Tom da resposta</span><select value={objectionTone} onChange={event => setObjectionTone(event.target.value)}><option value="natural">Natural</option><option value="short">Curto</option><option value="consultative">Consultivo</option><option value="direct">Direto</option></select></label>
+          <label><span>Objetivo</span><select value={objectionObjective} onChange={event => setObjectionObjective(event.target.value)}><option value="understand">Entender a objeção</option><option value="followup">Manter / fazer follow-up</option><option value="meeting">Levar para reunião</option><option value="defend">Defender a proposta</option><option value="negotiate">Negociar</option><option value="close">Encerrar educadamente</option></select></label>
+          <button className={s.analyzeButton} disabled={busy === "objection-ai" || objectionConversation.trim().length < 8} onClick={() => analyzeObjection(false)}>{busy === "objection-ai" ? "Analisando..." : "✦ Analisar conversa"}</button>
+        </div>
+
+        {objectionAnalysis.response && <div className={s.analysisResult}>
+          <div className={s.analysisSummary}>
+            <div><span>Situação detectada</span><strong>{objectionAnalysis.objectionType || "Contexto comercial"}</strong></div>
+            <div><span>Nível de interesse</span><strong className={s["interest_" + (objectionAnalysis.interestLevel || "incerto")]}>{interestLabel[objectionAnalysis.interestLevel] || "Incerto"}</strong></div>
+            <div className={s.analysisWide}><span>Leitura da IA</span><p>{objectionAnalysis.interpretation}</p></div>
+          </div>
+
+          <div className={s.suggestedResponse}>
+            <div className={s.responseHeading}><div><span>Resposta sugerida</span><small>{objectionAnalysis.providerName ? `${objectionAnalysis.providerName}${objectionAnalysis.model ? ` · ${objectionAnalysis.model}` : ""}` : "Revise antes de enviar"}</small></div><button onClick={() => copy(objectionAnalysis.response, "Resposta copiada.")}>Copiar resposta</button></div>
+            <textarea value={objectionAnalysis.response} onChange={event => setObjectionAnalysis(current => ({ ...current, response: event.target.value }))} />
+            <div className={s.nextStep}><span>Próximo passo sugerido</span><strong>{objectionAnalysis.nextStep || "Aguardar a reação do lead."}</strong></div>
+            <div className={s.buttonRow}><button className={s.primary} onClick={() => copy(objectionAnalysis.response, "Resposta copiada.")}>Copiar mensagem</button><button disabled={busy === "objection-ai"} onClick={() => analyzeObjection(true)}>Gerar alternativa</button><button onClick={() => persistWorkspace({ objectionAssistant: { ...objectionAnalysis, conversation: objectionConversation, tone: objectionTone, objective: objectionObjective } }, "Análise salva.")}>Salvar edição</button></div>
+          </div>
+        </div>}
+      </div>
+
+      <div className={s.quickAnswersHeader}><div><h3>Respostas rápidas</h3><p>Biblioteca manual para quando você não precisar usar IA.</p></div></div>
+      {groups.map(([title, items]) => <div key={title} className={s.objectionGroup}><h3>{title}</h3>{items.map(([question, answer]) => {
+        const key = `${title}-${question}`;
+        return <article className={s.objection} key={key}><button onClick={() => setExpanded(expanded === key ? "" : key)}><strong>“{question}”</strong><span>{expanded === key ? "−" : "+"}</span></button>{expanded === key && <div><p>{answer}</p><button onClick={() => copy(answer, "Resposta copiada.")}>Copiar resposta</button></div>}</article>;
+      })}</div>)}
+    </section>;
   }
 
   function renderSite() {

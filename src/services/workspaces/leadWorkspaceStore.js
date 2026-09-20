@@ -24,6 +24,19 @@ const DEFAULT_WORKSPACE = Object.freeze({
     nodes: [],
     edges: [],
   },
+  objectionAssistant: {
+    conversation: "",
+    tone: "natural",
+    objective: "understand",
+    objectionType: "",
+    interestLevel: "",
+    interpretation: "",
+    response: "",
+    nextStep: "",
+    lastAnalyzedAt: "",
+    providerName: "",
+    model: "",
+  },
   appointment: {
     type: "Reunião",
     time: "09:00",
@@ -141,6 +154,26 @@ function normalizeStrategyMap(value) {
   return { nodes, edges };
 }
 
+function normalizeObjectionAssistant(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const tone = ["natural", "short", "consultative", "direct"].includes(input.tone) ? input.tone : "natural";
+  const objective = ["understand", "followup", "meeting", "defend", "negotiate", "close"].includes(input.objective) ? input.objective : "understand";
+  const interest = ["baixo", "médio", "alto", "incerto"].includes(input.interestLevel) ? input.interestLevel : "";
+  return {
+    conversation: cleanText(input.conversation, 14_000),
+    tone,
+    objective,
+    objectionType: cleanText(input.objectionType, 140).trim(),
+    interestLevel: interest,
+    interpretation: cleanText(input.interpretation, 1800).trim(),
+    response: cleanText(input.response, 5000).trim(),
+    nextStep: cleanText(input.nextStep, 1000).trim(),
+    lastAnalyzedAt: cleanTimestamp(input.lastAnalyzedAt),
+    providerName: cleanText(input.providerName, 180).trim(),
+    model: cleanText(input.model, 180).trim(),
+  };
+}
+
 function cleanContactKind(value) {
   const kind = String(value || "").trim().toLowerCase();
   return CONTACT_KINDS.has(kind) ? kind : "";
@@ -175,6 +208,7 @@ function normalizeWorkspace(input = {}) {
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
     strategyMap: normalizeStrategyMap(input.strategyMap),
+    objectionAssistant: normalizeObjectionAssistant(input.objectionAssistant),
     appointment: {
       type: cleanText(appointment.type || DEFAULT_WORKSPACE.appointment.type, 80),
       time: /^\d{2}:\d{2}$/.test(String(appointment.time || "")) ? String(appointment.time) : DEFAULT_WORKSPACE.appointment.time,

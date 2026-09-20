@@ -20,6 +20,10 @@ const {
   buildLeadMessagePrompt,
   generateLeadMessage,
 } = await import("../src/services/ai/leadMessageService.js");
+const {
+  buildObjectionAdvisorPrompt,
+  analyzeLeadConversation,
+} = await import("../src/services/ai/objectionAdvisorService.js");
 
 let pass = 0, fail = 0;
 const t = (name, condition) => {
@@ -139,6 +143,23 @@ try {
   });
   t("gera última tentativa com IA", lastAttemptMessage.text.includes("mensagem gerada"));
   t("envia contexto de última tentativa ao provedor", requests.at(-1).body.messages[1].content.includes("última tentativa após duas mensagens sem resposta"));
+
+  const objectionPrompt = buildObjectionAdvisorPrompt({
+    lead: { name: "Mercado Silva", segment: "Mercado", proposalValue: 1500 },
+    conversation: "CLIENTE: Gostei da prévia, mas achei caro. EU: Entendo.",
+    tone: "consultative",
+    objective: "understand",
+  });
+  t("prompt de objeção contém conversa real", objectionPrompt.prompt.includes("achei caro"));
+  t("prompt de objeção proíbe inventar condição", objectionPrompt.systemPrompt.includes("Nunca invente preço, desconto"));
+
+  const objectionAnalysis = await analyzeLeadConversation({
+    lead: { name: "Mercado Silva", segment: "Mercado" },
+    conversation: "CLIENTE: Gostei, mas agora não sei se preciso disso.",
+  });
+  t("analista aceita fallback textual", objectionAnalysis.response.includes("mensagem gerada"));
+  t("analista retorna interesse", objectionAnalysis.interestLevel === "incerto");
+  t("analista envia conversa ao provedor", requests.at(-1).body.messages[1].content.includes("não sei se preciso"));
 
   await removeProvider(created.id);
   t("remove provedor", (await listProvidersPublic()).length === 0);
