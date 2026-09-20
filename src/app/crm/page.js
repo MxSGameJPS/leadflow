@@ -14,6 +14,7 @@ export default async function CRMPage() {
       lastContactAt: workspaces[index].lastContactAt || "",
       lastContactKind: workspaces[index].lastContactKind || "",
       contactCount: Number(workspaces[index].contactCount || 0),
+      previewUrl: workspaces[index].previewUrl || "",
       commercialTrack: resolveCommercialTrack(lead, workspaces[index]),
     }))
     .filter(lead => trackIncludes(lead.commercialTrack, "projects"));
