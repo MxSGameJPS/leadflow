@@ -2,6 +2,15 @@
 .header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
 .header h1{margin:0;font-size:24px}
 .header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+.cityFolders{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 12px;margin-bottom:4px;scrollbar-width:thin}
+.cityFolders button{flex:0 0 auto;display:flex;align-items:center;gap:10px;min-width:180px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:12px;padding:11px 13px;text-align:left;box-shadow:var(--shadow);cursor:pointer;transition:.15s ease}
+.cityFolders button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
+.cityFolders button>span:last-child{display:grid;gap:2px}
+.cityFolders strong{font-size:11px}
+.cityFolders small{font-size:9.5px;color:var(--muted)}
+.folderIcon{display:grid;place-items:center;width:34px;height:28px;border-radius:7px;background:var(--surface-3);color:var(--accent);font-size:17px}
+.cityFolders .folderActive{border-color:var(--accent);background:var(--accent-soft)}
+.cityFolders .folderActive .folderIcon{background:var(--accent);color:#fff}
 .toolbar{display:flex;flex-direction:column;gap:12px}
 .search{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:12px;padding:12px 15px;box-shadow:var(--shadow);outline:none}
 .search:focus{border-color:var(--accent)}
@@ -25,7 +34,13 @@
 .noticeSuccess{border-color:color-mix(in srgb,#16a34a 35%,var(--line));background:color-mix(in srgb,#16a34a 8%,var(--surface));color:#15803d}
 .counter{margin:14px 0 8px;color:var(--muted);font-size:11px}
 .selectionCount{font-weight:800;color:var(--accent)}
-.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(245px,1fr);gap:10px;overflow-x:auto;padding-bottom:16px;min-height:calc(100vh - 280px)}
+.topScrollbar{position:sticky;top:0;z-index:12;width:100%;height:16px;overflow-x:auto;overflow-y:hidden;margin:2px 0 7px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;scrollbar-width:auto}
+.topScrollbar>div{height:1px}
+.topScrollbar::-webkit-scrollbar{height:12px}
+.topScrollbar::-webkit-scrollbar-track{background:transparent}
+.topScrollbar::-webkit-scrollbar-thumb{background:var(--line-strong);border:3px solid var(--surface-2);border-radius:999px}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:280px;gap:10px;overflow-x:auto;padding-bottom:6px;min-height:calc(100vh - 320px);scrollbar-width:none}
+.board::-webkit-scrollbar{display:none}
 .column{display:flex;flex-direction:column;min-height:590px;border-radius:12px;transition:.15s ease}
 .dragOver{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft)}
 .columnHeader{display:flex;align-items:center;gap:8px;padding:5px 4px}
@@ -72,4 +87,4 @@
 .modalActions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 .modalActions button{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:10px 14px;font-weight:800}
 @media(max-width:1180px){.filterBar{grid-template-columns:repeat(3,minmax(160px,1fr))}.clearFilters{grid-column:1/-1;justify-self:start}.toolbarRow{align-items:stretch;flex-direction:column}.actions{justify-content:flex-end}.board{min-height:560px}}
-@media(max-width:760px){.page{padding:14px 10px}.filterBar{grid-template-columns:1fr}.clearFilters{grid-column:auto;width:100%}.filterSummary{justify-content:space-between}.actions{overflow:auto;justify-content:flex-start;padding-bottom:2px}.formGrid{grid-template-columns:1fr}.board{grid-auto-columns:minmax(225px,82vw)}.cardTopActions .deleteCard{font-size:0;min-width:27px;padding:0}.cardTopActions .deleteCard::after{content:"×";font-size:18px}}
+@media(max-width:760px){.page{padding:14px 10px}.cityFolders button{min-width:155px}.filterBar{grid-template-columns:1fr}.clearFilters{grid-column:auto;width:100%}.filterSummary{justify-content:space-between}.actions{overflow:auto;justify-content:flex-start;padding-bottom:2px}.formGrid{grid-template-columns:1fr}.board{grid-auto-columns:minmax(225px,82vw)}.cardTopActions .deleteCard{font-size:0;min-width:27px;padding:0}.cardTopActions .deleteCard::after{content:"×";font-size:18px}}

@@ -7,10 +7,12 @@ import { buildProfileMessages } from "../../services/leads/profileMessages.js";
 import * as LeadActions from "../../app/actions/leads.js";
 import * as AIActions from "../../app/actions/ai.js";
 import { saveLeadWorkspaceAction } from "../../app/actions/workspaces.js";
+import LeadStrategyMap from "../LeadStrategyMap/LeadStrategyMap.jsx";
 import s from "./LeadWorkspace.module.css";
 
 const TABS = [
   ["info", "Informações"],
+  ["strategy", "Estratégia"],
   ["scripts", "Roteiros"],
   ["objections", "Objeções"],
   ["site", "Site"],
@@ -292,6 +294,20 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     </section>;
   }
 
+  function renderStrategy() {
+    return <section className={s.section}>
+      <div className={s.strategyIntro}>
+        <div><h3>Mapa estratégico do lead</h3><p>Monte o caminho específico desta prospecção. Arraste as fases, conecte os blocos e registre o que aconteceu em cada etapa.</p></div>
+      </div>
+      <LeadStrategyMap
+        leadId={lead.id}
+        leadName={lead.name}
+        initialMap={workspace.strategyMap}
+        onSaved={strategyMap => setWorkspace(current => ({ ...current, strategyMap }))}
+      />
+    </section>;
+  }
+
   function renderScripts() {
     return <section className={s.section}>
       <div className={s.scriptCard}>
@@ -352,7 +368,8 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   }
 
   const content = tab === "info" ? renderInformation()
-    : tab === "scripts" ? renderScripts()
+    : tab === "strategy" ? renderStrategy()
+      : tab === "scripts" ? renderScripts()
       : tab === "objections" ? renderObjections()
         : tab === "site" ? renderSite()
           : tab === "sale" ? renderSale()

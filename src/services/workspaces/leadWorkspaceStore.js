@@ -9,6 +9,8 @@ const CONSULTING_STATUSES = new Set([
   "pending", "analyzing", "ready", "reviewed", "sent", "interested",
   "payment_pending", "paid", "delivered", "converted", "lost",
 ]);
+const STRATEGY_NODE_TYPES = new Set(["lead", "action", "contact", "decision", "result"]);
+const STRATEGY_NODE_STATUSES = new Set(["planned", "active", "done", "skipped"]);
 
 const DEFAULT_WORKSPACE = Object.freeze({
   commercialTrack: "auto",
@@ -18,6 +20,10 @@ const DEFAULT_WORKSPACE = Object.freeze({
   lastContactAt: "",
   lastContactKind: "",
   contactCount: 0,
+  strategyMap: {
+    nodes: [],
+    edges: [],
+  },
   appointment: {
     type: "Reunião",
     time: "09:00",
@@ -108,6 +114,33 @@ function cleanBoolean(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+function normalizeStrategyMap(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const rawNodes = Array.isArray(input.nodes) ? input.nodes.slice(0, 80) : [];
+  const nodes = rawNodes.map((node, index) => {
+    const id = cleanText(node?.id || `node_${index + 1}`, 80).replace(/[^a-zA-Z0-9_-]/g, "_") || `node_${index + 1}`;
+    const type = STRATEGY_NODE_TYPES.has(node?.type) ? node.type : "action";
+    const status = STRATEGY_NODE_STATUSES.has(node?.status) ? node.status : "planned";
+    return {
+      id,
+      title: cleanText(node?.title || "Nova fase", 120).trim() || "Nova fase",
+      note: cleanText(node?.note, 1000).trim(),
+      type,
+      status,
+      x: cleanInteger(node?.x, 40, 0, 2800),
+      y: cleanInteger(node?.y, 40, 0, 1800),
+    };
+  });
+  const nodeIds = new Set(nodes.map(node => node.id));
+  const rawEdges = Array.isArray(input.edges) ? input.edges.slice(0, 160) : [];
+  const edges = rawEdges.map((edge, index) => ({
+    id: cleanText(edge?.id || `edge_${index + 1}`, 80).replace(/[^a-zA-Z0-9_-]/g, "_") || `edge_${index + 1}`,
+    from: cleanText(edge?.from, 80),
+    to: cleanText(edge?.to, 80),
+  })).filter(edge => edge.from && edge.to && edge.from !== edge.to && nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  return { nodes, edges };
+}
+
 function cleanContactKind(value) {
   const kind = String(value || "").trim().toLowerCase();
   return CONTACT_KINDS.has(kind) ? kind : "";
@@ -141,6 +174,7 @@ function normalizeWorkspace(input = {}) {
     lastContactAt: cleanTimestamp(input.lastContactAt),
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
+    strategyMap: normalizeStrategyMap(input.strategyMap),
     appointment: {
       type: cleanText(appointment.type || DEFAULT_WORKSPACE.appointment.type, 80),
       time: /^\d{2}:\d{2}$/.test(String(appointment.time || "")) ? String(appointment.time) : DEFAULT_WORKSPACE.appointment.time,

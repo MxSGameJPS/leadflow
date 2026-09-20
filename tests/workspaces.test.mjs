@@ -13,6 +13,7 @@ try {
   assert.equal(empty.lastContactAt, "");
   assert.equal(empty.lastContactKind, "");
   assert.equal(empty.contactCount, 0);
+  assert.deepEqual(empty.strategyMap, { nodes: [], edges: [] });
 
   const first = await saveLeadWorkspace(leadId, {
     lastContactAt: "2026-08-08T13:00:00.000Z",
@@ -39,9 +40,23 @@ try {
   const sanitized = await saveLeadWorkspace(leadId, {
     lastContactKind: "tipo-invalido",
     contactCount: -10,
+    strategyMap: {
+      nodes: [
+        { id: "lead", title: "Lead", type: "lead", status: "done", x: 20, y: 30 },
+        { id: "contato", title: "Contato", type: "contact", status: "active", x: 250, y: 30 },
+      ],
+      edges: [
+        { id: "e1", from: "lead", to: "contato" },
+        { id: "invalida", from: "lead", to: "nao_existe" },
+      ],
+    },
   });
   assert.equal(sanitized.lastContactKind, "");
   assert.equal(sanitized.contactCount, 0);
+  assert.equal(sanitized.strategyMap.nodes.length, 2);
+  assert.equal(sanitized.strategyMap.edges.length, 1);
+  assert.equal(sanitized.strategyMap.edges[0].from, "lead");
+  assert.equal(sanitized.strategyMap.edges[0].to, "contato");
 
   console.log("Testes de workspace passaram.");
 } finally {
