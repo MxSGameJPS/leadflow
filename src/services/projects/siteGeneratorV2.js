@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
+import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
 
 const GENERATED_ROOT = path.join(process.cwd(), "generated-sites");
 const PLACE_DETAILS_MASK = [
@@ -333,11 +334,14 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     description: input.description,
     requestedChanges: clean(instruction, 5000),
     effects: normalizeEffects(input.effects),
+    skillMode: input.skillMode || "auto",
+    skills: Array.isArray(input.skills) ? input.skills : [],
   };
 
   return {
     systemPrompt: [
       "Você é diretor de criação, estrategista de conversão, redator e designer de produto digital.",
+      buildSiteSkillsSystemPrompt(input.skills),
       "Aplique o mesmo rigor das skills /ui-ux-pro-max e /frontend-design: identidade específica ao assunto, hierarquia real, acessibilidade WCAG AA, mobile-first, tipografia deliberada, uma assinatura visual memorável e movimento com propósito.",
       "A landing será enviada como prévia comercial. Ela precisa causar a impressão de trabalho autoral de um estúdio de alto nível, não de template WordPress, tema PHP ou interface genérica criada por IA.",
       "Evite purple gradient genérico, excesso de cards arredondados, sombras pesadas, seções intercambiáveis, números decorativos sem significado, texto corporativo vazio e a combinação automática de fundo creme com serifada apenas por hábito.",
@@ -600,6 +604,7 @@ Público: ${data.audience}
 Objetivo único: ${data.pageJob}
 Direção escolhida: ${data.design.direction}
 Assinatura visual: ${data.design.signatureLabel}
+Skills do LeadFlow: ${(data.skills || []).join(", ") || "briefing-base"}
 
 Preserve apenas informações verificáveis. Não invente serviços, resultados, preços ou depoimentos.
 Aprimore composição, tipografia, imagens, responsividade, acessibilidade WCAG AA e movimento com propósito.
@@ -635,7 +640,19 @@ export async function generateSiteFolder(input = {}) {
     description: clean(input.description, 1600),
     effects: normalizeEffects(input.effects),
     referenceImages: Array.isArray(input.referenceImages) ? input.referenceImages.slice(0, 6) : [],
+    skillMode: input.skillMode || "auto",
+    skills: Array.isArray(input.skills) ? input.skills : [],
   };
+
+  const skillRouting = resolveSiteSkills({
+    mode: input.skillMode,
+    selectedSkills: input.skills,
+    instruction: input.instruction,
+    referenceImages: placeData.referenceImages,
+    phase: input.existingSiteData ? "refine" : "create",
+  });
+  placeData.skillMode = skillRouting.mode;
+  placeData.skills = skillRouting.skills;
 
   let aiUsed = false;
   let aiWarning = "";
@@ -697,6 +714,9 @@ export async function generateSiteFolder(input = {}) {
     pageJob: siteData.pageJob,
     effects: siteData.effects,
     referenceImageCount: Array.isArray(input.referenceImages) ? input.referenceImages.length : 0,
+    skillMode: skillRouting.mode,
+    skills: skillRouting.skills,
+    skillRoutingReason: skillRouting.reason,
     photoAttributions: media.attributions,
     validationRequired: true,
   };
@@ -712,5 +732,5 @@ export async function generateSiteFolder(input = {}) {
     fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nLanding page premium gerada pelo LeadFlow.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Direção visual específica para o nicho\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
   ]);
 
-  return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, siteData };
+  return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, skillMode: skillRouting.mode, skills: skillRouting.skills, skillRoutingReason: skillRouting.reason, siteData };
 }
