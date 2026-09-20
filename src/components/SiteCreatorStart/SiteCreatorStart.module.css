@@ -5,8 +5,8 @@
 .skillModes{display:flex;gap:6px;flex:0 0 auto;padding:3px;border:1px solid #dbe3ee;border-radius:10px;background:#fff}
 .skillModes button{border:0;border-radius:7px;background:transparent;padding:7px 10px;color:#64748b;font:inherit;font-size:10px;font-weight:850;cursor:pointer}
 .skillModes button.modeActive{background:#111827;color:#fff}
-.skillSummary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border-radius:10px;background:#eef2f7;color:#64748b;font-size:10px}
-.skillSummary b{color:#334155}
+.skillSummary{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 12px;padding:9px 10px;border-radius:10px;background:#eef2f7;color:#64748b;font-size:10px}
+.skillSummary b{color:#334155}.skillSummary small{grid-column:1/-1;color:#7c8898;line-height:1.35}
 .skillGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
 .skillOption,.skillActive{position:relative;min-width:0;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:8px;row-gap:2px;text-align:left;padding:11px;border:1px solid #dbe3ee;border-radius:11px;background:#fff;color:#334155;cursor:pointer}
 .skillOption>span,.skillActive>span{grid-row:1/4;width:23px;height:23px;display:grid;place-items:center;border-radius:7px;background:#f1f5f9;font-weight:900}
@@ -18,4 +18,4 @@
 .skillOption:disabled,.skillActive:disabled{cursor:default;opacity:1}
 .promptBox .skills{background:#f8fafc}
 .promptBox .skillGrid{grid-template-columns:1fr}
-@media(max-width:680px){.skillModes{width:100%}.skillModes button{flex:1}.skillGrid{grid-template-columns:1fr}.skillSummary{align-items:flex-start;flex-direction:column}}
+@media(max-width:680px){.skillModes{width:100%}.skillModes button{flex:1}.skillGrid{grid-template-columns:1fr}.skillSummary{grid-template-columns:1fr}.skillSummary small{grid-column:auto}}
