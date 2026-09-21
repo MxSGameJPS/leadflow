@@ -27,172 +27,209 @@ function Icon({ name }) {
     pin: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/></>,
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
+    star: <path d="m12 3 2.6 5.3 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9L12 3Z"/>,
+    instagram: <><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/></>,
     spark: <><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name] || paths.check}</svg>;
 }
 
-function ActionLink({ href, children, className = "", icon = "arrow" }) {
-  if (!href) return null;
+function actionHref(action, site) {
+  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;
+  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\d]/g, "");
+  if (action === "instagram" && site.instagram) return site.instagram;
+  if (action === "maps" && site.mapsLink) return site.mapsLink;
+  return "#contato";
+}
+
+function actionIcon(action) {
+  if (action === "whatsapp" || action === "phone") return "phone";
+  if (action === "instagram") return "instagram";
+  if (action === "maps") return "pin";
+  return "arrow";
+}
+
+function ActionLink({ config, site, className = "" }) {
+  if (!config?.label) return null;
+  const href = actionHref(config.action, site);
   const external = /^https?:/i.test(href);
-  return <a className={className} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}><span>{children}</span><Icon name={icon}/></a>;
+  return <a className={className} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}><span>{config.label}</span><Icon name={actionIcon(config.action)}/></a>;
+}
+
+function SectionShell({ section, children, className = "", id }) {
+  return <section id={id} className={className} data-tone={section.tone || "base"} data-variant={section.variant || ""} data-align={section.align || "left"} data-lf-reveal>{children}</section>;
+}
+
+function Visual({ site, images, index = 0, className = "", label = "" }) {
+  const image = images[index] || images[0] || "";
+  if (image) return <figure className={className}><img src={image} alt={label || ("Imagem de " + (site.brandName || "negócio"))}/></figure>;
+  return <div className={className + " " + s.mediaFallback}><span>{String(site.brandName || "L").slice(0,1)}</span><small>{site.segment || "Negócio local"}</small></div>;
+}
+
+function Hero({ section, site, images }) {
+  const primary = site.ctas?.primary || { label: site.primaryCta || "Falar agora", action: "contact" };
+  const secondary = site.ctas?.secondary || { label: site.secondaryCta || "Ver localização", action: "maps" };
+  const variant = section.variant || "split-minimal";
+
+  return <SectionShell section={section} className={s.hero} id="top">
+    <div className={s.heroBg} aria-hidden="true">{variant === "fullbleed-cinematic" && images[section.imageIndex || 0] ? <img src={images[section.imageIndex || 0]} alt=""/> : null}</div>
+    <div className={s.heroInner}>
+      <div className={s.heroCopy}>
+        <span className={s.eyebrow}><Icon name="spark"/>{site.eyebrow}</span>
+        <h1>{site.heroTitle}</h1>
+        <p>{site.heroText}</p>
+        <div className={s.heroActions}><ActionLink config={primary} site={site} className={s.primary}/><ActionLink config={secondary} site={site} className={s.secondary}/></div>
+        <div className={s.trustLine}>
+          {site.rating && <div><strong>{site.rating}</strong><span>Google</span></div>}
+          {site.reviews && <div><strong>{site.reviews}</strong><span>avaliações</span></div>}
+          {site.city && <div><strong>{site.city}</strong><span>atendimento local</span></div>}
+        </div>
+      </div>
+
+      <div className={s.heroVisual}>
+        <Visual site={site} images={images} index={section.imageIndex || 0} className={s.heroMainMedia} label={"Apresentação de " + (site.brandName || "negócio")}/>
+        {variant === "collage" && images.length > 1 && <Visual site={site} images={images} index={(section.imageIndex || 0) + 1} className={s.heroSecondMedia} label={"Detalhe de " + (site.brandName || "negócio")}/>}
+        {variant === "portrait-editorial" && <div className={s.verticalSignature}>{site.design?.signatureLabel || site.brandName}</div>}
+        {["layered","collage"].includes(variant) && <div className={s.heroNote}><small>Conceito</small><strong>{site.blueprint?.visualThesis || site.pageJob}</strong></div>}
+      </div>
+    </div>
+  </SectionShell>;
+}
+
+function About({ section, site, images }) {
+  const showImage = section.variant === "image-note";
+  return <SectionShell section={section} className={s.about} id="sobre">
+    <div className={s.aboutInner}>
+      <div className={s.aboutTitle}><span className={s.sectionLabel}>Sobre</span><h2>{site.aboutTitle}</h2></div>
+      <div className={s.aboutBody}><p>{site.aboutText}</p><span className={s.audience}>Para {site.audience}</span></div>
+      {showImage && <Visual site={site} images={images} index={section.imageIndex || 1} className={s.aboutMedia} label={"Sobre " + (site.brandName || "negócio")}/>}
+    </div>
+  </SectionShell>;
+}
+
+function Services({ section, site }) {
+  const services = Array.isArray(site.services) ? site.services : [];
+  if (!services.length) return null;
+  return <SectionShell section={section} className={s.services} id="servicos">
+    <div className={s.sectionHead}><div><span className={s.sectionLabel}>Informações</span><h2>{site.servicesTitle}</h2></div>{site.servicesIntro && <p>{site.servicesIntro}</p>}</div>
+    <div className={s.serviceList}>{services.map((item,index)=><article className={s.serviceItem} key={(item.title || "item")+index}><span className={s.serviceIndex}>{String(index+1).padStart(2,"0")}</span><div className={s.serviceText}><h3>{item.title}</h3><p>{item.description}</p></div><Icon name={index===0?"spark":"arrow"}/></article>)}</div>
+  </SectionShell>;
+}
+
+function Gallery({ section, site, images }) {
+  if (images.length < 2) return null;
+  return <SectionShell section={section} className={s.gallery}>
+    <div className={s.galleryHead}><span className={s.sectionLabel}>Atmosfera</span><strong>{site.brandName}</strong></div>
+    <div className={s.galleryGrid}>{images.slice(0,5).map((image,index)=><figure key={image+index}><img src={image} alt={"Imagem " + (index+1) + " de " + (site.brandName || "negócio")}/></figure>)}</div>
+  </SectionShell>;
+}
+
+function Proof({ section, site }) {
+  const hasFacts = site.rating || site.reviews || site.address || site.phone || site.city;
+  if (!hasFacts && !site.proofText) return null;
+  return <SectionShell section={section} className={s.proof}>
+    <div className={s.proofIntro}><span className={s.sectionLabel}>Confiança</span><h2>{site.proofTitle}</h2><p>{site.proofText}</p></div>
+    <div className={s.proofFacts}>
+      {site.rating && <div className={s.ratingFact}><Icon name="star"/><strong>{site.rating}</strong><span>avaliação no Google</span></div>}
+      {site.reviews && <div><strong>{site.reviews}</strong><span>avaliações registradas</span></div>}
+      {site.city && <div><strong>{site.city}</strong><span>cidade</span></div>}
+      {site.phone && <div><strong>{site.phone}</strong><span>contato</span></div>}
+    </div>
+  </SectionShell>;
+}
+
+function Location({ section, site, images }) {
+  if (!site.address && !site.mapsLink) return null;
+  const mapsConfig = { label: "Abrir no Google Maps", action: "maps" };
+  return <SectionShell section={section} className={s.location}>
+    <div className={s.locationInner}>
+      <div className={s.locationCopy}><span className={s.sectionLabel}>Localização</span><h2>{site.city ? "Em " + site.city : "Onde encontrar"}</h2>{site.address && <p>{site.address}</p>}<ActionLink config={mapsConfig} site={site} className={s.locationAction}/></div>
+      <Visual site={site} images={images} index={section.imageIndex || 1} className={s.locationMedia} label={"Localização de " + (site.brandName || "negócio")}/>
+    </div>
+  </SectionShell>;
+}
+
+function Contact({ section, site }) {
+  const primary = site.ctas?.primary || { label: site.primaryCta || "Falar agora", action: "contact" };
+  const secondary = site.ctas?.secondary || { label: site.secondaryCta || "Ver localização", action: "maps" };
+  return <SectionShell section={section} className={s.contact} id="contato">
+    <div className={s.contactInner}><div><span className={s.sectionLabel}>Próximo passo</span><h2>{site.contactTitle}</h2><p>{site.contactText}</p></div><div className={s.contactActions}><ActionLink config={primary} site={site} className={s.contactPrimary}/><ActionLink config={secondary} site={site} className={s.contactSecondary}/></div></div>
+  </SectionShell>;
+}
+
+function RenderSection({ section, site, images }) {
+  if (section.type === "hero") return <Hero section={section} site={site} images={images}/>;
+  if (section.type === "about") return <About section={section} site={site} images={images}/>;
+  if (section.type === "services") return <Services section={section} site={site}/>;
+  if (section.type === "gallery") return <Gallery section={section} site={site} images={images}/>;
+  if (section.type === "proof") return <Proof section={section} site={site}/>;
+  if (section.type === "location") return <Location section={section} site={site} images={images}/>;
+  if (section.type === "contact") return <Contact section={section} site={site}/>;
+  return null;
 }
 
 export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
   const rootRef = useRef(null);
   const design = site.design || {};
-  const composition = design.composition || {};
   const colors = design.colors || {};
-  const services = Array.isArray(site.services) ? site.services : [];
-  const images = Array.isArray(site.images) ? site.images.map(image => assetUrl(image, assetBase)).filter(Boolean) : [];
-  const effects = useMemo(() => new Set(Array.isArray(site.effects) ? site.effects : []), [site.effects]);
-  const effectKey = [...effects].sort().join(" ");
-  const hasEffect = name => effects.has(name);
-  const phoneHref = site.phone ? "tel:" + String(site.phone).replace(/[^+\d]/g, "") : "";
-  const whatsappHref = site.whatsapp ? "https://wa.me/" + site.whatsapp : "";
-  const primaryHref = whatsappHref || phoneHref || site.mapsLink || "#contato";
-  const fonts = FONT_PAIRS[design.fontPair] || FONT_PAIRS.modern;
-  const radius = design.radius === "sharp" ? "2px" : design.radius === "rounded" ? "28px" : "14px";
-  const motionDistance = (composition.motion || 5) >= 8 ? 46 : design.motion === "expressive" ? 38 : design.motion === "subtle" ? 14 : 26;
-
-  const style = {
-    "--primary": colors.primary || "#17324D",
-    "--accent": colors.accent || "#D59B42",
-    "--background": colors.background || "#F3F1EC",
-    "--surface": colors.surface || "#FFFFFF",
-    "--text": colors.text || "#14202A",
-    "--muted": colors.muted || "#68737D",
-    "--radius": radius,
-    "--font-display": fonts.display,
-    "--font-body": fonts.body,
+  const composition = design.composition || {};
+  const images = Array.isArray(site.images) ? site.images.map(image=>assetUrl(image,assetBase)).filter(Boolean) : [];
+  const sections = Array.isArray(site.blueprint?.sections) && site.blueprint.sections.length ? site.blueprint.sections : [
+    {type:"hero",variant:"split-minimal",tone:"base",imageIndex:0,align:"left"},
+    {type:"about",variant:"large-type",tone:"primary",imageIndex:1,align:"left"},
+    {type:"proof",variant:"facts-list",tone:"surface",imageIndex:0,align:"left"},
+    {type:"location",variant:"editorial",tone:"base",imageIndex:1,align:"left"},
+    {type:"contact",variant:"band",tone:"accent",imageIndex:0,align:"left"},
+  ];
+  const effects = useMemo(()=>new Set(Array.isArray(site.effects)?site.effects:[]),[site.effects]);
+  const effectKey=[...effects].sort().join(" ");
+  const fonts=FONT_PAIRS[design.fontPair]||FONT_PAIRS.modern;
+  const radius=design.radius==="sharp"?"2px":design.radius==="rounded"?"28px":"14px";
+  const style={
+    "--primary":colors.primary||"#17324D",
+    "--accent":colors.accent||"#D59B42",
+    "--background":colors.background||"#F3F1EC",
+    "--surface":colors.surface||"#FFFFFF",
+    "--text":colors.text||"#14202A",
+    "--muted":colors.muted||"#68737D",
+    "--radius":radius,
+    "--font-display":fonts.display,
+    "--font-body":fonts.body,
   };
 
-  useEffect(() => {
-    if (!document.getElementById("leadflow-generated-site-fonts")) {
-      const link = document.createElement("link");
-      link.id = "leadflow-generated-site-fonts";
-      link.rel = "stylesheet";
-      link.href = FONT_STYLESHEET;
-      document.head.appendChild(link);
+  useEffect(()=>{
+    if(!document.getElementById("leadflow-generated-site-fonts")){
+      const link=document.createElement("link");link.id="leadflow-generated-site-fonts";link.rel="stylesheet";link.href=FONT_STYLESHEET;document.head.appendChild(link);
     }
-  }, []);
+  },[]);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
-    document.documentElement.style.scrollBehavior = hasEffect("smooth-scroll") ? "smooth" : "";
+  useEffect(()=>{
+    const root=rootRef.current;if(!root)return;
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const reveal=[...root.querySelectorAll("[data-lf-reveal]")];
+    let observer=null;
+    if(effects.has("section-reveal")&&!reduced&&"IntersectionObserver" in window){
+      observer=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){entry.target.setAttribute("data-lf-visible","true");observer.unobserve(entry.target)}}},{threshold:.1,rootMargin:"0px 0px -7% 0px"});
+      reveal.forEach(element=>observer.observe(element));
+    }else reveal.forEach(element=>element.setAttribute("data-lf-visible","true"));
+    const previous=document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior=effects.has("smooth-scroll")?"smooth":"";
+    return()=>{observer?.disconnect();document.documentElement.style.scrollBehavior=previous};
+  },[effectKey,effects]);
 
-    const revealElements = [...root.querySelectorAll("[data-lf-reveal]")];
-    let observer = null;
-    if (hasEffect("section-reveal") && !prefersReduced && "IntersectionObserver" in window) {
-      observer = new IntersectionObserver(entries => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.setAttribute("data-lf-visible", "true");
-            observer.unobserve(entry.target);
-          }
-        }
-      }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
-      revealElements.forEach(element => observer.observe(element));
-    } else {
-      revealElements.forEach(element => element.setAttribute("data-lf-visible", "true"));
-    }
+  const primary=site.ctas?.primary||{label:site.primaryCta||"Falar agora",action:"contact"};
 
-    const parallaxElements = [...root.querySelectorAll("[data-lf-parallax]")];
-    let frame = 0;
-    const updateParallax = () => {
-      frame = 0;
-      if (!hasEffect("parallax-hero") || prefersReduced) return;
-      const viewport = window.innerHeight || 800;
-      for (const element of parallaxElements) {
-        const rect = element.getBoundingClientRect();
-        const progress = Math.max(-1, Math.min(1, (rect.top + rect.height / 2 - viewport / 2) / viewport));
-        element.style.setProperty("--lf-parallax-y", (progress * -22).toFixed(2) + "px");
-      }
-    };
-    const onScroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateParallax);
-    };
-    updateParallax();
-    if (hasEffect("parallax-hero") && !prefersReduced) {
-      window.addEventListener("scroll", onScroll, { passive: true });
-      window.addEventListener("resize", onScroll);
-    }
-
-    return () => {
-      document.documentElement.style.scrollBehavior = previousScrollBehavior;
-      observer?.disconnect();
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [effectKey, motionDistance]);
-
-  return <main
-    ref={rootRef}
-    className={s.root}
-    style={style}
-    data-direction={design.direction || "minimal"}
-    data-archetype={composition.archetype || "editorial-offset"}
-    data-nav={composition.navStyle || "minimal"}
-    data-services={composition.servicesLayout || "split-list"}
-    data-gallery={composition.galleryLayout || "duo"}
-    data-rhythm={composition.sectionRhythm || "alternating"}
-    data-density={composition.density || "airy"}
-    data-hero-media={composition.heroMedia || "side"}
-    data-accent-shape={composition.accentShape || "line"}
-    data-effects={effectKey}
-  >
-    <header className={s.siteHeader}>
-      <a className={s.brand} href="#top" aria-label={"Ir ao início de " + (site.brandName || "site")}>{site.brandName}</a>
-      <nav aria-label="Navegação principal"><a href="#sobre">Sobre</a><a href="#servicos">Diferenciais</a><a href="#contato">Contato</a></nav>
-      <ActionLink href={primaryHref} className={s.headerCta}>{site.primaryCta || "Falar agora"}</ActionLink>
+  return <main ref={rootRef} className={s.root} style={style} data-effects={effectKey} data-concept={site.blueprint?.concept||"editorial-local"} data-direction={design.direction||"minimal"} data-density={composition.density||"balanced"}>
+    <header className={s.siteHeader} data-nav={composition.navStyle||"minimal"}>
+      <a className={s.brand} href="#top">{site.brandName}</a>
+      <nav aria-label="Navegação principal"><a href="#sobre">Sobre</a>{Array.isArray(site.services)&&site.services.length>0&&<a href="#servicos">Informações</a>}<a href="#contato">Contato</a></nav>
+      <ActionLink config={primary} site={site} className={s.headerCta}/>
     </header>
 
-    <section className={s.hero} id="top">
-      <div className={s.heroAtmosphere} aria-hidden="true"/>
-      <div className={s.heroCopy}>
-        <span className={s.eyebrow}><Icon name="spark"/>{site.eyebrow}</span>
-        <h1>{site.heroTitle}</h1>
-        <p>{site.heroText}</p>
-        <div className={s.heroActions}><ActionLink href={primaryHref} className={s.primary}>{site.primaryCta || "Falar agora"}</ActionLink>{site.mapsLink && <ActionLink href={site.mapsLink} className={s.secondary} icon="pin">{site.secondaryCta || "Ver localização"}</ActionLink>}</div>
-        <div className={s.trustLine} aria-label="Informações de confiança">{site.rating && <div><strong>{site.rating}</strong><span>avaliação no Google</span></div>}{site.reviews && <div><strong>{site.reviews}</strong><span>avaliações registradas</span></div>}{site.city && <div><strong>{site.city}</strong><span>atendimento local</span></div>}</div>
-      </div>
+    <div className={s.blueprint}>{sections.map((section,index)=><RenderSection key={section.type+"-"+index} section={section} site={site} images={images}/>)}</div>
 
-      <div className={s.heroVisual}>
-        <div className={s.signatureRail}><span>{design.signatureLabel}</span></div>
-        <div className={s.heroImage} data-lf-parallax>{images[0] ? <img src={images[0]} alt={"Ambiente ou apresentação de " + (site.brandName || "negócio")}/> : <div className={s.mediaFallback}><span>{String(site.brandName || "L").slice(0,1)}</span><small>{site.segment || "Negócio local"}</small></div>}</div>
-        <div className={s.heroNote}><span>Direção</span><strong>{site.pageJob}</strong></div>
-        {images[1] && <div className={s.heroImageSecondary}><img src={images[1]} alt={"Detalhe de " + (site.brandName || "negócio")}/></div>}
-      </div>
-    </section>
-
-    <section className={s.statement} id="sobre" data-lf-reveal>
-      <div><span className={s.sectionLabel}>Direção</span><h2>{site.aboutTitle}</h2></div>
-      <div className={s.statementBody}><p>{site.aboutText}</p><span className={s.audience}>Criado para: {site.audience}</span></div>
-    </section>
-
-    <section className={s.services} id="servicos">
-      <div className={s.sectionHead} data-lf-reveal><div><span className={s.sectionLabel}>Experiência</span><h2>{site.servicesTitle}</h2></div><p>{site.servicesIntro}</p></div>
-      <div className={s.serviceComposition}>{services.map((service,index)=><article className={s.serviceCard} key={service.title || index} data-lf-reveal><span className={s.serviceMarker}>{String(index+1).padStart(2,"0")}</span><div className={s.serviceIcon}><Icon name={index===0?"spark":"check"}/></div><h3>{service.title}</h3><p>{service.description}</p></article>)}</div>
-    </section>
-
-    {images.length > 2 && <section className={s.gallery} aria-label={"Galeria de " + (site.brandName || "negócio")}>{images.slice(2,6).map((image,index)=><figure key={image+index} data-lf-reveal><img src={image} alt={"Imagem " + (index+1) + " de " + (site.brandName || "negócio")}/></figure>)}</section>}
-
-    <section className={s.proof} data-lf-reveal>
-      <div className={s.proofCopy}><span className={s.sectionLabel}>Confiança</span><h2>{site.proofTitle}</h2><p>{site.proofText}</p></div>
-      <div className={s.proofPanel}>{site.address && <div><Icon name="pin"/><span><small>Endereço</small><strong>{site.address}</strong></span></div>}{Array.isArray(site.hours) && site.hours.length>0 && <div><Icon name="clock"/><span><small>Horários informados</small><strong>{site.hours.slice(0,2).join(" · ")}</strong></span></div>}{site.phone && <div><Icon name="phone"/><span><small>Contato</small><strong>{site.phone}</strong></span></div>}</div>
-    </section>
-
-    <section className={s.contact} id="contato" data-lf-reveal>
-      <div><span className={s.sectionLabel}>Próximo passo</span><h2>{site.contactTitle}</h2><p>{site.contactText}</p></div>
-      <div className={s.contactActions}><ActionLink href={primaryHref} className={s.contactPrimary}>{site.primaryCta || "Falar agora"}</ActionLink>{site.mapsLink && <ActionLink href={site.mapsLink} className={s.contactSecondary} icon="pin">Abrir no Google Maps</ActionLink>}</div>
-    </section>
-
-    <footer className={s.footer}><div><strong>{site.brandName}</strong><span>{site.segment}{site.city ? " · " + site.city : ""}</span></div><p>Prévia desenvolvida por Saulo Pavanello</p></footer>
-    {Array.isArray(site.attributions) && site.attributions.length>0 && <div className={s.attributions}>Fotos: {site.attributions.map((item,index)=><span key={(item.name||"foto")+index}>{index>0?" · ":""}{item.uri?<a href={item.uri} target="_blank" rel="noreferrer">{item.name}</a>:item.name}</span>)}</div>}
-    {whatsappHref && <a className={s.floatingWhatsapp} href={whatsappHref} target="_blank" rel="noreferrer" aria-label="Conversar pelo WhatsApp"><Icon name="phone"/><span>WhatsApp</span></a>}
+    <footer className={s.footer}><div><strong>{site.brandName}</strong><span>{site.segment}{site.city?" · "+site.city:""}</span></div><p>Prévia desenvolvida por Saulo Pavanello</p></footer>
+    {Array.isArray(site.attributions)&&site.attributions.length>0&&<div className={s.attributions}>Fotos: {site.attributions.map((item,index)=><span key={(item.name||"foto")+index}>{index>0?" · ":""}{item.uri?<a href={item.uri} target="_blank" rel="noreferrer">{item.name}</a>:item.name}</span>)}</div>}
+    {site.whatsapp&&<a className={s.floatingWhatsapp} href={"https://wa.me/"+site.whatsapp} target="_blank" rel="noreferrer" aria-label="Conversar pelo WhatsApp"><Icon name="phone"/><span>WhatsApp</span></a>}
   </main>;
 }
