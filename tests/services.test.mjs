@@ -6,7 +6,7 @@ import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
-import { depthForCount, normalizeScraperPlace, parseScraperCsv } from "../src/services/places/googleMapsScraper.js";
+import { depthForCount, distanceMeters, normalizeScraperPlace, parseCompleteAddress, parseScraperCsv, rowMatchesRequestedCity, rowWithinRadius } from "../src/services/places/googleMapsScraper.js";
 import { buildPlacesCsv, placesCsvFilename } from "../src/services/exports/placeResultsCsv.js";
 
 let pass = 0, fail = 0;
@@ -69,15 +69,22 @@ t("normaliza presença fraca", place.weakSite === true && place.hasOwnSite === f
 t("normaliza score e nota", place.score >= 80 && place.grade === "A");
 t("fonte normalizada como Google Maps", place.source === "Google Maps");
 
-const scraperRows = parseScraperCsv('title,phone,emails,website,category,address,review_rating,review_count,link,place_id\n"Restaurante, Scraper","(55) 99944-3944","contato@teste.com; financeiro@teste.com",https://teste.com,Restaurante,"Rua B, 20",4.7,220,https://maps.google.com/?cid=2,ChIJscraper\n');
-t("parser do scraper preserva campos entre aspas", scraperRows.length === 1 && scraperRows[0].title === "Restaurante, Scraper" && scraperRows[0].address === "Rua B, 20");
+const scraperRows = parseScraperCsv('title,phone,emails,website,category,address,review_rating,review_count,link,place_id,latitude,longitude,complete_address\n"Restaurante, Scraper","(55) 99944-3944","contato@teste.com; financeiro@teste.com",https://teste.com,Restaurante,"Rua B, 20 - Centro, Santa Maria - RS",4.7,220,https://maps.google.com/?cid=2,ChIJscraper,-29.6842,-53.8069,"{""city"":""Santa Maria"",""state"":""Rio Grande do Sul"",""country"":""Brasil""}"\n');
+t("parser do scraper preserva campos entre aspas", scraperRows.length === 1 && scraperRows[0].title === "Restaurante, Scraper" && scraperRows[0].address.includes("Santa Maria"));
+t("parser lê complete_address", parseCompleteAddress(scraperRows[0].complete_address).city === "Santa Maria");
+t("filtro aceita cidade real pesquisada", rowMatchesRequestedCity(scraperRows[0], { city: "Santa Maria" }) === true);
+t("filtro rejeita outra cidade", rowMatchesRequestedCity({ ...scraperRows[0], complete_address: '{"city":"Itaara"}', address: "Rua X, Itaara - RS" }, { city: "Santa Maria" }) === false);
+t("fallback de cidade usa endereço quando complete_address falta", rowMatchesRequestedCity({ address: "Av. Brasil, 100 - Centro, Ivoti - RS" }, { city: "Ivoti" }) === true);
+t("distância geográfica calcula metros", distanceMeters(-29.591, -51.160, -29.591, -51.160) < 1);
+t("raio aceita resultado próximo", rowWithinRadius({ latitude: -29.591, longitude: -51.160 }, { lat: -29.591, lon: -51.160 }, 10000) === true);
+t("raio rejeita resultado muito distante", rowWithinRadius({ latitude: -29.460, longitude: -49.930 }, { lat: -29.591, lon: -51.160 }, 10000) === false);
 const scrapedPlace = normalizeScraperPlace(scraperRows[0], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante" });
 t("scraper normaliza place id", scrapedPlace.placeId === "ChIJscraper");
 t("scraper captura primeiro email", scrapedPlace.email === "contato@teste.com");
 t("scraper mantém fonte Google Maps", scrapedPlace.source === "Google Maps");
 const previousDepth = process.env.GOOGLE_MAPS_SCRAPER_DEPTH;
 delete process.env.GOOGLE_MAPS_SCRAPER_DEPTH;
-t("profundidade cresce com quantidade", depthForCount(20) === 5 && depthForCount(40) === 6 && depthForCount(60) === 7);
+t("profundidade cresce com quantidade sem expandir demais", depthForCount(20) === 2 && depthForCount(40) === 3 && depthForCount(60) === 4);
 if (previousDepth == null) delete process.env.GOOGLE_MAPS_SCRAPER_DEPTH; else process.env.GOOGLE_MAPS_SCRAPER_DEPTH = previousDepth;
 
 const exportedCsv = buildPlacesCsv([{ ...place, email: "contato@teste.com", placeId: place.externalId, name: "=EMPRESA TESTE" }], { country: "BR", state: "RS", city: "Santa Maria", category: "Restaurante", neighborhood: "Centro" });

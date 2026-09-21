@@ -25,14 +25,86 @@ function positiveInt(value, fallback, min, max) {
 export function depthForCount(count) {
   const configured = Number.parseInt(String(process.env.GOOGLE_MAPS_SCRAPER_DEPTH || ""), 10);
   if (Number.isFinite(configured) && configured > 0) return Math.min(20, configured);
-  if (count <= 20) return 5;
-  if (count <= 40) return 6;
-  return 7;
+  if (count <= 20) return 2;
+  if (count <= 40) return 3;
+  return 4;
 }
 
 function firstEmail(value) {
   const match = String(value || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   return match?.[0] || null;
+}
+
+function envFlag(name, fallback = false) {
+  const raw = String(process.env[name] ?? "").trim().toLowerCase();
+  if (!raw) return fallback;
+  return ["1", "true", "yes", "on", "sim"].includes(raw);
+}
+
+function normalizeGeoText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function parseCompleteAddress(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {}
+  return {};
+}
+
+function actualCityFromRow(row) {
+  const complete = parseCompleteAddress(row.complete_address);
+  return String(complete.city || "").trim();
+}
+
+function cityAppearsInAddress(address, city) {
+  const normalizedAddress = normalizeGeoText(address);
+  const normalizedCity = normalizeGeoText(city);
+  if (!normalizedAddress || !normalizedCity) return false;
+  return (" " + normalizedAddress + " ").includes(" " + normalizedCity + " ");
+}
+
+export function rowMatchesRequestedCity(row, filters) {
+  const requested = normalizeGeoText(filters.city);
+  if (!requested) return true;
+  const actual = normalizeGeoText(actualCityFromRow(row));
+  if (actual) return actual === requested;
+  return cityAppearsInAddress(row.address, filters.city);
+}
+
+function numericCoordinate(value) {
+  const parsed = Number.parseFloat(String(value || "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function distanceMeters(lat1, lon1, lat2, lon2) {
+  const values = [lat1, lon1, lat2, lon2].map(numericCoordinate);
+  if (values.some(value => value === null)) return null;
+  const [aLat, aLon, bLat, bLon] = values;
+  const toRad = degrees => degrees * Math.PI / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const x = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+export function rowWithinRadius(row, coords, radiusMeters) {
+  const rowLat = numericCoordinate(row.latitude);
+  const rowLon = numericCoordinate(row.longitude ?? row.longtitude);
+  if (rowLat === null || rowLon === null) return true;
+  const distance = distanceMeters(coords.lat, coords.lon, rowLat, rowLon);
+  return distance === null || distance <= radiusMeters;
 }
 
 export function parseScraperImageUrls(value) {
@@ -103,12 +175,13 @@ export function parseScraperCsv(input = "") {
 }
 
 export function normalizeScraperPlace(row, filters) {
+  const complete = parseCompleteAddress(row.complete_address);
   const lead = normalizePlaceLead({
     externalId: stableExternalId(row),
     name: row.title,
     segment: row.category || filters.category,
-    city: filters.city,
-    location: filters.state,
+    city: complete.city || filters.city,
+    location: complete.state || filters.state,
     address: row.address,
     phone: row.phone,
     email: firstEmail(row.emails),
@@ -226,9 +299,21 @@ export async function searchGoogleMapsScraper(input, { fetchImpl = fetch, sleepI
   const rows = parseScraperCsv(csv);
   const results = [];
   const seen = new Set();
+  const strictCity = envFlag("GOOGLE_MAPS_SCRAPER_STRICT_CITY", true);
+  const radius = positiveInt(process.env.GOOGLE_MAPS_SCRAPER_RADIUS, 10000, 1000, 50000);
+  let discardedByCity = 0;
+  let discardedByRadius = 0;
 
   for (const row of rows) {
     if (/closed permanently|fechado permanentemente/i.test(String(row.status || ""))) continue;
+    if (strictCity && !rowMatchesRequestedCity(row, filters)) {
+      discardedByCity++;
+      continue;
+    }
+    if (!rowWithinRadius(row, coords, radius)) {
+      discardedByRadius++;
+      continue;
+    }
     const item = normalizeScraperPlace(row, filters);
     const key = item.placeId || (item.name + "|" + (item.address || "")).toLowerCase();
     if (!item.name || seen.has(key)) continue;
@@ -237,5 +322,19 @@ export async function searchGoogleMapsScraper(input, { fetchImpl = fetch, sleepI
     if (results.length >= filters.count) break;
   }
 
-  return { results, count: results.length, query, filters, provider: "google_maps_scraper", jobId: job.id };
+  return {
+    results,
+    count: results.length,
+    query,
+    filters,
+    provider: "google_maps_scraper",
+    jobId: job.id,
+    geographicFilter: {
+      strictCity,
+      radiusMeters: radius,
+      discardedByCity,
+      discardedByRadius,
+      rawResults: rows.length,
+    },
+  };
 }
