@@ -8,14 +8,16 @@ const SKILL_PROMPTS={
     "Trate esta landing como modo Persuade: atenção, decisão e ação são parte do produto visual.",
     "Antes de compor, defina uma tese visual específica; depois faça uma passada mental de critique, bolder, layout, typeset, colorize, animate e polish.",
     "Evite os sinais clássicos de frontend genérico: Inter/system font por hábito, gradiente roxo-azul automático, cards dentro de cards, ícone em quadrado arredondado acima de cada título, texto cinza em fundos coloridos, repetição excessiva de radius e composição SaaS.",
-    "Escolha pelo menos uma decisão visual claramente autoral e justificável para este negócio, mantendo usabilidade, acessibilidade e performance."
+    "Escolha pelo menos uma decisão visual claramente autoral e justificável para este negócio, mantendo usabilidade, acessibilidade e performance.",
+    "Sua influência deve aparecer no blueprint da página: ordem de seções, variante de hero, tratamento de imagem, ritmo e hierarquia. Se o blueprint continuar com a estrutura padrão de uma landing genérica, o trabalho não está concluído."
   ].join(" "),
   "ui-ux-pro-max":[
     "Aplique UI/UX Pro Max como inteligência de design system para Next.js/React.",
     "Defina estilo, paleta, tipografia, espaçamento, composição, densidade e motion como um sistema coerente com produto, público e contexto; não escolha pela moda.",
     "Priorize acessibilidade WCAG AA, foco visível, navegação por teclado, alvos interativos confortáveis, responsividade mobile-first, ausência de scroll horizontal e motion que respeita prefers-reduced-motion.",
     "Use SVG/ícones consistentes em vez de emoji como interface. Preserve estabilidade visual e evite layout shift.",
-    "Use os dials variance, motion e density deliberadamente. Alta variance deve alterar composição e hierarquia, não apenas cor; motion deve comunicar continuidade ou feedback; density deve controlar ritmo e respiro."
+    "Use os dials variance, motion e density deliberadamente. Alta variance deve alterar composição e hierarquia, não apenas cor; motion deve comunicar continuidade ou feedback; density deve controlar ritmo e respiro.",
+    "Trate o blueprint como parte do design system: escolha padrões de hero, leitura, prova, galeria, localização e CTA adequados ao contexto, e remova seções que não tenham conteúdo verificável."
   ].join(" "),
   "creative-web-director":[
     "Atue como Creative Web Director sênior.",

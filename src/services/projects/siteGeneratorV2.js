@@ -33,6 +33,17 @@ const SECTION_RHYTHMS = new Set(["contrast", "alternating", "structured", "flowi
 const DENSITY_LEVELS = new Set(["airy", "balanced", "dense"]);
 const HERO_MEDIA = new Set(["side", "collage", "portrait", "fullbleed", "layered"]);
 const ACCENT_SHAPES = new Set(["line", "block", "frame", "circle", "none"]);
+const BLUEPRINT_TYPES = new Set(["hero", "about", "services", "gallery", "proof", "location", "contact"]);
+const HERO_VARIANTS = new Set(["portrait-editorial", "fullbleed-cinematic", "typographic-poster", "collage", "split-minimal", "layered", "precision-grid"]);
+const ABOUT_VARIANTS = new Set(["large-type", "split-statement", "image-note", "manifesto-band"]);
+const SERVICES_VARIANTS = new Set(["numbered-list", "editorial-mosaic", "ribbon-list", "poster-grid"]);
+const GALLERY_VARIANTS_V3 = new Set(["duo", "filmstrip", "masonry", "fullbleed", "strip"]);
+const PROOF_VARIANTS = new Set(["rating-strip", "facts-list", "split-proof"]);
+const LOCATION_VARIANTS = new Set(["editorial", "minimal", "framed"]);
+const CONTACT_VARIANTS = new Set(["full-screen", "split", "band"]);
+const SECTION_TONES = new Set(["base", "surface", "primary", "accent", "dark"]);
+const ALIGNMENTS = new Set(["left", "center", "right"]);
+const CTA_ACTIONS = new Set(["whatsapp", "phone", "maps", "instagram", "contact"]);
 const SITE_EFFECTS = new Set(["entrance-motion", "section-reveal", "parallax-hero", "glass-header", "hover-lift", "ambient-glow", "cta-pulse", "smooth-scroll"]);
 
 function normalizeEffects(value) {
@@ -68,6 +79,15 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function instagramUrl(value) {
+  const raw = clean(value, 1000);
+  if (!raw) return "";
+  const direct = safeUrl(raw);
+  if (direct) return direct;
+  const handle = raw.replace(/^@/, "").replace(/[^a-zA-Z0-9._]/g, "");
+  return handle ? "https://www.instagram.com/" + handle + "/" : "";
 }
 
 function mobileWhatsapp(phone) {
@@ -166,6 +186,172 @@ function fallbackDesign(input) {
   };
 }
 
+function fallbackBlueprint(input) {
+  const segment = input.segment || "negócio local";
+  let concept = "editorial-local";
+  let visualThesis = "Uma página com hierarquia autoral, informação verificável e um caminho de contato claro.";
+  let sections = [
+    { type: "hero", variant: "split-minimal", tone: "base", imageIndex: 0, align: "left" },
+    { type: "about", variant: "large-type", tone: "primary", imageIndex: 1, align: "left" },
+    { type: "proof", variant: "rating-strip", tone: "surface", imageIndex: 0, align: "left" },
+    { type: "location", variant: "editorial", tone: "base", imageIndex: 1, align: "left" },
+    { type: "contact", variant: "band", tone: "accent", imageIndex: 0, align: "left" },
+  ];
+
+  if (segmentIncludes(segment, ["restaurante", "pizz", "caf", "bar", "padaria", "hamburg", "marmit", "sorvet"])) {
+    concept = "cinematic-local-flavor";
+    visualThesis = "Fotografia e tipografia criam desejo antes da informação prática.";
+    sections = [
+      { type: "hero", variant: "fullbleed-cinematic", tone: "dark", imageIndex: 0, align: "left" },
+      { type: "gallery", variant: "filmstrip", tone: "base", imageIndex: 0, align: "left" },
+      { type: "about", variant: "split-statement", tone: "primary", imageIndex: 1, align: "left" },
+      { type: "services", variant: "ribbon-list", tone: "base", imageIndex: 0, align: "left" },
+      { type: "proof", variant: "rating-strip", tone: "surface", imageIndex: 0, align: "left" },
+      { type: "location", variant: "framed", tone: "base", imageIndex: 1, align: "left" },
+      { type: "contact", variant: "full-screen", tone: "accent", imageIndex: 0, align: "center" },
+    ];
+  } else if (segmentIncludes(segment, ["advoc", "contab", "segur", "imobili", "clínica", "medic", "odont", "laboratório"])) {
+    concept = "precision-authority";
+    visualThesis = "Ordem, tipografia precisa e fatos verificáveis constroem confiança.";
+    sections = [
+      { type: "hero", variant: "precision-grid", tone: "base", imageIndex: 0, align: "left" },
+      { type: "proof", variant: "facts-list", tone: "surface", imageIndex: 0, align: "left" },
+      { type: "about", variant: "split-statement", tone: "primary", imageIndex: 1, align: "left" },
+      { type: "services", variant: "numbered-list", tone: "base", imageIndex: 0, align: "left" },
+      { type: "location", variant: "minimal", tone: "surface", imageIndex: 1, align: "left" },
+      { type: "contact", variant: "split", tone: "accent", imageIndex: 0, align: "left" },
+    ];
+  } else if (segmentIncludes(segment, ["estética", "beleza", "salão", "manicure", "spa", "pilates", "yoga", "nutri", "psico", "fisi"])) {
+    concept = "personal-beauty-editorial";
+    visualThesis = "A pessoa e a identidade real do negócio protagonizam a página, evitando o clichê genérico de wellness.";
+    sections = [
+      { type: "hero", variant: "portrait-editorial", tone: "base", imageIndex: 0, align: "left" },
+      { type: "about", variant: "large-type", tone: "surface", imageIndex: 1, align: "left" },
+      { type: "gallery", variant: "masonry", tone: "base", imageIndex: 0, align: "left" },
+      { type: "proof", variant: "rating-strip", tone: "primary", imageIndex: 0, align: "left" },
+      { type: "services", variant: "numbered-list", tone: "base", imageIndex: 0, align: "left" },
+      { type: "location", variant: "editorial", tone: "surface", imageIndex: 1, align: "left" },
+      { type: "contact", variant: "full-screen", tone: "accent", imageIndex: 0, align: "center" },
+    ];
+  } else if (segmentIncludes(segment, ["loja", "supermerc", "farmácia", "óptica", "joalher", "papelaria", "material", "auto peças"])) {
+    concept = "retail-poster-system";
+    visualThesis = "Escala tipográfica, ritmo e produto criam uma presença memorável e comercial.";
+    sections = [
+      { type: "hero", variant: "typographic-poster", tone: "base", imageIndex: 0, align: "left" },
+      { type: "gallery", variant: "strip", tone: "base", imageIndex: 0, align: "left" },
+      { type: "services", variant: "poster-grid", tone: "surface", imageIndex: 0, align: "left" },
+      { type: "about", variant: "manifesto-band", tone: "primary", imageIndex: 1, align: "left" },
+      { type: "proof", variant: "facts-list", tone: "base", imageIndex: 0, align: "left" },
+      { type: "location", variant: "framed", tone: "surface", imageIndex: 1, align: "left" },
+      { type: "contact", variant: "band", tone: "accent", imageIndex: 0, align: "left" },
+    ];
+  }
+
+  return { version: 3, concept, visualThesis, sections };
+}
+
+function variantSetFor(type) {
+  if (type === "hero") return HERO_VARIANTS;
+  if (type === "about") return ABOUT_VARIANTS;
+  if (type === "services") return SERVICES_VARIANTS;
+  if (type === "gallery") return GALLERY_VARIANTS_V3;
+  if (type === "proof") return PROOF_VARIANTS;
+  if (type === "location") return LOCATION_VARIANTS;
+  if (type === "contact") return CONTACT_VARIANTS;
+  return new Set();
+}
+
+function defaultVariantFor(type) {
+  return {
+    hero: "split-minimal",
+    about: "large-type",
+    services: "numbered-list",
+    gallery: "duo",
+    proof: "facts-list",
+    location: "editorial",
+    contact: "band",
+  }[type] || "split-minimal";
+}
+
+function normalizeBlueprint(value, fallback, servicesCount = 0) {
+  const data = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const fallbackSections = Array.isArray(fallback?.sections) ? fallback.sections : fallbackBlueprint({}).sections;
+  const rawSections = Array.isArray(data.sections) ? data.sections : fallbackSections;
+  const seen = new Set();
+  const sections = [];
+
+  for (const raw of rawSections.slice(0, 10)) {
+    const type = clean(raw?.type, 40);
+    if (!BLUEPRINT_TYPES.has(type) || seen.has(type)) continue;
+    if (type === "services" && servicesCount < 1) continue;
+    seen.add(type);
+    const variants = variantSetFor(type);
+    const variant = variants.has(raw?.variant) ? raw.variant : defaultVariantFor(type);
+    sections.push({
+      type,
+      variant,
+      tone: SECTION_TONES.has(raw?.tone) ? raw.tone : "base",
+      imageIndex: Math.max(0, Math.min(7, Number.parseInt(String(raw?.imageIndex ?? 0), 10) || 0)),
+      align: ALIGNMENTS.has(raw?.align) ? raw.align : "left",
+    });
+  }
+
+  if (!seen.has("hero")) sections.unshift({ type: "hero", variant: "split-minimal", tone: "base", imageIndex: 0, align: "left" });
+  else {
+    const heroIndex = sections.findIndex(section => section.type === "hero");
+    if (heroIndex > 0) sections.unshift(...sections.splice(heroIndex, 1));
+  }
+
+  if (!seen.has("contact")) sections.push({ type: "contact", variant: "band", tone: "accent", imageIndex: 0, align: "left" });
+  else {
+    const contactIndex = sections.findIndex(section => section.type === "contact");
+    if (contactIndex >= 0 && contactIndex !== sections.length - 1) sections.push(...sections.splice(contactIndex, 1));
+  }
+
+  return {
+    version: 3,
+    concept: clean(data.concept, 100) || fallback?.concept || "editorial-local",
+    visualThesis: clean(data.visualThesis, 320) || fallback?.visualThesis || "Composição autoral orientada aos fatos do negócio.",
+    sections,
+  };
+}
+
+function fallbackCtas(input) {
+  const available = [];
+  if (mobileWhatsapp(input.phone)) available.push("whatsapp");
+  if (clean(input.phone, 80)) available.push("phone");
+  if (instagramUrl(input.instagram)) available.push("instagram");
+  if (safeUrl(input.mapsLink)) available.push("maps");
+  available.push("contact");
+  const primaryAction = available[0] || "contact";
+  const secondaryAction = available.find(item => item !== primaryAction) || "contact";
+  const labels = { whatsapp: "Conversar no WhatsApp", phone: "Ligar agora", instagram: "Ver no Instagram", maps: "Ver localização", contact: "Ver contato" };
+  return {
+    primary: { label: labels[primaryAction], action: primaryAction },
+    secondary: { label: labels[secondaryAction], action: secondaryAction },
+  };
+}
+
+function normalizeCtas(value, input, fallback) {
+  const data = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const available = new Set(["contact"]);
+  if (mobileWhatsapp(input.phone)) available.add("whatsapp");
+  if (clean(input.phone, 80)) available.add("phone");
+  if (instagramUrl(input.instagram)) available.add("instagram");
+  if (safeUrl(input.mapsLink)) available.add("maps");
+
+  const normalizeOne = (candidate, fallbackOne) => {
+    const action = CTA_ACTIONS.has(candidate?.action) && available.has(candidate.action) ? candidate.action : fallbackOne.action;
+    const defaultLabels = { whatsapp: "Conversar no WhatsApp", phone: "Ligar agora", instagram: "Ver no Instagram", maps: "Ver localização", contact: "Ver contato" };
+    return { label: clean(candidate?.label, 70) || defaultLabels[action] || fallbackOne.label, action };
+  };
+
+  return {
+    primary: normalizeOne(data.primary, fallback.primary),
+    secondary: normalizeOne(data.secondary, fallback.secondary),
+  };
+}
+
 function fallbackSpec(input) {
   const segment = input.segment || "negócio local";
   const city = input.city || "sua região";
@@ -179,15 +365,12 @@ function fallbackSpec(input) {
     heroText: input.editorialSummary || `Uma prévia criada para organizar as informações essenciais, transmitir confiança e facilitar o próximo contato com a ${input.name}.`,
     primaryCta: "Falar agora",
     secondaryCta: "Ver localização",
+    ctas: fallbackCtas(input),
     aboutTitle: "Uma presença que traduz o negócio",
     aboutText: input.editorialSummary || `A ${input.name} ganha uma apresentação clara, responsiva e construída para valorizar sua atuação em ${city}, sem promessas genéricas nem informações inventadas.`,
     servicesTitle: "O que o cliente encontra aqui",
     servicesIntro: "Informação útil, hierarquia clara e um caminho de contato sem atrito.",
-    services: [
-      { title: "Atendimento direto", description: "Telefone, WhatsApp e localização organizados para o visitante agir sem procurar demais." },
-      { title: "Presença local", description: `Uma comunicação alinhada ao contexto de ${city} e ao público que já busca este tipo de serviço.` },
-      { title: "Decisão com confiança", description: "Conteúdo objetivo, prova disponível e experiência consistente no celular e no computador." },
-    ],
+    services: [],
     proofTitle: "Confiança antes do primeiro contato",
     proofText: input.rating ? `O negócio possui avaliação ${input.rating} no Google e ${input.reviews || 0} avaliações registradas.` : "A página reúne apenas dados verificáveis e conduz o visitante com clareza.",
     contactTitle: "O próximo passo precisa ser simples",
@@ -195,13 +378,13 @@ function fallbackSpec(input) {
     seoTitle: `${input.name} | ${segment} em ${city}`,
     seoDescription: `Conheça a ${input.name}, ${segment} em ${city}. Veja informações, localização e formas de contato.`,
     design,
+    blueprint: fallbackBlueprint(input),
   };
 }
 
 function normalizeServices(value, fallback) {
   if (!Array.isArray(value)) return fallback;
-  const services = value.slice(0, 5).map(item => ({ title: clean(item?.title, 90), description: clean(item?.description, 280) })).filter(item => item.title && item.description);
-  return services.length >= 3 ? services : fallback;
+  return value.slice(0, 5).map(item => ({ title: clean(item?.title, 90), description: clean(item?.description, 280) })).filter(item => item.title && item.description);
 }
 
 function dial(value, fallback) {
@@ -250,6 +433,9 @@ function normalizeDesign(value, fallback) {
 function normalizeSpec(value, input) {
   const fallback = fallbackSpec(input);
   const data = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const services = normalizeServices(data.services, fallback.services);
+  const design = normalizeDesign(data.design, fallback.design);
+  const ctas = normalizeCtas(data.ctas, input, fallback.ctas);
   return {
     brandName: clean(data.brandName, 120) || fallback.brandName,
     audience: clean(data.audience, 220) || fallback.audience,
@@ -257,20 +443,22 @@ function normalizeSpec(value, input) {
     eyebrow: clean(data.eyebrow, 100) || fallback.eyebrow,
     heroTitle: clean(data.heroTitle, 190) || fallback.heroTitle,
     heroText: clean(data.heroText, 520) || fallback.heroText,
-    primaryCta: clean(data.primaryCta, 60) || fallback.primaryCta,
-    secondaryCta: clean(data.secondaryCta, 60) || fallback.secondaryCta,
+    primaryCta: ctas.primary.label,
+    secondaryCta: ctas.secondary.label,
+    ctas,
     aboutTitle: clean(data.aboutTitle, 130) || fallback.aboutTitle,
     aboutText: clean(data.aboutText, 900) || fallback.aboutText,
     servicesTitle: clean(data.servicesTitle, 130) || fallback.servicesTitle,
     servicesIntro: clean(data.servicesIntro, 380) || fallback.servicesIntro,
-    services: normalizeServices(data.services, fallback.services),
+    services,
     proofTitle: clean(data.proofTitle, 130) || fallback.proofTitle,
     proofText: clean(data.proofText, 520) || fallback.proofText,
     contactTitle: clean(data.contactTitle, 130) || fallback.contactTitle,
     contactText: clean(data.contactText, 520) || fallback.contactText,
     seoTitle: clean(data.seoTitle, 70) || fallback.seoTitle,
     seoDescription: clean(data.seoDescription, 170) || fallback.seoDescription,
-    design: normalizeDesign(data.design, fallback.design),
+    design,
+    blueprint: normalizeBlueprint(data.blueprint, fallback.blueprint, services.length),
   };
 }
 
@@ -385,6 +573,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     editorialSummary: input.editorialSummary,
     openingHours: input.openingHours,
     existingWebsite: input.existingWebsite,
+    instagram: input.instagram,
     template: input.template,
     description: input.description,
     requestedChanges: clean(instruction, 5000),
@@ -402,11 +591,15 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "A landing será enviada como prévia comercial. Ela precisa causar a impressão de trabalho autoral de um estúdio de alto nível, não de template WordPress, tema PHP ou interface genérica criada por IA.",
       "Evite purple gradient genérico, excesso de cards arredondados, sombras pesadas, seções intercambiáveis, números decorativos sem significado, texto corporativo vazio e a combinação automática de fundo creme com serifada apenas por hábito.",
       "Escolha UMA direção estética coerente com o nicho, o público e o objetivo da página. Assuma um risco visual justificável em um único elemento de assinatura e mantenha o restante disciplinado.",
-      "Não reutilize automaticamente a mesma arquitetura de landing. O objeto design.composition deve alterar de verdade hero, navegação, ritmo, serviços, galeria, densidade e relação texto/imagem.",
+      "ARQUITETURA É PARTE DO DESIGN: blueprint.sections define a ordem real da página e a variante de cada seção. Não devolva sempre hero+sobre+serviços+galeria+prova+contato.",
+      "O blueprint deve nascer do negócio, das imagens e da tese visual. Use tipos de seção somente quando os fatos sustentarem seu conteúdo.",
+      "Se os dados não comprovarem serviços específicos, retorne services: [] e NÃO inclua a seção services no blueprint. Categoria do Google não autoriza inventar tratamentos, técnicas ou especialidades.",
+      "Não reutilize automaticamente a mesma arquitetura de landing. O objeto design.composition deve alterar de verdade hero, navegação, ritmo, galeria, densidade e relação texto/imagem.",
       "Use variance como coragem compositiva (1 conservador, 10 muito autoral), motion como intensidade de movimento e densityDial como densidade informacional. Eles devem ser coerentes com o negócio, não aleatórios.",
       "Planeje composição, paleta, tipografia e movimento antes de escrever. O hero deve funcionar como uma tese visual do negócio.",
       "As animações devem usar transform e opacity, respeitar prefers-reduced-motion e reforçar hierarquia, continuidade espacial ou feedback. Não anime por decorar.",
-      "Use exclusivamente os fatos fornecidos. Não invente serviços, preços, promoções, resultados, prêmios, depoimentos, tempo de mercado, certificações ou diferenciais não comprovados.",
+      "Use exclusivamente os fatos fornecidos. Não invente serviços, preços, promoções, resultados, prêmios, depoimentos, tempo de mercado, certificações, protocolos, técnicas, especialidades ou diferenciais não comprovados.",
+      "As imagens podem orientar paleta, atmosfera, proporção, presença humana e composição, mas nunca provar um serviço ou credencial.",
       "Quando houver imagens de referência anexadas, use-as apenas para compreender composição, hierarquia, atmosfera, densidade, tipografia aparente e linguagem visual. Não extraia delas fatos sobre o negócio e não copie marcas, textos ou identidade de terceiros.",
       "Os efeitos selecionados pelo usuário são uma restrição explícita. Não proponha efeitos extras quando a lista estiver vazia.",
       "Escreva em português do Brasil, em voz ativa, sem emojis, hashtags ou clichês.",
@@ -420,6 +613,10 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Formato obrigatório:",
       JSON.stringify({
         brandName: "", audience: "", pageJob: "", eyebrow: "", heroTitle: "", heroText: "", primaryCta: "", secondaryCta: "",
+        ctas: {
+          primary: { label: "", action: "whatsapp | phone | maps | instagram | contact" },
+          secondary: { label: "", action: "whatsapp | phone | maps | instagram | contact" }
+        },
         aboutTitle: "", aboutText: "", servicesTitle: "", servicesIntro: "",
         services: [{ title: "", description: "" }, { title: "", description: "" }, { title: "", description: "" }],
         proofTitle: "", proofText: "", contactTitle: "", contactText: "", seoTitle: "", seoDescription: "",
@@ -444,6 +641,20 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
             motion: 5,
             densityDial: 4
           },
+        },
+        blueprint: {
+          version: 3,
+          concept: "",
+          visualThesis: "",
+          sections: [
+            { type: "hero", variant: "portrait-editorial | fullbleed-cinematic | typographic-poster | collage | split-minimal | layered | precision-grid", tone: "base | surface | primary | accent | dark", imageIndex: 0, align: "left | center | right" },
+            { type: "about", variant: "large-type | split-statement | image-note | manifesto-band", tone: "base | surface | primary | accent | dark", imageIndex: 1, align: "left | center | right" },
+            { type: "services", variant: "numbered-list | editorial-mosaic | ribbon-list | poster-grid", tone: "base | surface | primary | accent | dark", imageIndex: 0, align: "left | center | right" },
+            { type: "gallery", variant: "duo | filmstrip | masonry | fullbleed | strip", tone: "base | surface | primary | accent | dark", imageIndex: 0, align: "left | center | right" },
+            { type: "proof", variant: "rating-strip | facts-list | split-proof", tone: "base | surface | primary | accent | dark", imageIndex: 0, align: "left | center | right" },
+            { type: "location", variant: "editorial | minimal | framed", tone: "base | surface | primary | accent | dark", imageIndex: 1, align: "left | center | right" },
+            { type: "contact", variant: "full-screen | split | band", tone: "base | surface | primary | accent | dark", imageIndex: 0, align: "left | center | right" }
+          ]
         },
       }, null, 2),
       instruction ? "ALTERAÇÃO SOLICITADA PELO USUÁRIO:\n" + clean(instruction, 5000) : "",
@@ -638,6 +849,7 @@ export async function generateSiteFolder(input = {}) {
     reviews: place?.userRatingCount ?? input.reviews ?? null,
     mapsLink: safeUrl(place?.googleMapsUri || input.mapsLink),
     existingWebsite: safeUrl(place?.websiteUri || input.existingWebsite),
+    instagram: instagramUrl(input.instagram),
     editorialSummary: clean(place?.editorialSummary?.text || input.description, 1200),
     openingHours: Array.isArray(place?.regularOpeningHours?.weekdayDescriptions) ? place.regularOpeningHours.weekdayDescriptions.slice(0, 7).map(item => clean(item, 180)) : [],
     template: clean(input.template, 80) || "institutional",
@@ -693,6 +905,7 @@ export async function generateSiteFolder(input = {}) {
     reviews: placeData.reviews ? new Intl.NumberFormat("pt-BR").format(Number(placeData.reviews)) : "",
     mapsLink: placeData.mapsLink,
     existingWebsite: placeData.existingWebsite,
+    instagram: placeData.instagram,
     hours: placeData.openingHours,
     images: [...media.images, ...externalImages].slice(0, 8),
     attributions: media.attributions,
@@ -718,13 +931,14 @@ export async function generateSiteFolder(input = {}) {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    generatorVersion: 2,
+    generatorVersion: 3,
     aiUsed,
     aiWarning,
     source: place ? "Google Places + CRM" : "CRM ou descrição",
     design: siteData.design,
     composition: siteData.design?.composition,
-    runtimeIntegrity: "shared-runtime-v1",
+    blueprint: siteData.blueprint,
+    runtimeIntegrity: "shared-blueprint-runtime-v3",
     audience: siteData.audience,
     pageJob: siteData.pageJob,
     effects: siteData.effects,
@@ -746,7 +960,7 @@ export async function generateSiteFolder(input = {}) {
     fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.module.css"), runtimeCss, "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "generation-report.json"), JSON.stringify(report, null, 2), "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "CLAUDE-REFINEMENT.md"), refinementPrompt(siteData), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nLanding page premium gerada pelo LeadFlow.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Direção visual específica para o nicho\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
+    fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nSite autoral gerado pelo LeadFlow a partir de um blueprint visual.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Blueprint V3 com ordem e variantes de seção específicas para o negócio\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
   ]);
 
   return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, skillMode: skillRouting.mode, skills: skillRouting.skills, skillRoutingReason: skillRouting.reason, siteData };

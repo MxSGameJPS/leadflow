@@ -88,6 +88,11 @@ assert.equal(exportedRuntime, runtimeSource);
 assert.equal(exportedRuntimeCss, runtimeCssSource);
 assert.match(exportedPage, /GeneratedSiteRuntime/);
 assert.ok(generated.siteData.design.composition?.archetype);
+assert.equal(generated.siteData.blueprint?.version, 3);
+assert.equal(generated.siteData.blueprint?.sections?.[0]?.type, "hero");
+assert.equal(generated.siteData.blueprint?.sections?.at(-1)?.type, "contact");
+assert.ok(!generated.siteData.blueprint.sections.some(section => section.type === "services"), "fallback sem serviços comprovados não deve renderizar seção de serviços");
+assert.ok(["whatsapp","phone","maps","instagram","contact"].includes(generated.siteData.ctas?.primary?.action));
 await fs.rm(path.join(root, generated.folderPath), { recursive: true, force: true });
 
 console.log("Testes de projetos passaram.");
