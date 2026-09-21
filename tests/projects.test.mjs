@@ -17,6 +17,8 @@ assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");
+assert.ok(autoSkills.skills.includes("impeccable"));
+assert.ok(autoSkills.skills.includes("ui-ux-pro-max"));
 assert.ok(autoSkills.skills.includes("creative-web-director"));
 assert.ok(autoSkills.skills.includes("seo-content-engine"));
 assert.ok(autoSkills.skills.includes("screenshot-to-ui-blueprint"));
@@ -25,6 +27,8 @@ const focusedSeoSkills = resolveSiteSkills({ mode: "auto", phase: "refine", inst
 assert.deepEqual(focusedSeoSkills.skills, ["seo-content-engine"]);
 
 const focusedVisualSkills = resolveSiteSkills({ mode: "auto", phase: "refine", instruction: "Deixe o hero mais premium" });
+assert.ok(focusedVisualSkills.skills.includes("impeccable"));
+assert.ok(focusedVisualSkills.skills.includes("ui-ux-pro-max"));
 assert.ok(focusedVisualSkills.skills.includes("creative-web-director"));
 assert.ok(focusedVisualSkills.skills.includes("conversion-director"));
 

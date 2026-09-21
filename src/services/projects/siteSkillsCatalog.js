@@ -1,4 +1,6 @@
 export const SITE_SKILL_OPTIONS = Object.freeze([
+  {id:"impeccable",auto:"core",label:"Impeccable",shortLabel:"Impeccable",description:"Craft fora do padrão, crítica visual, hierarquia, personalidade e combate a interfaces genéricas."},
+  {id:"ui-ux-pro-max",auto:"core",label:"UI/UX Pro Max",shortLabel:"UI/UX",description:"Sistema visual, estilo, paleta, tipografia, acessibilidade, responsividade, densidade e motion."},
   {id:"creative-web-director",auto:"core",label:"Design Premium",shortLabel:"Design",description:"Direção visual, composição, tipografia, motion e acabamento autoral."},
   {id:"brand-system-architect",auto:"core",label:"Branding",shortLabel:"Marca",description:"Traduz o negócio em paleta, tipografia, linguagem e sistema visual coerente."},
   {id:"seo-content-engine",auto:"core",label:"SEO",shortLabel:"SEO",description:"Estrutura intenção local, headings, title, meta description e conteúdo encontrável."},
@@ -47,14 +49,14 @@ export function resolveSiteSkills({mode="auto",selectedSkills=[],instruction="",
     return{mode:normalizedMode,skills,reason:hasReferences||PATTERNS.reference.test(text)?"Criação automática completa com leitura de referência visual.":"Criação automática completa com direção, marca, SEO, conversão e organização."};
   }
 
-  if(PATTERNS.design.test(text))addUnique(skills,"creative-web-director");
-  if(PATTERNS.brand.test(text))addUnique(skills,"brand-system-architect","creative-web-director");
+  if(PATTERNS.design.test(text))addUnique(skills,"impeccable","ui-ux-pro-max","creative-web-director");
+  if(PATTERNS.brand.test(text))addUnique(skills,"impeccable","ui-ux-pro-max","brand-system-architect","creative-web-director");
   if(PATTERNS.seo.test(text))addUnique(skills,"seo-content-engine");
   if(PATTERNS.conversion.test(text))addUnique(skills,"conversion-director");
   if(PATTERNS.organization.test(text))addUnique(skills,"organizacao-padrao-saulo");
 
   const needsReference=PATTERNS.reference.test(text)||(hasReferences&&!text);
-  if(needsReference)addUnique(skills,"screenshot-to-ui-blueprint","creative-web-director","brand-system-architect");
+  if(needsReference)addUnique(skills,"impeccable","ui-ux-pro-max","screenshot-to-ui-blueprint","creative-web-director","brand-system-architect");
 
   if(!skills.length)addUnique(skills,...AUTO_CORE);
   return{

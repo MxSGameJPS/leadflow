@@ -3,6 +3,20 @@ import { SITE_SKILL_OPTIONS,normalizeSiteSkillIds,normalizeSiteSkillMode,resolve
 export { SITE_SKILL_OPTIONS,normalizeSiteSkillIds,normalizeSiteSkillMode,resolveSiteSkills } from "./siteSkillsCatalog.js";
 
 const SKILL_PROMPTS={
+  "impeccable":[
+    "Aplique a disciplina do Impeccable como diretor de design premiado: o trabalho deve ter ponto de vista, personalidade e craft de produção, nunca parecer seguro, tímido ou intercambiável.",
+    "Trate esta landing como modo Persuade: atenção, decisão e ação são parte do produto visual.",
+    "Antes de compor, defina uma tese visual específica; depois faça uma passada mental de critique, bolder, layout, typeset, colorize, animate e polish.",
+    "Evite os sinais clássicos de frontend genérico: Inter/system font por hábito, gradiente roxo-azul automático, cards dentro de cards, ícone em quadrado arredondado acima de cada título, texto cinza em fundos coloridos, repetição excessiva de radius e composição SaaS.",
+    "Escolha pelo menos uma decisão visual claramente autoral e justificável para este negócio, mantendo usabilidade, acessibilidade e performance."
+  ].join(" "),
+  "ui-ux-pro-max":[
+    "Aplique UI/UX Pro Max como inteligência de design system para Next.js/React.",
+    "Defina estilo, paleta, tipografia, espaçamento, composição, densidade e motion como um sistema coerente com produto, público e contexto; não escolha pela moda.",
+    "Priorize acessibilidade WCAG AA, foco visível, navegação por teclado, alvos interativos confortáveis, responsividade mobile-first, ausência de scroll horizontal e motion que respeita prefers-reduced-motion.",
+    "Use SVG/ícones consistentes em vez de emoji como interface. Preserve estabilidade visual e evite layout shift.",
+    "Use os dials variance, motion e density deliberadamente. Alta variance deve alterar composição e hierarquia, não apenas cor; motion deve comunicar continuidade ou feedback; density deve controlar ritmo e respiro."
+  ].join(" "),
   "creative-web-director":[
     "Atue como Creative Web Director sênior.",
     "Defina uma tese visual clara para o hero, hierarquia deliberada, composição específica ao nicho e um elemento de assinatura memorável.",
