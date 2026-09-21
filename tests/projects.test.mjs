@@ -93,6 +93,30 @@ assert.equal(generated.siteData.blueprint?.sections?.[0]?.type, "hero");
 assert.equal(generated.siteData.blueprint?.sections?.at(-1)?.type, "contact");
 assert.ok(!generated.siteData.blueprint.sections.some(section => section.type === "services"), "fallback sem serviços comprovados não deve renderizar seção de serviços");
 assert.ok(["whatsapp","phone","maps","instagram","contact"].includes(generated.siteData.ctas?.primary?.action));
+assert.ok(!generated.siteData.blueprint.sections.some(section => section.type === "location"), "sem endereço/maps não deve haver seção de localização");
+assert.match(runtimeSource, /MobileActionBar/);
+assert.match(runtimeCssSource, /max-width:768px/);
+assert.match(runtimeCssSource, /mobileActionBar/);
+assert.match(runtimeCssSource, /max-width:390px/);
+assert.match(runtimeCssSource, /scroll-snap-type:x mandatory/);
 await fs.rm(path.join(root, generated.folderPath), { recursive: true, force: true });
+
+const commercialFolder = `generated-sites/commercial-contract-${stamp}`;
+const commercial = await generateSiteFolder({
+  name: "Comercial Mobile",
+  segment: "Estética",
+  city: "Ivoti",
+  address: "Rua Teste, 100 - Ivoti - RS",
+  phone: "(51) 99999-9999",
+  rating: 5,
+  reviews: 12,
+  mapsLink: "https://maps.google.com/?q=Ivoti",
+  folderPath: commercialFolder,
+  skipAi: true,
+});
+assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "proof"), "site comercial com prova disponível deve renderizar prova");
+assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "location"), "site comercial com endereço deve renderizar localização");
+assert.ok(commercial.siteData.heroTitle.length <= 112);
+await fs.rm(path.join(root, commercial.folderPath), { recursive: true, force: true });
 
 console.log("Testes de projetos passaram.");

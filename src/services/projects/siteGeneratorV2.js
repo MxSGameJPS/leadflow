@@ -273,8 +273,11 @@ function defaultVariantFor(type) {
   }[type] || "split-minimal";
 }
 
-function normalizeBlueprint(value, fallback, servicesCount = 0) {
+function normalizeBlueprint(value, fallback, context = {}) {
   const data = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const servicesCount = Number(context.servicesCount || 0);
+  const hasProof = Boolean(context.hasProof);
+  const hasLocation = Boolean(context.hasLocation);
   const fallbackSections = Array.isArray(fallback?.sections) ? fallback.sections : fallbackBlueprint({}).sections;
   const rawSections = Array.isArray(data.sections) ? data.sections : fallbackSections;
   const seen = new Set();
@@ -284,6 +287,8 @@ function normalizeBlueprint(value, fallback, servicesCount = 0) {
     const type = clean(raw?.type, 40);
     if (!BLUEPRINT_TYPES.has(type) || seen.has(type)) continue;
     if (type === "services" && servicesCount < 1) continue;
+    if (type === "proof" && !hasProof) continue;
+    if (type === "location" && !hasLocation) continue;
     seen.add(type);
     const variants = variantSetFor(type);
     const variant = variants.has(raw?.variant) ? raw.variant : defaultVariantFor(type);
@@ -302,7 +307,16 @@ function normalizeBlueprint(value, fallback, servicesCount = 0) {
     if (heroIndex > 0) sections.unshift(...sections.splice(heroIndex, 1));
   }
 
-  if (!seen.has("contact")) sections.push({ type: "contact", variant: "band", tone: "accent", imageIndex: 0, align: "left" });
+  const addBeforeContact = section => {
+    const contactIndex = sections.findIndex(item => item.type === "contact");
+    if (contactIndex >= 0) sections.splice(contactIndex, 0, section);
+    else sections.push(section);
+  };
+
+  if (hasProof && !sections.some(section => section.type === "proof")) addBeforeContact({ type: "proof", variant: "rating-strip", tone: "surface", imageIndex: 0, align: "left" });
+  if (hasLocation && !sections.some(section => section.type === "location")) addBeforeContact({ type: "location", variant: "editorial", tone: "base", imageIndex: 1, align: "left" });
+
+  if (!sections.some(section => section.type === "contact")) sections.push({ type: "contact", variant: "band", tone: "accent", imageIndex: 0, align: "left" });
   else {
     const contactIndex = sections.findIndex(section => section.type === "contact");
     if (contactIndex >= 0 && contactIndex !== sections.length - 1) sections.push(...sections.splice(contactIndex, 1));
@@ -441,24 +455,28 @@ function normalizeSpec(value, input) {
     audience: clean(data.audience, 220) || fallback.audience,
     pageJob: clean(data.pageJob, 220) || fallback.pageJob,
     eyebrow: clean(data.eyebrow, 100) || fallback.eyebrow,
-    heroTitle: clean(data.heroTitle, 190) || fallback.heroTitle,
-    heroText: clean(data.heroText, 520) || fallback.heroText,
+    heroTitle: clean(data.heroTitle, 112) || clean(fallback.heroTitle, 112),
+    heroText: clean(data.heroText, 420) || clean(fallback.heroText, 420),
     primaryCta: ctas.primary.label,
     secondaryCta: ctas.secondary.label,
     ctas,
-    aboutTitle: clean(data.aboutTitle, 130) || fallback.aboutTitle,
-    aboutText: clean(data.aboutText, 900) || fallback.aboutText,
+    aboutTitle: clean(data.aboutTitle, 96) || clean(fallback.aboutTitle, 96),
+    aboutText: clean(data.aboutText, 760) || clean(fallback.aboutText, 760),
     servicesTitle: clean(data.servicesTitle, 130) || fallback.servicesTitle,
     servicesIntro: clean(data.servicesIntro, 380) || fallback.servicesIntro,
     services,
-    proofTitle: clean(data.proofTitle, 130) || fallback.proofTitle,
-    proofText: clean(data.proofText, 520) || fallback.proofText,
-    contactTitle: clean(data.contactTitle, 130) || fallback.contactTitle,
-    contactText: clean(data.contactText, 520) || fallback.contactText,
+    proofTitle: clean(data.proofTitle, 96) || clean(fallback.proofTitle, 96),
+    proofText: clean(data.proofText, 420) || clean(fallback.proofText, 420),
+    contactTitle: clean(data.contactTitle, 96) || clean(fallback.contactTitle, 96),
+    contactText: clean(data.contactText, 420) || clean(fallback.contactText, 420),
     seoTitle: clean(data.seoTitle, 70) || fallback.seoTitle,
     seoDescription: clean(data.seoDescription, 170) || fallback.seoDescription,
     design,
-    blueprint: normalizeBlueprint(data.blueprint, fallback.blueprint, services.length),
+    blueprint: normalizeBlueprint(data.blueprint, fallback.blueprint, {
+      servicesCount: services.length,
+      hasProof: Boolean(input.rating || input.reviews || input.phone || input.city),
+      hasLocation: Boolean(input.address || input.mapsLink),
+    }),
   };
 }
 
@@ -592,6 +610,10 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Evite purple gradient genérico, excesso de cards arredondados, sombras pesadas, seções intercambiáveis, números decorativos sem significado, texto corporativo vazio e a combinação automática de fundo creme com serifada apenas por hábito.",
       "Escolha UMA direção estética coerente com o nicho, o público e o objetivo da página. Assuma um risco visual justificável em um único elemento de assinatura e mantenha o restante disciplinado.",
       "ARQUITETURA É PARTE DO DESIGN: blueprint.sections define a ordem real da página e a variante de cada seção. Não devolva sempre hero+sobre+serviços+galeria+prova+contato.",
+      "O resultado é um SITE COMERCIAL que será mostrado a um cliente real. Priorize clareza de oferta, confiança, contato fácil e aparência profissional; evite conceito artístico que prejudique venda ou leitura.",
+      "MOBILE É O PRIMEIRO TESTE: o projeto deve funcionar em 320, 360 e 390px antes de desktop. Não dependa de sobreposição absoluta para conteúdo essencial, não crie títulos intermináveis e mantenha CTAs alcançáveis com o polegar.",
+      "Em mobile, hierarquia, imagem, prova e CTA devem continuar fazendo sentido mesmo quando as colunas virarem uma só. Nunca projete algo que só funciona em 1440px.",
+      "Se existem rating/reviews/telefone/cidade, use prova de confiança. Se existe endereço/Maps, mantenha uma rota clara para localização. O normalizador poderá inserir essas seções como requisito comercial mínimo.",
       "O blueprint deve nascer do negócio, das imagens e da tese visual. Use tipos de seção somente quando os fatos sustentarem seu conteúdo.",
       "Se os dados não comprovarem serviços específicos, retorne services: [] e NÃO inclua a seção services no blueprint. Categoria do Google não autoriza inventar tratamentos, técnicas ou especialidades.",
       "Não reutilize automaticamente a mesma arquitetura de landing. O objeto design.composition deve alterar de verdade hero, navegação, ritmo, galeria, densidade e relação texto/imagem.",
@@ -762,7 +784,7 @@ export default function RootLayout({ children }) {
 }
 
 function cssSource() {
-  return `html,body{margin:0;padding:0;min-height:100%;background:#fff}body{min-width:320px}*{box-sizing:border-box}`;
+  return `html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden;background:#fff}body{min-width:0}*{box-sizing:border-box}img,svg{max-width:100%}`;
 }
 
 export async function syncGeneratedSiteRuntime(folderPath, siteData) {
@@ -925,7 +947,7 @@ export async function generateSiteFolder(input = {}) {
 
   const packageJson = {
     name: folder.folderName,
-    version: "2.0.0",
+    version: "3.1.0",
     private: true,
     scripts: { dev: "next dev", build: "next build", start: "next start" },
     dependencies: { next: "15.1.6", react: "19.0.0", "react-dom": "19.0.0" },
@@ -940,7 +962,13 @@ export async function generateSiteFolder(input = {}) {
     design: siteData.design,
     composition: siteData.design?.composition,
     blueprint: siteData.blueprint,
-    runtimeIntegrity: "shared-blueprint-runtime-v3",
+    runtimeIntegrity: "shared-blueprint-runtime-v3.1",
+    qualityContract: {
+      mobileFirst: true,
+      targetViewports: [320, 360, 390, 768, 1024, 1440],
+      persistentMobileCta: true,
+      commercialMinimums: true,
+    },
     audience: siteData.audience,
     pageJob: siteData.pageJob,
     effects: siteData.effects,
@@ -962,7 +990,7 @@ export async function generateSiteFolder(input = {}) {
     fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.module.css"), runtimeCss, "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "generation-report.json"), JSON.stringify(report, null, 2), "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "CLAUDE-REFINEMENT.md"), refinementPrompt(siteData), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nSite autoral gerado pelo LeadFlow a partir de um blueprint visual.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Blueprint V3 com ordem e variantes de seção específicas para o negócio\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
+    fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nSite autoral gerado pelo LeadFlow a partir de um blueprint visual.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Blueprint V3 com ordem e variantes de seção específicas para o negócio\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 360px, 390px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
   ]);
 
   return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, skillMode: skillRouting.mode, skills: skillRouting.skills, skillRoutingReason: skillRouting.reason, siteData };

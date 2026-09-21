@@ -141,10 +141,11 @@ function Proof({ section, site }) {
 function Location({ section, site, images }) {
   if (!site.address && !site.mapsLink) return null;
   const mapsConfig = { label: "Abrir no Google Maps", action: "maps" };
+  const hasLocationMedia = images.length > 1;
   return <SectionShell section={section} className={s.location}>
-    <div className={s.locationInner}>
+    <div className={s.locationInner} data-has-media={hasLocationMedia ? "true" : "false"}>
       <div className={s.locationCopy}><span className={s.sectionLabel}>Localização</span><h2>{site.city ? "Em " + site.city : "Onde encontrar"}</h2>{site.address && <p>{site.address}</p>}<ActionLink config={mapsConfig} site={site} className={s.locationAction}/></div>
-      <Visual site={site} images={images} index={section.imageIndex || 1} className={s.locationMedia} label={"Localização de " + (site.brandName || "negócio")}/>
+      {hasLocationMedia && <Visual site={site} images={images} index={section.imageIndex || 1} className={s.locationMedia} label={"Localização de " + (site.brandName || "negócio")}/>}
     </div>
   </SectionShell>;
 }
@@ -155,6 +156,16 @@ function Contact({ section, site }) {
   return <SectionShell section={section} className={s.contact} id="contato">
     <div className={s.contactInner}><div><span className={s.sectionLabel}>Próximo passo</span><h2>{site.contactTitle}</h2><p>{site.contactText}</p></div><div className={s.contactActions}><ActionLink config={primary} site={site} className={s.contactPrimary}/><ActionLink config={secondary} site={site} className={s.contactSecondary}/></div></div>
   </SectionShell>;
+}
+
+function MobileActionBar({ site }) {
+  const primary = site.ctas?.primary || { label: site.primaryCta || "Falar agora", action: "contact" };
+  const candidate = site.ctas?.secondary;
+  const secondary = candidate && candidate.action !== primary.action ? candidate : (site.mapsLink ? { label: "Como chegar", action: "maps" } : null);
+  return <div className={s.mobileActionBar} aria-label="Ações rápidas">
+    <ActionLink config={primary} site={site} className={s.mobilePrimaryAction}/>
+    {secondary && <ActionLink config={secondary} site={site} className={s.mobileSecondaryAction}/>}
+  </div>;
 }
 
 function RenderSection({ section, site, images }) {
@@ -230,6 +241,7 @@ export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
 
     <footer className={s.footer}><div><strong>{site.brandName}</strong><span>{site.segment}{site.city?" · "+site.city:""}</span></div><p>Prévia desenvolvida por Saulo Pavanello</p></footer>
     {Array.isArray(site.attributions)&&site.attributions.length>0&&<div className={s.attributions}>Fotos: {site.attributions.map((item,index)=><span key={(item.name||"foto")+index}>{index>0?" · ":""}{item.uri?<a href={item.uri} target="_blank" rel="noreferrer">{item.name}</a>:item.name}</span>)}</div>}
+    <MobileActionBar site={site}/>
     {site.whatsapp&&<a className={s.floatingWhatsapp} href={"https://wa.me/"+site.whatsapp} target="_blank" rel="noreferrer" aria-label="Conversar pelo WhatsApp"><Icon name="phone"/><span>WhatsApp</span></a>}
   </main>;
 }
