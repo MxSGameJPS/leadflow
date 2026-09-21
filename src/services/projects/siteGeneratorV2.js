@@ -554,6 +554,38 @@ function cssSource() {
   return `html,body{margin:0;padding:0;min-height:100%;background:#fff}body{min-width:320px}*{box-sizing:border-box}`;
 }
 
+export async function syncGeneratedSiteRuntime(folderPath, siteData) {
+  const requested = clean(folderPath, 500);
+  if (!requested) throw new Error("Este projeto ainda não possui uma pasta gerada.");
+  const absolutePath = path.resolve(process.cwd(), requested);
+  if (!absolutePath.startsWith(GENERATED_ROOT + path.sep) || absolutePath === GENERATED_ROOT) {
+    throw new Error("A pasta do projeto está fora do diretório permitido.");
+  }
+  if (!siteData || typeof siteData !== "object") throw new Error("O projeto não possui dados visuais para sincronizar.");
+
+  const appDir = path.join(absolutePath, "app");
+  const runtimeDir = path.join(absolutePath, "components", "GeneratedSiteRuntime");
+  await Promise.all([
+    fs.mkdir(appDir, { recursive: true }),
+    fs.mkdir(runtimeDir, { recursive: true }),
+  ]);
+
+  const [runtimeComponent, runtimeCss] = await Promise.all([
+    fs.readFile(RUNTIME_COMPONENT_PATH, "utf8"),
+    fs.readFile(RUNTIME_CSS_PATH, "utf8"),
+  ]);
+
+  await Promise.all([
+    fs.writeFile(path.join(appDir, "layout.js"), layoutSource(siteData), "utf8"),
+    fs.writeFile(path.join(appDir, "page.js"), pageSource(siteData), "utf8"),
+    fs.writeFile(path.join(appDir, "globals.css"), cssSource(), "utf8"),
+    fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.jsx"), runtimeComponent, "utf8"),
+    fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.module.css"), runtimeCss, "utf8"),
+  ]);
+
+  return absolutePath;
+}
+
 function refinementPrompt(data) {
   return `# Refinamento opcional no Claude Code
 
