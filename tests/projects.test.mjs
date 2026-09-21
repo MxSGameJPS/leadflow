@@ -9,7 +9,7 @@ const generatedAbsolute = path.join(root, generatedRelative);
 const projectDir = path.join(root, "data", "projects");
 
 const { createSiteProject, deleteSiteProject, getSiteProject } = await import("../src/services/projects/projectStore.js");
-const { parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
+const { generateSiteFolder, parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -68,4 +68,26 @@ await assert.rejects(
 );
 
 await fs.rm(path.join(projectDir, `${ready.id}.json`), { force: true });
+
+const integrityFolder = `generated-sites/runtime-integrity-${stamp}`;
+const generated = await generateSiteFolder({
+  name: "Runtime Integrity",
+  segment: "Restaurante",
+  city: "Ivoti",
+  template: "landing",
+  folderPath: integrityFolder,
+  skipAi: true,
+  effects: ["entrance-motion", "section-reveal"],
+});
+const runtimeSource = await fs.readFile(path.join(root, "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx"), "utf8");
+const runtimeCssSource = await fs.readFile(path.join(root, "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.module.css"), "utf8");
+const exportedRuntime = await fs.readFile(path.join(root, generated.folderPath, "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx"), "utf8");
+const exportedRuntimeCss = await fs.readFile(path.join(root, generated.folderPath, "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.module.css"), "utf8");
+const exportedPage = await fs.readFile(path.join(root, generated.folderPath, "app", "page.js"), "utf8");
+assert.equal(exportedRuntime, runtimeSource);
+assert.equal(exportedRuntimeCss, runtimeCssSource);
+assert.match(exportedPage, /GeneratedSiteRuntime/);
+assert.ok(generated.siteData.design.composition?.archetype);
+await fs.rm(path.join(root, generated.folderPath), { recursive: true, force: true });
+
 console.log("Testes de projetos passaram.");
