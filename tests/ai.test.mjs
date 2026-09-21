@@ -103,6 +103,19 @@ try {
   t("envia system e user", generationRequest.body.messages[0].role === "system" && generationRequest.body.messages[1].role === "user");
   t("retorna metadados do provedor", generation.providerName === "OmniRoute atualizado");
 
+  const roleGeneration = await generateWithDefaultProvider({
+    systemPrompt: "Diretor de criação",
+    prompt: "Crie algo único",
+    model: "modelo-premium-codegen",
+    temperature: 0.72,
+    maxTokens: 12000,
+  });
+  const roleRequest = requests.at(-1);
+  t("aceita override de modelo por tarefa", roleRequest.body.model === "modelo-premium-codegen");
+  t("aceita override de temperatura", roleRequest.body.temperature === 0.72);
+  t("aceita override de max tokens", roleRequest.body.max_tokens === 12000);
+  t("retorna modelo efetivamente usado", roleGeneration.model === "modelo-premium-codegen");
+
   const prompt = buildLeadMessagePrompt({
     kind: "initial",
     lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos", problem: "Não possui site próprio" },

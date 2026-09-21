@@ -63,7 +63,10 @@ function normalizeImages(input) {
 function normalizeGenerationRequest(input) {
   const request = typeof input === "string" ? { prompt: input } : (input || {}), prompt = String(request.prompt || "").trim();
   if (!prompt) throw new Error("Informe o conteúdo que será enviado para a IA.");
-  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images) };
+  const model = String(request.model || "").trim().slice(0, 300);
+  const temperature = request.temperature == null ? null : clampNumber(request.temperature, .4, 0, 2);
+  const maxTokens = request.maxTokens == null ? null : Math.round(clampNumber(request.maxTokens, 1024, 1, 200000));
+  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens };
 }
 function ensureReadyForGeneration(provider) { if (!provider.enabled) throw new Error("O provedor está desativado."); if (!provider.model && provider.type !== "custom-rest") throw new Error("Escolha um modelo antes de usar este provedor."); }
 function authRequest(provider, url, headers) {
@@ -99,7 +102,7 @@ async function generateOpenAICompatible(provider, requestInput) {
   const request = normalizeGenerationRequest(requestInput), endpoint = provider.endpoint || "/chat/completions", messages = [];
   if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
   messages.push({ role: "user", content: openAIUserContent(request) });
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: provider.model, messages, temperature: provider.temperature, max_tokens: provider.maxTokens, stream: false } });
+  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false } });
   const output = getPath(result.data, "choices[0].message.content") ?? getPath(result.data, "choices[0].text") ?? getPath(result.data, "output_text");
   if (typeof output !== "string") throw new Error("A resposta não contém texto no formato compatível com OpenAI.");
   return { ...result, text: output.trim() };
@@ -110,13 +113,13 @@ async function generateOllama(provider, requestInput) {
   const userMessage = { role: "user", content: request.prompt };
   if (request.images.length) userMessage.images = request.images.map(image => image.dataUrl.split(",", 2)[1]);
   messages.push(userMessage);
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: provider.model, messages, stream: false, options: { temperature: provider.temperature, num_predict: provider.maxTokens } } });
+  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, stream: false, options: { temperature: request.temperature ?? provider.temperature, num_predict: request.maxTokens ?? provider.maxTokens } } });
   const output = getPath(result.data, "message.content") ?? getPath(result.data, "response");
   if (typeof output !== "string") throw new Error("A resposta do Ollama não contém texto reconhecível.");
   return { ...result, text: output.trim() };
 }
 async function generateCustom(provider, requestInput) {
-  const request = normalizeGenerationRequest(requestInput), variables = { prompt: request.prompt, systemPrompt: request.systemPrompt, model: provider.model, temperature: provider.temperature, maxTokens: provider.maxTokens, images: request.images, imagesJson: JSON.stringify(request.images) };
+  const request = normalizeGenerationRequest(requestInput), variables = { prompt: request.prompt, systemPrompt: request.systemPrompt, model: request.model || provider.model, temperature: request.temperature ?? provider.temperature, maxTokens: request.maxTokens ?? provider.maxTokens, images: request.images, imagesJson: JSON.stringify(request.images) };
   const template = provider.bodyTemplate ? parseJsonObject(provider.bodyTemplate, "Template do corpo") : { model: "{{model}}", prompt: "{{prompt}}", system_prompt: "{{systemPrompt}}", temperature: "{{temperature}}", max_tokens: "{{maxTokens}}", images: "{{images}}" };
   const endpoint = provider.endpoint || "", result = await requestJson(provider, { url: provider.baseUrl + (endpoint ? (endpoint.startsWith("/") ? endpoint : "/" + endpoint) : ""), method: provider.method || "POST", body: provider.method === "GET" ? undefined : templateValue(template, variables) });
   const output = getPath(result.data, provider.responsePath || "choices[0].message.content");
@@ -126,7 +129,8 @@ async function generateCustom(provider, requestInput) {
 async function generateInternal(provider, request) {
   ensureReadyForGeneration(provider);
   const result = provider.type === "ollama" ? await generateOllama(provider, request) : provider.type === "custom-rest" ? await generateCustom(provider, request) : await generateOpenAICompatible(provider, request);
-  return { ...result, providerId: provider.id, providerName: provider.name, model: provider.model || "" };
+  const normalizedRequest = normalizeGenerationRequest(request);
+  return { ...result, providerId: provider.id, providerName: provider.name, model: normalizedRequest.model || provider.model || "" };
 }
 export async function listProvidersPublic() { return (await loadProviders()).map(toPublicProvider); }
 export async function getProviderInternal(id) { const provider = (await loadProviders()).find(item => item.id === id); if (!provider) throw new Error("Provedor de IA não encontrado."); return provider; }
