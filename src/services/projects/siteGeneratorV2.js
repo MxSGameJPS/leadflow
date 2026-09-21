@@ -581,7 +581,7 @@ Skills do LeadFlow: ${(data.skills || []).join(", ") || "briefing-base"}
 Preserve apenas informações verificáveis. Não invente serviços, resultados, preços ou depoimentos.
 Aprimore composição, tipografia, imagens, responsividade, acessibilidade WCAG AA e movimento com propósito.
 Evite aparência de template, estética genérica de IA, excesso de cards, gradientes gratuitos e animações decorativas.
-Mantenha Framer Motion para entrada e microinterações e GSAP ScrollTrigger para movimento de scroll.
+Mantenha o runtime compartilhado leve: CSS, transform/opacity e IntersectionObserver; não introduza bibliotecas de animação sem necessidade.
 Antes de entregar, valide 320px, 768px, 1024px e 1440px, foco por teclado e prefers-reduced-motion.
 \`\`\`
 `;
@@ -681,7 +681,7 @@ export async function generateSiteFolder(input = {}) {
     version: "2.0.0",
     private: true,
     scripts: { dev: "next dev", build: "next build", start: "next start" },
-    dependencies: { next: "15.1.6", react: "19.0.0", "react-dom": "19.0.0", "framer-motion": "^12.0.0", gsap: "^3.12.5" },
+    dependencies: { next: "15.1.6", react: "19.0.0", "react-dom": "19.0.0" },
   };
 
   const report = {

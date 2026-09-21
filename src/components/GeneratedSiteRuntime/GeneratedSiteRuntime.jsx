@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import s from "./GeneratedSiteRuntime.module.css";
 
 const FONT_STYLESHEET = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap";
@@ -41,7 +40,6 @@ function ActionLink({ href, children, className = "", icon = "arrow" }) {
 
 export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
   const rootRef = useRef(null);
-  const reducedMotion = useReducedMotion();
   const design = site.design || {};
   const composition = design.composition || {};
   const colors = design.colors || {};
@@ -80,40 +78,57 @@ export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
   }, []);
 
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const previousScrollBehavior = document.documentElement.style.scrollBehavior;
     document.documentElement.style.scrollBehavior = hasEffect("smooth-scroll") ? "smooth" : "";
-    if (reducedMotion || !rootRef.current || (!hasEffect("section-reveal") && !hasEffect("parallax-hero"))) {
-      return () => { document.documentElement.style.scrollBehavior = previousScrollBehavior; };
-    }
-    let context;
-    let active = true;
-    Promise.all([import("gsap"), import("gsap/ScrollTrigger")]).then(([gsapModule, triggerModule]) => {
-      if (!active || !rootRef.current) return;
-      const gsap = gsapModule.gsap;
-      const ScrollTrigger = triggerModule.ScrollTrigger;
-      gsap.registerPlugin(ScrollTrigger);
-      context = gsap.context(() => {
-        if (hasEffect("section-reveal")) {
-          gsap.utils.toArray("[data-lf-reveal]").forEach(element => {
-            gsap.fromTo(element, { y: motionDistance, opacity: 0 }, { y: 0, opacity: 1, duration: design.motion === "subtle" ? 0.5 : 0.82, ease: "power3.out", scrollTrigger: { trigger: element, start: "top 86%", once: true } });
-          });
-        }
-        if (hasEffect("parallax-hero")) {
-          gsap.utils.toArray("[data-lf-parallax]").forEach(element => {
-            gsap.to(element, { yPercent: -8, ease: "none", scrollTrigger: { trigger: element, start: "top bottom", end: "bottom top", scrub: 0.8 } });
-          });
-        }
-      }, rootRef);
-    });
-    return () => {
-      active = false;
-      document.documentElement.style.scrollBehavior = previousScrollBehavior;
-      if (context) context.revert();
-    };
-  }, [reducedMotion, motionDistance, effectKey]);
 
-  const heroInitial = reducedMotion || !hasEffect("entrance-motion") ? false : { opacity: 0, y: motionDistance };
-  const heroTransition = { duration: design.motion === "subtle" ? 0.45 : 0.8, ease: [0.22, 1, 0.36, 1] };
+    const revealElements = [...root.querySelectorAll("[data-lf-reveal]")];
+    let observer = null;
+    if (hasEffect("section-reveal") && !prefersReduced && "IntersectionObserver" in window) {
+      observer = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.setAttribute("data-lf-visible", "true");
+            observer.unobserve(entry.target);
+          }
+        }
+      }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+      revealElements.forEach(element => observer.observe(element));
+    } else {
+      revealElements.forEach(element => element.setAttribute("data-lf-visible", "true"));
+    }
+
+    const parallaxElements = [...root.querySelectorAll("[data-lf-parallax]")];
+    let frame = 0;
+    const updateParallax = () => {
+      frame = 0;
+      if (!hasEffect("parallax-hero") || prefersReduced) return;
+      const viewport = window.innerHeight || 800;
+      for (const element of parallaxElements) {
+        const rect = element.getBoundingClientRect();
+        const progress = Math.max(-1, Math.min(1, (rect.top + rect.height / 2 - viewport / 2) / viewport));
+        element.style.setProperty("--lf-parallax-y", (progress * -22).toFixed(2) + "px");
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateParallax);
+    };
+    updateParallax();
+    if (hasEffect("parallax-hero") && !prefersReduced) {
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+    }
+
+    return () => {
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+      observer?.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [effectKey, motionDistance]);
 
   return <main
     ref={rootRef}
@@ -138,20 +153,20 @@ export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
 
     <section className={s.hero} id="top">
       <div className={s.heroAtmosphere} aria-hidden="true"/>
-      <motion.div className={s.heroCopy} initial={heroInitial} animate={{ opacity: 1, y: 0 }} transition={heroTransition}>
+      <div className={s.heroCopy}>
         <span className={s.eyebrow}><Icon name="spark"/>{site.eyebrow}</span>
         <h1>{site.heroTitle}</h1>
         <p>{site.heroText}</p>
         <div className={s.heroActions}><ActionLink href={primaryHref} className={s.primary}>{site.primaryCta || "Falar agora"}</ActionLink>{site.mapsLink && <ActionLink href={site.mapsLink} className={s.secondary} icon="pin">{site.secondaryCta || "Ver localização"}</ActionLink>}</div>
         <div className={s.trustLine} aria-label="Informações de confiança">{site.rating && <div><strong>{site.rating}</strong><span>avaliação no Google</span></div>}{site.reviews && <div><strong>{site.reviews}</strong><span>avaliações registradas</span></div>}{site.city && <div><strong>{site.city}</strong><span>atendimento local</span></div>}</div>
-      </motion.div>
+      </div>
 
-      <motion.div className={s.heroVisual} initial={reducedMotion || !hasEffect("entrance-motion") ? false : { opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ ...heroTransition, delay: 0.12 }}>
+      <div className={s.heroVisual}>
         <div className={s.signatureRail}><span>{design.signatureLabel}</span></div>
         <div className={s.heroImage} data-lf-parallax>{images[0] ? <img src={images[0]} alt={"Ambiente ou apresentação de " + (site.brandName || "negócio")}/> : <div className={s.mediaFallback}><span>{String(site.brandName || "L").slice(0,1)}</span><small>{site.segment || "Negócio local"}</small></div>}</div>
         <div className={s.heroNote}><span>Direção</span><strong>{site.pageJob}</strong></div>
         {images[1] && <div className={s.heroImageSecondary}><img src={images[1]} alt={"Detalhe de " + (site.brandName || "negócio")}/></div>}
-      </motion.div>
+      </div>
     </section>
 
     <section className={s.statement} id="sobre" data-lf-reveal>
@@ -178,6 +193,6 @@ export default function GeneratedSiteRuntime({ site = {}, assetBase = "" }) {
 
     <footer className={s.footer}><div><strong>{site.brandName}</strong><span>{site.segment}{site.city ? " · " + site.city : ""}</span></div><p>Prévia desenvolvida por Saulo Pavanello</p></footer>
     {Array.isArray(site.attributions) && site.attributions.length>0 && <div className={s.attributions}>Fotos: {site.attributions.map((item,index)=><span key={(item.name||"foto")+index}>{index>0?" · ":""}{item.uri?<a href={item.uri} target="_blank" rel="noreferrer">{item.name}</a>:item.name}</span>)}</div>}
-    {whatsappHref && <motion.a className={s.floatingWhatsapp} href={whatsappHref} target="_blank" rel="noreferrer" aria-label="Conversar pelo WhatsApp" whileHover={reducedMotion?undefined:{y:-3}} whileTap={reducedMotion?undefined:{scale:.96}}><Icon name="phone"/><span>WhatsApp</span></motion.a>}
+    {whatsappHref && <a className={s.floatingWhatsapp} href={whatsappHref} target="_blank" rel="noreferrer" aria-label="Conversar pelo WhatsApp"><Icon name="phone"/><span>WhatsApp</span></a>}
   </main>;
 }
