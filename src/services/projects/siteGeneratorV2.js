@@ -889,8 +889,10 @@ export async function generateSiteFolder(input = {}) {
     }
   } catch (error) {
     aiWarning = `A IA não concluiu a direção criativa: ${error.message}. Foi aplicado um sistema visual profissional específico para o nicho.`;
-    spec = normalizeSpec(spec, placeData);
   }
+
+  // Todo caminho (IA, fallback, refinamento ou skipAi) passa pelo mesmo contrato V3.
+  spec = normalizeSpec(spec, placeData);
 
   const media = await downloadPlacePhotos(place, publicDir);
   const externalImages = await downloadExternalImages(input.assetUrls, publicDir);
