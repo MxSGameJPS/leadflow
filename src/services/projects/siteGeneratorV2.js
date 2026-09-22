@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
 import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
+import { enforceLatestPackage,generateUniqueSiteCode,isUniqueCodegenProject } from "./siteCodegenV4.js";
 
 const GENERATED_ROOT = path.join(process.cwd(), "generated-sites");
 const RUNTIME_COMPONENT_PATH = path.join(process.cwd(), "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx");
@@ -789,6 +790,9 @@ function cssSource() {
 
 export async function syncGeneratedSiteRuntime(folderPath, siteData) {
   const requested = clean(folderPath, 500);
+  if (requested && await isUniqueCodegenProject(requested)) {
+    return enforceLatestPackage(requested);
+  }
   if (!requested) throw new Error("Este projeto ainda não possui uma pasta gerada.");
   const absolutePath = path.resolve(process.cwd(), requested);
   if (!absolutePath.startsWith(GENERATED_ROOT + path.sep) || absolutePath === GENERATED_ROOT) {
@@ -900,10 +904,21 @@ export async function generateSiteFolder(input = {}) {
       const request = buildAiPrompt(placeData, input.existingSiteData, input.instruction);
       let result;
       try {
-        result = await generateWithDefaultProvider(request);
+        result = await generateWithDefaultProvider({
+          ...request,
+          model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
+          temperature: 0.72,
+          maxTokens: 16000,
+        });
       } catch (imageError) {
         if (!request.images?.length) throw imageError;
-        result = await generateWithDefaultProvider({ ...request, images: [] });
+        result = await generateWithDefaultProvider({
+          ...request,
+          images: [],
+          model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
+          temperature: 0.72,
+          maxTokens: 16000,
+        });
         aiWarning = "O modelo configurado não aceitou as imagens de referência; a direção criativa foi gerada apenas com o briefing textual.";
       }
       spec = normalizeSpec(await parseAiJsonWithRepair(result.text), placeData);
@@ -938,31 +953,30 @@ export async function generateSiteFolder(input = {}) {
     skills: skillRouting.skills,
   };
 
-  const runtimeDir = path.join(folder.absolutePath, "components", "GeneratedSiteRuntime");
-  await fs.mkdir(runtimeDir, { recursive: true });
-  const [runtimeComponent, runtimeCss] = await Promise.all([
-    fs.readFile(RUNTIME_COMPONENT_PATH, "utf8"),
-    fs.readFile(RUNTIME_CSS_PATH, "utf8"),
-  ]);
-
-  const packageJson = {
-    name: folder.folderName,
-    version: "3.1.0",
-    private: true,
-    scripts: { dev: "next dev", build: "next build", start: "next start" },
-    dependencies: { next: "15.1.6", react: "19.0.0", "react-dom": "19.0.0" },
-  };
+  const codegen = await generateUniqueSiteCode({
+    folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"),
+    folderName: folder.folderName,
+    siteData,
+    instruction: input.instruction || "",
+    currentPlan: input.existingSiteData?.codegenPlan || null,
+    skipAi: Boolean(input.skipAi),
+    validateBuild: input.validateBuild !== false,
+  });
+  siteData.codegenPlan = codegen.plan;
+  siteData.generatorFormat = codegen.format;
 
   const report = {
     generatedAt: new Date().toISOString(),
-    generatorVersion: 3,
+    generatorVersion: 4,
     aiUsed,
     aiWarning,
     source: place ? "Google Places + CRM" : "CRM ou descrição",
     design: siteData.design,
     composition: siteData.design?.composition,
     blueprint: siteData.blueprint,
-    runtimeIntegrity: "shared-blueprint-runtime-v3.1",
+    runtimeIntegrity: "unique-codegen-v4",
+    codegenPlan: codegen.plan,
+    codegenBuildOk: codegen.buildOk,
     qualityContract: {
       mobileFirst: true,
       targetViewports: [320, 360, 390, 768, 1024, 1440],
@@ -981,16 +995,9 @@ export async function generateSiteFolder(input = {}) {
   };
 
   await Promise.all([
-    fs.writeFile(path.join(folder.absolutePath, "package.json"), JSON.stringify(packageJson, null, 2), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, ".gitignore"), "node_modules\n.next\n.env*\n", "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "app", "layout.js"), layoutSource(siteData), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "app", "page.js"), pageSource(siteData), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "app", "globals.css"), cssSource(), "utf8"),
-    fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.jsx"), runtimeComponent, "utf8"),
-    fs.writeFile(path.join(runtimeDir, "GeneratedSiteRuntime.module.css"), runtimeCss, "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "generation-report.json"), JSON.stringify(report, null, 2), "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "CLAUDE-REFINEMENT.md"), refinementPrompt(siteData), "utf8"),
-    fs.writeFile(path.join(folder.absolutePath, "README.md"), `# ${placeData.name}\n\nSite autoral gerado pelo LeadFlow a partir de um blueprint visual.\n\n## Executar\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nAbra http://localhost:3000.\n\n## Stack visual\n\n- Next.js 15 + React 19\n- Framer Motion para entrada e microinterações\n- GSAP ScrollTrigger para movimento de scroll\n- Tipografia via next/font\n- Blueprint V3 com ordem e variantes de seção específicas para o negócio\n- prefers-reduced-motion e foco por teclado\n\n## Validação obrigatória\n\n- Revise textos, telefones, horários e serviços antes do deploy.\n- Confirme com o cliente o direito de uso das imagens.\n- Mantenha as atribuições das fotos quando existirem.\n- Teste em 320px, 360px, 390px, 768px, 1024px e 1440px.\n- A assinatura \"Prévia desenvolvida por Saulo Pavanello\" já está aplicada.\n- Consulte CLAUDE-REFINEMENT.md para uma segunda passada com /ui-ux-pro-max e /frontend-design.\n`, "utf8"),
+    fs.writeFile(path.join(folder.absolutePath, "data", "siteData.js"), "const siteData = " + JSON.stringify(siteData, null, 2) + ";\n\nexport default siteData;\n", "utf8"),
   ]);
 
   return { folderName: folder.folderName, folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"), aiUsed, warning: aiWarning, imageCount: siteData.images.length, designDirection: siteData.design.direction, skillMode: skillRouting.mode, skills: skillRouting.skills, skillRoutingReason: skillRouting.reason, siteData };
