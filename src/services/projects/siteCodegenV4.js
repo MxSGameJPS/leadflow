@@ -165,9 +165,9 @@ function fallbackComponent(component){
     : '.root{padding:64px 20px;background:var(--color-background);color:var(--color-text)}.root h1,.root h2{font-family:var(--font-display);line-height:.95}.root p{max-width:680px;color:var(--color-muted)}.content{max-width:720px}.cta{display:inline-flex;margin-top:20px;padding:14px 20px;border-radius:var(--radius);background:var(--color-primary);color:#fff;text-decoration:none}.image{width:100%;max-height:620px;object-fit:cover;margin-top:28px;border-radius:var(--radius)}@media(min-width:768px){.root{padding:96px clamp(32px,6vw,96px)}}';
   return{jsx,css};
 }
-async function generateComponent(site,plan,component,skipAi){
+async function generateComponent(site,plan,component,skipAi,initialNotes=[]){
   if(skipAi)return fallbackComponent(component);
-  let errors=[];
+  let errors=[...initialNotes];
   for(let attempt=0;attempt<2;attempt++){
     const result=await generateWithDefaultProvider(componentRequest(site,plan,component,errors));
     let source;
@@ -184,7 +184,7 @@ async function concurrent(items,limit,fn){
   return output;
 }
 function actionLib(){
-  return 'export function actionHref(action, site = {}) {\n  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;\n  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\\\\d]/g, "");\n  if (action === "instagram" && site.instagram) return site.instagram;\n  if (action === "maps" && site.mapsLink) return site.mapsLink;\n  return "#contato";\n}\n';
+  return 'export function actionHref(action, site = {}) {\n  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;\n  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\\d]/g, "");\n  if (action === "instagram" && site.instagram) return site.instagram;\n  if (action === "maps" && site.mapsLink) return site.mapsLink;\n  return "#contato";\n}\n';
 }
 function pageSource(plan){
   const imports=plan.components.map(function(item){return 'import '+item.name+' from "../components/'+item.name+'/'+item.name+'.jsx";'}).join("\n");
@@ -231,6 +231,52 @@ async function writeProject(root,folderName,site,plan,sources){
   }
   await Promise.all(writes);
 }
+async function reviewSources(site,plan,sources){
+  const snapshot=plan.components.map(function(component,index){
+    return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,7000),css:clean(sources[index]?.css,7000)};
+  });
+  const result=await generateWithDefaultProvider({
+    model:roleModel("review"),
+    temperature:.22,
+    maxTokens:7000,
+    systemPrompt:[
+      "Você é o revisor final de uma agência premium.",
+      "Revise o site como produto comercial real, não como exercício de código.",
+      "Procure aparência genérica, repetição de cards, baixa personalidade, problemas de hierarquia, mobile fraco, CTA escondido, acessibilidade e inconsistência entre componentes.",
+      "Não peça informações que não existem e não invente fatos.",
+      "Retorne somente JSON válido no formato solicitado."
+    ].join(" "),
+    prompt:[
+      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy}),
+      "DADOS: "+JSON.stringify(facts(site)),
+      "COMPONENTES: "+JSON.stringify(snapshot),
+      "Retorne: "+JSON.stringify({pass:true,issues:[{component:"Nome",severity:"high",instruction:"Correção objetiva para este componente"}]})
+    ].join("\n\n")
+  });
+  let data;
+  try{data=parseJson(result.text)}catch{return[]}
+  const known=new Set(plan.components.map(function(item){return item.name}));
+  return (Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
+    return known.has(issue?.component)&&["high","medium"].includes(String(issue?.severity||"").toLowerCase())&&clean(issue?.instruction,1200);
+  }).slice(0,5).map(function(issue){return{component:issue.component,note:"REVISÃO FINAL: "+clean(issue.instruction,1200)}});
+}
+async function rewriteComponents(root,plan,sources,names){
+  for(const name of names){
+    const index=plan.components.findIndex(function(item){return item.name===name});
+    if(index<0)continue;
+    const source=sources[index],dir=path.join(root,"components",name);
+    await fs.writeFile(path.join(dir,name+".jsx"),source.jsx,"utf8");
+    await fs.writeFile(path.join(dir,name+".module.css"),source.css,"utf8");
+  }
+}
+function componentNamesFromBuildLog(log,plan){
+  const names=[];
+  for(const component of plan.components){
+    if(String(log).includes("components/"+component.name+"/")||String(log).includes("components\\\\ "+component.name+"\\".replace(" ","")))names.push(component.name);
+  }
+  return [...new Set(names)].slice(0,4);
+}
+
 async function validateProject(root,plan){
   const errors=[];
   const pkg=JSON.parse(await fs.readFile(path.join(root,"package.json"),"utf8"));
@@ -265,12 +311,34 @@ export async function generateUniqueSiteCode(options={}){
   }
   plan=normalizePlan(plan,site);
   const sources=await concurrent(plan.components,3,function(component){return generateComponent(site,plan,component,skipAi)});
+  if(!skipAi){
+    const review=await reviewSources(site,plan,sources);
+    if(review.length){
+      await concurrent(review,2,async function(issue){
+        const index=plan.components.findIndex(function(item){return item.name===issue.component});
+        if(index<0)return;
+        sources[index]=await generateComponent(site,plan,plan.components[index],false,[issue.note]);
+      });
+    }
+  }
   await writeProject(root,folderName,site,plan,sources);
-  const errors=await validateProject(root,plan);
+  let errors=await validateProject(root,plan);
   if(errors.length)throw new Error("Projeto reprovado pelas regras de engenharia: "+errors.join(" | "));
   let build={ok:true,log:"Build ignorado."};
   if(options.validateBuild!==false&&!skipAi){
     build=await runBuild(root);
+    if(!build.ok){
+      const affected=componentNamesFromBuildLog(build.log,plan);
+      if(affected.length){
+        await concurrent(affected,2,async function(name){
+          const index=plan.components.findIndex(function(item){return item.name===name});
+          sources[index]=await generateComponent(site,plan,plan.components[index],false,["BUILD FALHOU. Corrija sintaxe/imports/uso de client component. Log: "+clean(build.log,1800)]);
+        });
+        await rewriteComponents(root,plan,sources,affected);
+        errors=await validateProject(root,plan);
+        if(!errors.length)build=await runBuild(root);
+      }
+    }
     if(!build.ok)throw new Error("O código foi gerado, mas falhou no build automático: "+clean(build.log,3500));
   }
   return{plan,format:"unique-codegen-v4",buildOk:build.ok};
