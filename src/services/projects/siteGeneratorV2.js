@@ -371,25 +371,26 @@ function fallbackSpec(input) {
   const segment = input.segment || "negócio local";
   const city = input.city || "sua região";
   const design = fallbackDesign(input);
+  const summary = clean(input.editorialSummary, 1000);
   return {
     brandName: input.name,
     audience: `Pessoas que procuram ${segment} em ${city}`,
     pageJob: "Gerar confiança imediata e conduzir o visitante ao contato",
-    eyebrow: `${segment} em ${city}`,
-    heroTitle: `${input.name}, apresentado com a força que o negócio merece`,
-    heroText: input.editorialSummary || `Uma prévia criada para organizar as informações essenciais, transmitir confiança e facilitar o próximo contato com a ${input.name}.`,
+    eyebrow: `${segment} · ${city}`,
+    heroTitle: clean(input.name, 112),
+    heroText: summary || `Conheça a ${input.name}, ${segment} em ${city}. Consulte informações, localização e fale diretamente com a equipe.`,
     primaryCta: "Falar agora",
     secondaryCta: "Ver localização",
     ctas: fallbackCtas(input),
-    aboutTitle: "Uma presença que traduz o negócio",
-    aboutText: input.editorialSummary || `A ${input.name} ganha uma apresentação clara, responsiva e construída para valorizar sua atuação em ${city}, sem promessas genéricas nem informações inventadas.`,
-    servicesTitle: "O que o cliente encontra aqui",
-    servicesIntro: "Informação útil, hierarquia clara e um caminho de contato sem atrito.",
+    aboutTitle: `Conheça a ${input.name}`,
+    aboutText: summary || `A ${input.name} atende em ${city}. Aqui você encontra informações verificadas do negócio, formas de contato, horários e localização para planejar seu atendimento com facilidade.`,
+    servicesTitle: "Atendimento",
+    servicesIntro: "Informações confirmadas do negócio, apresentadas com clareza.",
     services: [],
-    proofTitle: "Confiança antes do primeiro contato",
-    proofText: input.rating ? `O negócio possui avaliação ${input.rating} no Google e ${input.reviews || 0} avaliações registradas.` : "A página reúne apenas dados verificáveis e conduz o visitante com clareza.",
-    contactTitle: "O próximo passo precisa ser simples",
-    contactText: "Entre em contato para confirmar atendimento, disponibilidade e demais informações.",
+    proofTitle: "Confiança de quem já conhece",
+    proofText: input.rating ? `Avaliação ${input.rating} no Google, com ${input.reviews || 0} avaliações registradas.` : `Informações verificadas para facilitar seu contato com a ${input.name}.`,
+    contactTitle: "Fale diretamente com a equipe",
+    contactText: `Entre em contato com a ${input.name} para confirmar atendimento, disponibilidade e demais informações.`,
     seoTitle: `${input.name} | ${segment} em ${city}`,
     seoDescription: `Conheça a ${input.name}, ${segment} em ${city}. Veja informações, localização e formas de contato.`,
     design,
@@ -580,6 +581,37 @@ async function downloadPlacePhotos(place, publicDir) {
   return { images, attributions };
 }
 
+function imageMimeFromPath(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  return "image/jpeg";
+}
+
+async function localBusinessVisuals(publicDir, imagePaths, max = 4) {
+  const output = [];
+  for (const imagePath of (Array.isArray(imagePaths) ? imagePaths : []).slice(0, max)) {
+    try {
+      const relative = String(imagePath || "").replace(/^\/+/, "");
+      const absolute = path.resolve(publicDir, relative);
+      const publicRoot = path.resolve(publicDir);
+      if (!absolute.startsWith(publicRoot + path.sep)) continue;
+      const buffer = await fs.readFile(absolute);
+      if (!buffer.length || buffer.length > 5 * 1024 * 1024) continue;
+      output.push({
+        dataUrl: `data:${imageMimeFromPath(absolute)};base64,${buffer.toString("base64")}`,
+        label: `Foto real do negócio: ${imagePath}`,
+      });
+    } catch {}
+  }
+  return output;
+}
+
+function isImageCapabilityError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return /image|imagem|vision|multimodal|content.*type|unsupported.*(media|input)/i.test(message);
+}
+
 function buildAiPrompt(input, currentSiteData = null, instruction = "") {
   const facts = {
     name: input.name,
@@ -594,7 +626,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     existingWebsite: input.existingWebsite,
     instagram: input.instagram,
     template: input.template,
-    description: input.description,
+    internalLeadContext: input.description,
     requestedChanges: clean(instruction, 5000),
     effects: normalizeEffects(input.effects),
     skillMode: input.skillMode || "auto",
@@ -622,6 +654,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Planeje composição, paleta, tipografia e movimento antes de escrever. O hero deve funcionar como uma tese visual do negócio.",
       "As animações devem usar transform e opacity, respeitar prefers-reduced-motion e reforçar hierarquia, continuidade espacial ou feedback. Não anime por decorar.",
       "Use exclusivamente os fatos fornecidos. Não invente serviços, preços, promoções, resultados, prêmios, depoimentos, tempo de mercado, certificações, protocolos, técnicas, especialidades ou diferenciais não comprovados.",
+      "internalLeadContext é contexto interno de prospecção. Nunca copie para a página frases como oportunidade comercial, ausência de site, lead, prospecção, necessidade de site ou observações do vendedor.",
       "As imagens podem orientar paleta, atmosfera, proporção, presença humana e composição, mas nunca provar um serviço ou credencial.",
       "Quando houver imagens de referência anexadas, use-as apenas para compreender composição, hierarquia, atmosfera, densidade, tipografia aparente e linguagem visual. Não extraia delas fatos sobre o negócio e não copie marcas, textos ou identidade de terceiros.",
       "Os efeitos selecionados pelo usuário são uma restrição explícita. Não proponha efeitos extras quando a lista estiver vazia.",
@@ -630,7 +663,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     ].join(" "),
     prompt: [
       "Crie a direção completa de conteúdo e design para uma landing page comercial premium.",
-      "A página será implementada em Next.js 15 + React 19, com Framer Motion para entrada e microinterações e GSAP ScrollTrigger para revelações de scroll.",
+      "A página será implementada em Next.js App Router com next@latest, React, JavaScript JSX e CSS Modules. Sem Tailwind, TypeScript, CSS inline ou bibliotecas de animação obrigatórias.",
       "Escolha valores somente entre os enums informados e mantenha contraste suficiente.",
       "O rodapé será assinado como: Prévia desenvolvida por Saulo Pavanello.",
       "Formato obrigatório:",
@@ -682,7 +715,8 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       }, null, 2),
       instruction ? "ALTERAÇÃO SOLICITADA PELO USUÁRIO:\n" + clean(instruction, 5000) : "",
       "EFEITOS VISUAIS SELECIONADOS PELO USUÁRIO:\n" + JSON.stringify(normalizeEffects(input.effects), null, 2),
-      Array.isArray(input.referenceImages) && input.referenceImages.length ? "Há " + input.referenceImages.length + " imagem(ns) de referência visual anexada(s). Analise-as como inspiração estética." : "Nenhuma imagem de referência visual foi anexada.",
+      Array.isArray(input.businessVisualReferences) && input.businessVisualReferences.length ? "Há " + input.businessVisualReferences.length + " foto(s) REAIS do negócio anexada(s). Analise pessoa, ambiente, identidade existente, proporções, cores e atmosfera para construir uma direção específica." : "Não há fotos reais do negócio disponíveis para análise visual.",
+      Array.isArray(input.referenceImages) && input.referenceImages.length ? "Há " + input.referenceImages.length + " imagem(ns) de referência visual anexada(s) pelo usuário. Use-as apenas como inspiração estética." : "Nenhuma imagem externa de referência visual foi anexada.",
 
       currentSiteData ? "ESTADO ATUAL APROVADO DO SITE. Preserve o que não foi pedido para mudar:\n" + JSON.stringify(currentSiteData, null, 2) : "",
 
@@ -690,7 +724,10 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
 
       JSON.stringify(facts, null, 2),
     ].join("\n"),
-    images: Array.isArray(input.referenceImages) ? input.referenceImages.map(item => ({ dataUrl: item.dataUrl, label: item.label || "Referência visual" })) : [],
+    images: [
+      ...(Array.isArray(input.businessVisualReferences) ? input.businessVisualReferences : []),
+      ...(Array.isArray(input.referenceImages) ? input.referenceImages.map(item => ({ dataUrl: item.dataUrl, label: item.label || "Referência visual" })) : []),
+    ].filter(item => item?.dataUrl).slice(0, 6),
   };
 }
 
@@ -877,7 +914,7 @@ export async function generateSiteFolder(input = {}) {
     mapsLink: safeUrl(place?.googleMapsUri || input.mapsLink),
     existingWebsite: safeUrl(place?.websiteUri || input.existingWebsite),
     instagram: instagramUrl(input.instagram),
-    editorialSummary: clean(place?.editorialSummary?.text || input.description, 1200),
+    editorialSummary: clean(place?.editorialSummary?.text, 1200),
     openingHours: Array.isArray(place?.regularOpeningHours?.weekdayDescriptions) ? place.regularOpeningHours.weekdayDescriptions.slice(0, 7).map(item => clean(item, 180)) : [],
     template: clean(input.template, 80) || "institutional",
     description: clean(input.description, 1600),
@@ -897,6 +934,12 @@ export async function generateSiteFolder(input = {}) {
   placeData.skillMode = skillRouting.mode;
   placeData.skills = skillRouting.skills;
 
+  const media = await downloadPlacePhotos(place, publicDir);
+  const externalImages = await downloadExternalImages(input.assetUrls, publicDir);
+  const businessImages = [...media.images, ...externalImages].slice(0, 8);
+  const businessVisualReferences = await localBusinessVisuals(publicDir, businessImages, 4);
+  placeData.businessVisualReferences = businessVisualReferences;
+
   let aiUsed = false;
   let aiWarning = "";
   let spec = input.existingSiteData ? normalizeSpec(input.existingSiteData, placeData) : fallbackSpec(placeData);
@@ -910,17 +953,21 @@ export async function generateSiteFolder(input = {}) {
           model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
           temperature: 0.72,
           maxTokens: 16000,
+          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 240000),
+          retries: 1,
         });
       } catch (imageError) {
-        if (!request.images?.length) throw imageError;
+        if (!request.images?.length || !isImageCapabilityError(imageError)) throw imageError;
         result = await generateWithDefaultProvider({
           ...request,
           images: [],
           model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
           temperature: 0.72,
           maxTokens: 16000,
+          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 240000),
+          retries: 1,
         });
-        aiWarning = "O modelo configurado não aceitou as imagens de referência; a direção criativa foi gerada apenas com o briefing textual.";
+        aiWarning = "O modelo configurado não aceitou entrada multimodal; a direção criativa foi gerada apenas com o briefing textual.";
       }
       spec = normalizeSpec(await parseAiJsonWithRepair(result.text), placeData);
       aiUsed = true;
@@ -932,8 +979,6 @@ export async function generateSiteFolder(input = {}) {
   // Todo caminho (IA, fallback, refinamento ou skipAi) passa pelo mesmo contrato V3.
   spec = normalizeSpec(spec, placeData);
 
-  const media = await downloadPlacePhotos(place, publicDir);
-  const externalImages = await downloadExternalImages(input.assetUrls, publicDir);
   const siteData = {
     ...spec,
     segment: placeData.segment,
@@ -947,7 +992,7 @@ export async function generateSiteFolder(input = {}) {
     existingWebsite: placeData.existingWebsite,
     instagram: placeData.instagram,
     hours: placeData.openingHours,
-    images: [...media.images, ...externalImages].slice(0, 8),
+    images: businessImages,
     attributions: media.attributions,
     effects: normalizeEffects(input.effects),
     skillMode: skillRouting.mode,
@@ -960,6 +1005,10 @@ export async function generateSiteFolder(input = {}) {
     siteData,
     instruction: input.instruction || "",
     currentPlan: input.existingSiteData?.codegenPlan || null,
+    visualImages: [
+      ...businessVisualReferences,
+      ...(Array.isArray(input.referenceImages) ? input.referenceImages.map(item => ({ dataUrl: item.dataUrl, label: item.label || "Referência visual" })) : []),
+    ].filter(item => item?.dataUrl).slice(0, 6),
     skipAi: Boolean(input.skipAi),
     validateBuild: input.validateBuild !== false,
   });
@@ -988,6 +1037,7 @@ export async function generateSiteFolder(input = {}) {
     pageJob: siteData.pageJob,
     effects: siteData.effects,
     referenceImageCount: Array.isArray(input.referenceImages) ? input.referenceImages.length : 0,
+    businessVisualImageCount: businessVisualReferences.length,
     skillMode: skillRouting.mode,
     skills: skillRouting.skills,
     skillRoutingReason: skillRouting.reason,

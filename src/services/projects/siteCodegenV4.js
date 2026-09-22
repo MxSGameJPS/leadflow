@@ -103,7 +103,24 @@ function fallbackPlan(site){
     {name:"BrandFooter",role:"footer",purpose:"Encerrar com identidade",layout:"Rodapé próprio",interaction:"Links existentes",mobile:"Empilhado"}
   );
   if(site.whatsapp||site.phone||site.mapsLink)list.push({name:"MobileConversionBar",role:"mobile-cta",purpose:"Ação persistente no celular",layout:"Barra exclusiva de mobile",interaction:"Contato em um toque",mobile:"Fixa com safe-area"});
-  return {version:4,concept:site.blueprint?.concept||"site-autoral",creativeThesis:site.blueprint?.visualThesis||"Uma presença digital própria para este lead.",conversionStrategy:"Entendimento, confiança e contato.",components:list};
+  return {
+    version:4,
+    concept:site.blueprint?.concept||"site-autoral",
+    creativeThesis:site.blueprint?.visualThesis||"Uma presença digital própria para este lead.",
+    conversionStrategy:"Entendimento, confiança e contato.",
+    visualSystem:"Use a identidade definida em site.design com hierarquia tipográfica forte, fotografia real e composição sem aparência de template.",
+    imageStrategy:"Priorize as imagens reais do negócio e evite repetição da mesma foto em seções consecutivas.",
+    motionStrategy:"Movimento discreto com transform e opacity, sempre respeitando prefers-reduced-motion.",
+    responsiveStrategy:"Mobile-first em 320/360/390px; conteúdo essencial no fluxo normal; ampliar composição progressivamente em tablet e desktop.",
+    copy:{
+      eyebrow:site.eyebrow||"",heroTitle:site.heroTitle||"",heroText:site.heroText||"",
+      aboutTitle:site.aboutTitle||"",aboutText:site.aboutText||"",
+      proofTitle:site.proofTitle||"",proofText:site.proofText||"",
+      contactTitle:site.contactTitle||"",contactText:site.contactText||"",
+      primaryCtaLabel:site.ctas?.primary?.label||"",secondaryCtaLabel:site.ctas?.secondary?.label||""
+    },
+    components:list
+  };
 }
 function normalizePlan(value,site){
   const source=value&&typeof value==="object"&&!Array.isArray(value)?value:{};
@@ -114,7 +131,21 @@ function normalizePlan(value,site){
     const item=raw[i]||{},name=pascal(item.name||((item.role||"Section")+" "+(i+1)));
     if(!name||seen.has(name))continue;
     seen.add(name);
-    components.push({name,role:normalizeRole(item.role),purpose:clean(item.purpose,700),layout:clean(item.layout,900),interaction:clean(item.interaction,700),mobile:clean(item.mobile,700),visualHook:clean(item.visualHook,700)});
+    components.push({
+      name,
+      role:normalizeRole(item.role),
+      purpose:clean(item.purpose,900),
+      content:clean(item.content,1400),
+      layout:clean(item.layout,1400),
+      desktop:clean(item.desktop,1400),
+      tablet:clean(item.tablet,1200),
+      mobile:clean(item.mobile,1400),
+      assetUsage:clean(item.assetUsage,1400),
+      interaction:clean(item.interaction,1000),
+      accessibility:clean(item.accessibility,900),
+      acceptanceCriteria:clean(item.acceptanceCriteria,1800),
+      visualHook:clean(item.visualHook,1000)
+    });
   }
   const fallback=fallbackPlan(site);
   const hasRole=function(role){return components.some(function(item){return item.role===role})};
@@ -135,14 +166,54 @@ function normalizePlan(value,site){
   if(!hasRole("footer"))components.push(fallbackRole("footer"));
   if((site.whatsapp||site.phone||site.mapsLink)&&!hasRole("mobile-cta"))components.push(fallbackRole("mobile-cta"));
 
-  return {version:4,concept:clean(source.concept,220)||fallback.concept,creativeThesis:clean(source.creativeThesis,1600)||fallback.creativeThesis,conversionStrategy:clean(source.conversionStrategy,1600)||fallback.conversionStrategy,components:components.filter(Boolean).slice(0,MAX_COMPONENTS)};
-}
-function architectureRequest(site,instruction,currentPlan){
+  const sourceCopy=source.copy&&typeof source.copy==="object"?source.copy:{};
   return {
-    model:roleModel("architect"),temperature:.76,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||180000),retries:1,
+    version:4,
+    concept:clean(source.concept,260)||fallback.concept,
+    creativeThesis:clean(source.creativeThesis,2200)||fallback.creativeThesis,
+    conversionStrategy:clean(source.conversionStrategy,2000)||fallback.conversionStrategy,
+    visualSystem:clean(source.visualSystem,2600)||fallback.visualSystem,
+    imageStrategy:clean(source.imageStrategy,2200)||fallback.imageStrategy,
+    motionStrategy:clean(source.motionStrategy,1800)||fallback.motionStrategy,
+    responsiveStrategy:clean(source.responsiveStrategy,2200)||fallback.responsiveStrategy,
+    copy:{
+      eyebrow:clean(sourceCopy.eyebrow,120)||site.eyebrow||"",
+      heroTitle:clean(sourceCopy.heroTitle,112)||site.heroTitle||"",
+      heroText:clean(sourceCopy.heroText,520)||site.heroText||"",
+      aboutTitle:clean(sourceCopy.aboutTitle,120)||site.aboutTitle||"",
+      aboutText:clean(sourceCopy.aboutText,900)||site.aboutText||"",
+      proofTitle:clean(sourceCopy.proofTitle,120)||site.proofTitle||"",
+      proofText:clean(sourceCopy.proofText,520)||site.proofText||"",
+      contactTitle:clean(sourceCopy.contactTitle,120)||site.contactTitle||"",
+      contactText:clean(sourceCopy.contactText,520)||site.contactText||"",
+      primaryCtaLabel:clean(sourceCopy.primaryCtaLabel,80)||site.ctas?.primary?.label||"",
+      secondaryCtaLabel:clean(sourceCopy.secondaryCtaLabel,80)||site.ctas?.secondary?.label||""
+    },
+    components:components.filter(Boolean).slice(0,MAX_COMPONENTS)
+  };
+}
+function applyPlanCopy(site,plan){
+  const copy=plan?.copy||{};
+  for(const key of ["eyebrow","heroTitle","heroText","aboutTitle","aboutText","proofTitle","proofText","contactTitle","contactText"]){
+    if(copy[key])site[key]=copy[key];
+  }
+  if(copy.primaryCtaLabel&&site.ctas?.primary){
+    site.ctas.primary.label=copy.primaryCtaLabel;
+    site.primaryCta=copy.primaryCtaLabel;
+  }
+  if(copy.secondaryCtaLabel&&site.ctas?.secondary){
+    site.ctas.secondary.label=copy.secondaryCtaLabel;
+    site.secondaryCta=copy.secondaryCtaLabel;
+  }
+}
+function architectureRequest(site,instruction,currentPlan,visualImages=[]){
+  return {
+    model:roleModel("architect"),temperature:.72,maxTokens:15000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||240000),retries:1,
+    images:Array.isArray(visualImages)?visualImages.slice(0,6):[],
     systemPrompt:[
       "Você é diretor de criação, arquiteto de experiência e estrategista de conversão.",
-      "Crie uma arquitetura própria para este negócio. Não escolha nem adapte um template.",
+      "Crie um DOSSIÊ DE IMPLEMENTAÇÃO próprio para este negócio. Não escolha nem adapte um template.",
+      "Você está entregando especificações para desenvolvedores executores mais simples. Portanto tome AGORA todas as decisões difíceis de direção visual, copy, composição, fotografia, responsividade, interação e conversão.",
       "Cada item da arquitetura virará um componente React real com JSX e CSS próprios.",
       "Use apenas fatos fornecidos. Não invente serviços, preços, depoimentos, profissionais, certificações, equipamentos, resultados ou números.",
       "FAQ, pricing e testimonials somente podem existir se os fatos fornecidos realmente sustentarem esse conteúdo.",
@@ -150,16 +221,27 @@ function architectureRequest(site,instruction,currentPlan){
       "Evite a sequência automática Hero/About/Services/Cards. Pense na jornada ideal deste lead.",
       "A página precisa ser comercialmente completa: quando existirem fatos de serviços, prova, localização e contato, cubra essas responsabilidades na arquitetura, mas escolha nomes, ordem, composição e linguagem visual próprios.",
       "Não entregue uma arquitetura mínima de 2 ou 3 blocos se existem dados suficientes para uma experiência comercial completa.",
+      "Quando fotos reais estiverem anexadas, ANALISE-AS. Defina exatamente quais imagens usar em cada componente, enquadramento sugerido e função narrativa. As paths válidas estão em site.images e devem aparecer em assetUsage.",
+      "Você pode reescrever a COPY-SEMENTE para torná-la mais comercial e específica, mas sem inventar tratamentos, serviços, credenciais ou resultados.",
+      "Para cada componente descreva desktop, tablet e mobile separadamente. Mobile precisa funcionar em 320, 360 e 390px sem overflow horizontal.",
+      "Cada acceptanceCriteria deve ser testável e específico. Evite frases vagas como 'ficar bonito' ou 'ser premium'.",
       "Retorne somente JSON válido."
     ].join(" "),
     prompt:[
-      "Desenhe o site exclusivo deste lead.",
-      "Cada componente deve ter name PascalCase, role, purpose, layout, interaction, mobile e visualHook.",
+      "Desenhe o site exclusivo deste lead e entregue um plano suficientemente detalhado para que outro modelo apenas EXECUTE.",
+      "Crie normalmente 7 a 12 componentes quando os dados sustentarem uma landing completa; não infle a página com conteúdo sem função.",
+      "Cada componente deve ter name PascalCase, role, purpose, content, layout, desktop, tablet, mobile, assetUsage, interaction, accessibility, acceptanceCriteria e visualHook.",
       "Roles: navigation, hero, proof, services, story, showcase, benefits, gallery, faq, location, contact, footer, mobile-cta, custom.",
+      "ASSETS DISPONÍVEIS: "+JSON.stringify(Array.isArray(site.images)?site.images:[]),
       instruction?"PEDIDO DE ALTERAÇÃO: "+clean(instruction,5000):"",
       currentPlan?"ARQUITETURA ATUAL: "+JSON.stringify(currentPlan):"",
-      "DADOS VERIFICADOS E COPY: "+JSON.stringify(facts(site)),
-      "FORMATO: "+JSON.stringify({version:4,concept:"",creativeThesis:"",conversionStrategy:"",components:[{name:"DreamsHero",role:"hero",purpose:"",layout:"",interaction:"",mobile:"",visualHook:""}]})
+      "DADOS VERIFICADOS E COPY-SEMENTE: "+JSON.stringify(facts(site)),
+      "FORMATO: "+JSON.stringify({
+        version:4,concept:"",creativeThesis:"",conversionStrategy:"",
+        visualSystem:"",imageStrategy:"",motionStrategy:"",responsiveStrategy:"",
+        copy:{eyebrow:"",heroTitle:"",heroText:"",aboutTitle:"",aboutText:"",proofTitle:"",proofText:"",contactTitle:"",contactText:"",primaryCtaLabel:"",secondaryCtaLabel:""},
+        components:[{name:"NomeAutoral",role:"hero",purpose:"",content:"",layout:"",desktop:"",tablet:"",mobile:"",assetUsage:"Use /images/arquivo.jpg...",interaction:"",accessibility:"",acceptanceCriteria:"",visualHook:""}]
+      })
     ].filter(Boolean).join("\n\n")
   };
 }
@@ -205,6 +287,7 @@ function componentRequest(site,plan,component,errors){
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
+      "Você é EXECUTOR do dossiê criado pelo diretor premium. Não simplifique nem substitua as decisões de layout por padrões genéricos de cards.",
       "Stack: React/Next App Router, JavaScript JSX e CSS Modules.",
       "Proibido: TypeScript, Tailwind, styled-components, emotion, CSS-in-JS, style=, bibliotecas de UI e dependências externas.",
       "O JSX deve importar exatamente ./"+component.name+".module.css como styles.",
@@ -213,12 +296,13 @@ function componentRequest(site,plan,component,errors){
       "Se não precisar de interatividade no cliente, mantenha o componente como Server Component.",
       "O componente recebe a prop site. Use somente fatos existentes em site.",
       "Todo visual fica no CSS Module. CSS deve ser mobile-first; amplie com @media (min-width:...).",
+      "Em 320px, 360px e 390px: zero overflow horizontal; evite larguras fixas; prefira min(), max(), clamp(), minmax() e fluxo normal para conteúdo essencial. Composição desktop complexa deve ter uma transformação mobile explicitamente coerente.",
       "Acessibilidade, foco visível e touch targets são obrigatórios.",
       "Retorne somente <JSX>...</JSX><CSS>...</CSS>."
     ].join(" "),
     prompt:[
       "SITE: "+JSON.stringify(facts(site)),
-      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy}),
+      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy}),
       "COMPONENTE: "+JSON.stringify(component),
       "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --radius.",
       "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\"; e chame sempre actionHref(action, site), por exemplo actionHref(site.ctas?.primary?.action, site).",
@@ -331,7 +415,7 @@ async function reviewSources(site,plan,sources){
       "Retorne somente JSON válido no formato solicitado."
     ].join(" "),
     prompt:[
-      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy}),
+      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy}),
       "DADOS: "+JSON.stringify(facts(site)),
       "COMPONENTES: "+JSON.stringify(snapshot),
       "Retorne: "+JSON.stringify({pass:true,issues:[{component:"Nome",severity:"high",instruction:"Correção objetiva para este componente"}]})
@@ -400,10 +484,11 @@ async function runBuild(root){
 export async function generateUniqueSiteCode(options={}){
   const folderPath=options.folderPath,folderName=options.folderName,site=options.siteData||{},skipAi=Boolean(options.skipAi);
   const root=path.resolve(process.cwd(),folderPath);
+  const visualImages=Array.isArray(options.visualImages)?options.visualImages.filter(item=>item?.dataUrl).slice(0,6):[];
   let plan;
   if(skipAi)plan=fallbackPlan(site);
   else{
-    const request=architectureRequest(site,options.instruction||"",options.currentPlan||null);
+    const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages);
     let result=await generateWithDefaultProvider(request);
     try{
       plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
@@ -423,6 +508,7 @@ export async function generateUniqueSiteCode(options={}){
     }
   }
   plan=normalizePlan(plan,site);
+  applyPlanCopy(site,plan);
   const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
   const sources=await concurrent(plan.components,componentConcurrency,function(component){return generateComponent(site,plan,component,skipAi)});
   if(!skipAi){

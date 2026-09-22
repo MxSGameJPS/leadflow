@@ -129,12 +129,16 @@ const commercial = await generateSiteFolder({
   rating: 5,
   reviews: 12,
   mapsLink: "https://maps.google.com/?q=Ivoti",
+  description: "Não possui presença digital encontrada — oportunidade para oferecer um site do zero. Instagram do negócio: https://instagram.com/teste",
   folderPath: commercialFolder,
   skipAi: true,
 });
 assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "proof"), "site comercial com prova disponível deve renderizar prova");
 assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "location"), "site comercial com endereço deve renderizar localização");
 assert.ok(commercial.siteData.heroTitle.length <= 112);
+assert.ok(!/oportunidade|presença digital|site do zero|instagram do negócio/i.test(commercial.siteData.heroText), "notas internas de prospecção não podem aparecer na copy pública");
+assert.ok(commercial.siteData.codegenPlan.visualSystem);
+assert.ok(commercial.siteData.codegenPlan.responsiveStrategy);
 assert.ok(commercial.siteData.codegenPlan.components.length >= 7, "site com fatos comerciais deve gerar arquitetura completa");
 assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "proof"));
 assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "location"));
