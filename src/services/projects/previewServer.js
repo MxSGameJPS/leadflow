@@ -2,6 +2,7 @@ import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { resolveProjectFolder } from "./projectStore.js";
+import { hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
 
 const state = globalThis.__leadflowSitePreviewServers || new Map();
 globalThis.__leadflowSitePreviewServers = state;
@@ -44,6 +45,7 @@ async function waitForServer(url,entry){
 export async function ensureProjectPreviewServer(folderPath){
   const root=resolveProjectFolder(folderPath);
   if(!root)throw new Error("Projeto sem pasta gerada.");
+  if(await isUniqueCodegenProject(folderPath))await hardenUniqueCodegenProject(folderPath);
   const key=path.resolve(root);
   const existing=state.get(key);
   if(existing&&existing.child.exitCode==null){

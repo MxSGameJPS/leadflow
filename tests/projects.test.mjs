@@ -104,6 +104,9 @@ for (const component of generated.siteData.codegenPlan.components) {
   assert.match(jsx, new RegExp(component.name + "\\.module\\.css"));
   assert.match(jsx, /styles\./);
   assert.ok(!/\sstyle\s*=/.test(jsx), component.name + " não pode usar CSS inline");
+  if (/\b(useState|useEffect|window|document|requestAnimationFrame)\b/.test(jsx)) {
+    assert.match(jsx, /^\s*["']use client["'];/, component.name + " interativo precisa ser Client Component");
+  }
   assert.ok(!/@tailwind|@apply/.test(css), component.name + " não pode usar Tailwind");
   assert.ok(css.length > 40);
 }

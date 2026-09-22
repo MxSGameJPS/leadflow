@@ -171,13 +171,24 @@ function parseComponent(text){
   try{const obj=parseJson(raw);if(typeof obj.jsx==="string"&&typeof obj.css==="string")return{jsx:obj.jsx.trim(),css:obj.css.trim()}}catch{}
   throw new Error("A resposta não contém JSX e CSS válidos.");
 }
+function componentNeedsClient(jsx){
+  return /\b(useState|useEffect|useLayoutEffect|useReducer|useRef|useMemo|useCallback|useTransition)\b|\b(window|document|requestAnimationFrame|cancelAnimationFrame)\b/.test(String(jsx||""));
+}
+function normalizeComponentSource(source){
+  let jsx=String(source?.jsx||"").replace(/^\uFEFF/,"").trim();
+  let css=String(source?.css||"").trim();
+  if(componentNeedsClient(jsx)&&!/^\s*["']use client["'];/.test(jsx)){
+    jsx='"use client";\n\n'+jsx;
+  }
+  return {jsx,css};
+}
 function validateComponent(name,source){
   const jsx=String(source.jsx||""),css=String(source.css||""),errors=[];
   if(!jsx||!css)errors.push("JSX e CSS são obrigatórios");
   if(/\sstyle\s*=/i.test(jsx))errors.push("style= e CSS inline são proibidos");
   if(/@tailwind|@apply/i.test(css))errors.push("Tailwind é proibido");
   if(/\b(interface|enum|implements)\b|React\.FC|:\s*(string|number|boolean)\b/.test(jsx))errors.push("TypeScript é proibido");
-  const needsClient=/\b(useState|useEffect|useLayoutEffect|useReducer|useRef|useMemo|useCallback|useTransition)\b|\b(window|document|requestAnimationFrame|cancelAnimationFrame)\b/.test(jsx);
+  const needsClient=componentNeedsClient(jsx);
   const hasUseClient=/^\s*["']use client["'];/.test(jsx);
   if(needsClient&&!hasUseClient)errors.push('componente usa hooks/API de browser e precisa começar com "use client";');
   if(!jsx.includes('import styles from "./'+name+'.module.css"')&&!jsx.includes("import styles from './"+name+".module.css'"))errors.push("importe o CSS Module próprio como styles");
@@ -242,7 +253,7 @@ async function generateComponent(site,plan,component,skipAi,initialNotes=[]){
   for(let attempt=0;attempt<2;attempt++){
     const result=await generateWithDefaultProvider(componentRequest(site,plan,component,errors));
     let source;
-    try{source=parseComponent(result.text)}catch(error){errors=[error.message];continue}
+    try{source=normalizeComponentSource(parseComponent(result.text))}catch(error){errors=[error.message];continue}
     errors=validateComponent(component.name,source);
     if(!errors.length)return source;
   }
@@ -442,6 +453,39 @@ export async function generateUniqueSiteCode(options={}){
     if(!build.ok)throw new Error("O código foi gerado, mas falhou no build automático: "+clean(build.log,3500));
   }
   return{plan,format:"unique-codegen-v4",buildOk:build.ok};
+}
+
+export async function hardenUniqueCodegenProject(folderPath){
+  const root=path.resolve(process.cwd(),folderPath);
+  let changed=0;
+  try{
+    const componentsRoot=path.join(root,"components");
+    const dirs=await fs.readdir(componentsRoot,{withFileTypes:true});
+    for(const dir of dirs){
+      if(!dir.isDirectory())continue;
+      const jsxPath=path.join(componentsRoot,dir.name,dir.name+".jsx");
+      try{
+        const original=await fs.readFile(jsxPath,"utf8");
+        const normalized=normalizeComponentSource({jsx:original,css:""}).jsx;
+        if(normalized!==original.trim()){
+          await fs.writeFile(jsxPath,normalized+"\n","utf8");
+          changed++;
+        }
+      }catch{}
+    }
+    const libDir=path.join(root,"lib");
+    await fs.mkdir(libDir,{recursive:true});
+    const actionsPath=path.join(libDir,"siteActions.js");
+    const expectedActions=actionLib();
+    let currentActions="";
+    try{currentActions=await fs.readFile(actionsPath,"utf8")}catch{}
+    if(currentActions!==expectedActions){
+      await fs.writeFile(actionsPath,expectedActions,"utf8");
+      changed++;
+    }
+    await enforceLatestPackage(folderPath);
+  }catch{}
+  return {changed};
 }
 
 export async function isUniqueCodegenProject(folderPath){

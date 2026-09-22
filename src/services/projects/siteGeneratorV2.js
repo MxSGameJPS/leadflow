@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
 import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
-import { enforceLatestPackage,generateUniqueSiteCode,isUniqueCodegenProject } from "./siteCodegenV4.js";
+import { enforceLatestPackage,generateUniqueSiteCode,hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
 
 const GENERATED_ROOT = path.join(process.cwd(), "generated-sites");
 const RUNTIME_COMPONENT_PATH = path.join(process.cwd(), "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx");
@@ -791,6 +791,7 @@ function cssSource() {
 export async function syncGeneratedSiteRuntime(folderPath, siteData) {
   const requested = clean(folderPath, 500);
   if (requested && await isUniqueCodegenProject(requested)) {
+    await hardenUniqueCodegenProject(requested);
     return enforceLatestPackage(requested);
   }
   if (!requested) throw new Error("Este projeto ainda não possui uma pasta gerada.");
