@@ -66,7 +66,9 @@ function normalizeGenerationRequest(input) {
   const model = String(request.model || "").trim().slice(0, 300);
   const temperature = request.temperature == null ? null : clampNumber(request.temperature, .4, 0, 2);
   const maxTokens = request.maxTokens == null ? null : Math.round(clampNumber(request.maxTokens, 1024, 1, 200000));
-  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens };
+  const timeoutMs = request.timeoutMs == null ? null : Math.round(clampNumber(request.timeoutMs, 180000, 1000, 900000));
+  const retries = request.retries == null ? null : Math.round(clampNumber(request.retries, 0, 0, 3));
+  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens, timeoutMs, retries };
 }
 function ensureReadyForGeneration(provider) { if (!provider.enabled) throw new Error("O provedor está desativado."); if (!provider.model && provider.type !== "custom-rest") throw new Error("Escolha um modelo antes de usar este provedor."); }
 function authRequest(provider, url, headers) {
@@ -78,21 +80,53 @@ function authRequest(provider, url, headers) {
   else if (provider.authType === "query") target.searchParams.set(provider.queryKey || "api_key", provider.apiKey);
   return target;
 }
-async function requestJson(provider, { url, method = "POST", body }) {
+function retryableProviderError(error) {
+  const message = String(error?.message || "");
+  if (error?.name === "AbortError") return true;
+  if (/HTTP (429|502|503|504):/i.test(message)) return true;
+  if (["ECONNRESET","ETIMEDOUT","EAI_AGAIN"].includes(error?.cause?.code)) return true;
+  return false;
+}
+function providerDelay(attempt) {
+  return new Promise(resolve => setTimeout(resolve, 900 * Math.pow(2, attempt)));
+}
+async function requestJson(provider, { url, method = "POST", body, timeoutMs = null, retries = 0 }) {
   const headers = { Accept: "application/json", ...parseJsonObject(provider.headersJson, "Cabeçalhos adicionais") };
   if (body !== undefined) headers["Content-Type"] = headers["Content-Type"] || "application/json";
-  const target = authRequest(provider, url, headers), controller = new AbortController(), timeout = setTimeout(() => controller.abort(), provider.timeout || 60000), started = Date.now();
-  try {
-    const response = await fetch(target, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal, cache: "no-store" }), raw = await response.text();
-    let parsed;
-    try { parsed = raw ? JSON.parse(raw) : {}; } catch { parsed = { raw }; }
-    if (!response.ok) { const detail = getPath(parsed, "error.message") || getPath(parsed, "message") || raw.slice(0, 300); throw new Error(`HTTP ${response.status}: ${detail || "falha no provedor"}`); }
-    return { data: parsed, status: response.status, elapsedMs: Date.now() - started };
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("A conexão com o provedor excedeu o tempo limite.");
-    if (error?.cause?.code === "ECONNREFUSED") throw new Error(`Não foi possível conectar em ${provider.baseUrl}. Confirme se o serviço está em execução.`);
-    throw error;
-  } finally { clearTimeout(timeout); }
+  const target = authRequest(provider, url, headers);
+  const effectiveTimeout = Math.round(clampNumber(timeoutMs ?? provider.timeout, provider.timeout || 60000, 1000, 900000));
+  const maxRetries = Math.round(clampNumber(retries, 0, 0, 3));
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
+    const started = Date.now();
+    try {
+      const response = await fetch(target, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal, cache: "no-store" }), raw = await response.text();
+      let parsed;
+      try { parsed = raw ? JSON.parse(raw) : {}; } catch { parsed = { raw }; }
+      if (!response.ok) {
+        const detail = getPath(parsed, "error.message") || getPath(parsed, "message") || raw.slice(0, 300);
+        const error = new Error(`HTTP ${response.status}: ${detail || "falha no provedor"}`);
+        error.status = response.status;
+        throw error;
+      }
+      return { data: parsed, status: response.status, elapsedMs: Date.now() - started, attempts: attempt + 1 };
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && retryableProviderError(error)) {
+        await providerDelay(attempt);
+        continue;
+      }
+      if (error?.name === "AbortError") throw new Error(`A conexão com o provedor excedeu o tempo limite de ${Math.round(effectiveTimeout / 1000)}s após ${attempt + 1} tentativa(s).`);
+      if (error?.cause?.code === "ECONNREFUSED") throw new Error(`Não foi possível conectar em ${provider.baseUrl}. Confirme se o serviço está em execução.`);
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError || new Error("Falha ao conectar ao provedor.");
 }
 function openAIUserContent(request) {
   if (!request.images.length) return request.prompt;
@@ -102,7 +136,7 @@ async function generateOpenAICompatible(provider, requestInput) {
   const request = normalizeGenerationRequest(requestInput), endpoint = provider.endpoint || "/chat/completions", messages = [];
   if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
   messages.push({ role: "user", content: openAIUserContent(request) });
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false } });
+  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
   const output = getPath(result.data, "choices[0].message.content") ?? getPath(result.data, "choices[0].text") ?? getPath(result.data, "output_text");
   if (typeof output !== "string") throw new Error("A resposta não contém texto no formato compatível com OpenAI.");
   return { ...result, text: output.trim() };
@@ -113,7 +147,7 @@ async function generateOllama(provider, requestInput) {
   const userMessage = { role: "user", content: request.prompt };
   if (request.images.length) userMessage.images = request.images.map(image => image.dataUrl.split(",", 2)[1]);
   messages.push(userMessage);
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, stream: false, options: { temperature: request.temperature ?? provider.temperature, num_predict: request.maxTokens ?? provider.maxTokens } } });
+  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, stream: false, options: { temperature: request.temperature ?? provider.temperature, num_predict: request.maxTokens ?? provider.maxTokens } }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
   const output = getPath(result.data, "message.content") ?? getPath(result.data, "response");
   if (typeof output !== "string") throw new Error("A resposta do Ollama não contém texto reconhecível.");
   return { ...result, text: output.trim() };
@@ -121,7 +155,7 @@ async function generateOllama(provider, requestInput) {
 async function generateCustom(provider, requestInput) {
   const request = normalizeGenerationRequest(requestInput), variables = { prompt: request.prompt, systemPrompt: request.systemPrompt, model: request.model || provider.model, temperature: request.temperature ?? provider.temperature, maxTokens: request.maxTokens ?? provider.maxTokens, images: request.images, imagesJson: JSON.stringify(request.images) };
   const template = provider.bodyTemplate ? parseJsonObject(provider.bodyTemplate, "Template do corpo") : { model: "{{model}}", prompt: "{{prompt}}", system_prompt: "{{systemPrompt}}", temperature: "{{temperature}}", max_tokens: "{{maxTokens}}", images: "{{images}}" };
-  const endpoint = provider.endpoint || "", result = await requestJson(provider, { url: provider.baseUrl + (endpoint ? (endpoint.startsWith("/") ? endpoint : "/" + endpoint) : ""), method: provider.method || "POST", body: provider.method === "GET" ? undefined : templateValue(template, variables) });
+  const endpoint = provider.endpoint || "", result = await requestJson(provider, { url: provider.baseUrl + (endpoint ? (endpoint.startsWith("/") ? endpoint : "/" + endpoint) : ""), method: provider.method || "POST", body: provider.method === "GET" ? undefined : templateValue(template, variables), timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
   const output = getPath(result.data, provider.responsePath || "choices[0].message.content");
   if (typeof output !== "string") throw new Error(`Não foi encontrado texto no caminho de resposta: ${provider.responsePath || "choices[0].message.content"}.`);
   return { ...result, text: output.trim() };

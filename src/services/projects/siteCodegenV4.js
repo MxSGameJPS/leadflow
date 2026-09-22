@@ -60,7 +60,9 @@ async function parseJsonWithRepair(text,role="review"){
     const repair=await generateWithDefaultProvider({
       model:roleModel(role)||roleModel("architect"),
       temperature:0,
-      maxTokens:12000,
+      maxTokens:7000,
+      timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||180000),
+      retries:1,
       systemPrompt:"Você é um reparador de JSON. Retorne SOMENTE JSON estrito RFC 8259, sem markdown, sem comentários, sem explicações e sem texto antes ou depois. Preserve fielmente todos os valores e a estrutura do conteúdo recebido.",
       prompt:"Converta o conteúdo abaixo para JSON estrito válido. Não resuma e não invente campos.\n\n"+clean(text,50000),
     });
@@ -122,7 +124,7 @@ function normalizePlan(value,site){
 }
 function architectureRequest(site,instruction,currentPlan){
   return {
-    model:roleModel("architect"),temperature:.76,maxTokens:16000,
+    model:roleModel("architect"),temperature:.76,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||180000),retries:1,
     systemPrompt:[
       "Você é diretor de criação, arquiteto de experiência e estrategista de conversão.",
       "Crie uma arquitetura própria para este negócio. Não escolha nem adapte um template.",
@@ -168,7 +170,7 @@ function validateComponent(name,source){
 }
 function componentRequest(site,plan,component,errors){
   return {
-    model:roleModel("code"),temperature:.64,maxTokens:14000,
+    model:roleModel("code"),temperature:.64,maxTokens:9000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
@@ -285,7 +287,9 @@ async function reviewSources(site,plan,sources){
   const result=await generateWithDefaultProvider({
     model:roleModel("review"),
     temperature:.22,
-    maxTokens:7000,
+    maxTokens:5000,
+    timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||180000),
+    retries:1,
     systemPrompt:[
       "Você é o revisor final de uma agência premium.",
       "Revise o site como produto comercial real, não como exercício de código.",
@@ -362,7 +366,7 @@ export async function generateUniqueSiteCode(options={}){
       result=await generateWithDefaultProvider({
         ...request,
         temperature:0.35,
-        maxTokens:16000,
+        maxTokens:12000,
         systemPrompt:request.systemPrompt+" ATENÇÃO: sua tentativa anterior não pôde ser interpretada. Retorne exclusivamente um objeto JSON estrito iniciado por { e terminado por }, sem cercas de código, comentários, raciocínio, texto introdutório ou conclusão.",
         prompt:request.prompt+"\n\nEsta é uma nova tentativa porque a resposta anterior não era JSON válido. Obedeça rigorosamente ao formato JSON.",
       });
@@ -374,7 +378,8 @@ export async function generateUniqueSiteCode(options={}){
     }
   }
   plan=normalizePlan(plan,site);
-  const sources=await concurrent(plan.components,3,function(component){return generateComponent(site,plan,component,skipAi)});
+  const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
+  const sources=await concurrent(plan.components,componentConcurrency,function(component){return generateComponent(site,plan,component,skipAi)});
   if(!skipAi){
     const review=await reviewSources(site,plan,sources);
     if(review.length){

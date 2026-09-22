@@ -109,6 +109,8 @@ try {
     model: "modelo-premium-codegen",
     temperature: 0.72,
     maxTokens: 12000,
+    timeoutMs: 180000,
+    retries: 1,
   });
   const roleRequest = requests.at(-1);
   t("aceita override de modelo por tarefa", roleRequest.body.model === "modelo-premium-codegen");
