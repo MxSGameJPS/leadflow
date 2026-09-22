@@ -132,6 +132,11 @@ const commercial = await generateSiteFolder({
 assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "proof"), "site comercial com prova disponível deve renderizar prova");
 assert.ok(commercial.siteData.blueprint.sections.some(section => section.type === "location"), "site comercial com endereço deve renderizar localização");
 assert.ok(commercial.siteData.heroTitle.length <= 112);
+assert.ok(commercial.siteData.codegenPlan.components.length >= 7, "site com fatos comerciais deve gerar arquitetura completa");
+assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "proof"));
+assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "location"));
+assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "contact"));
+assert.ok(commercial.siteData.codegenPlan.components.some(component => component.role === "mobile-cta"));
 await fs.rm(path.join(root, commercial.folderPath), { recursive: true, force: true });
 
 console.log("Testes de projetos passaram.");

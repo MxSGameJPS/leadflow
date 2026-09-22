@@ -117,10 +117,25 @@ function normalizePlan(value,site){
     components.push({name,role:normalizeRole(item.role),purpose:clean(item.purpose,700),layout:clean(item.layout,900),interaction:clean(item.interaction,700),mobile:clean(item.mobile,700),visualHook:clean(item.visualHook,700)});
   }
   const fallback=fallbackPlan(site);
-  if(!components.some(function(item){return item.role==="hero"}))components.unshift(fallback.components.find(function(item){return item.role==="hero"}));
-  if(!components.some(function(item){return item.role==="footer"}))components.push(fallback.components.find(function(item){return item.role==="footer"}));
-  if((site.whatsapp||site.phone||site.mapsLink)&&!components.some(function(item){return item.role==="mobile-cta"}))components.push(fallback.components.find(function(item){return item.role==="mobile-cta"}));
-  return {version:4,concept:clean(source.concept,160)||fallback.concept,creativeThesis:clean(source.creativeThesis,900)||fallback.creativeThesis,conversionStrategy:clean(source.conversionStrategy,1200)||fallback.conversionStrategy,components:components.slice(0,MAX_COMPONENTS)};
+  const hasRole=function(role){return components.some(function(item){return item.role===role})};
+  const fallbackRole=function(role){return fallback.components.find(function(item){return item.role===role})};
+  const insertBeforeEnd=function(item){
+    if(!item||components.some(function(existing){return existing.name===item.name||existing.role===item.role}))return;
+    const endIndex=components.findIndex(function(existing){return ["contact","footer","mobile-cta"].includes(existing.role)});
+    if(endIndex>=0)components.splice(endIndex,0,item); else components.push(item);
+  };
+
+  if(!hasRole("navigation")&&fallbackRole("navigation"))components.unshift(fallbackRole("navigation"));
+  if(!hasRole("hero"))components.splice(Math.min(1,components.length),0,fallbackRole("hero"));
+  if((site.aboutTitle||site.aboutText)&&!hasRole("story"))insertBeforeEnd(fallbackRole("story"));
+  if(Array.isArray(site.services)&&site.services.length&&!components.some(function(item){return ["services","showcase","benefits"].includes(item.role)}))insertBeforeEnd(fallbackRole("services"));
+  if((site.rating||site.reviews||site.city||site.phone)&&!hasRole("proof"))insertBeforeEnd(fallbackRole("proof"));
+  if((site.address||site.mapsLink)&&!hasRole("location"))insertBeforeEnd(fallbackRole("location"));
+  if(!hasRole("contact"))insertBeforeEnd(fallbackRole("contact"));
+  if(!hasRole("footer"))components.push(fallbackRole("footer"));
+  if((site.whatsapp||site.phone||site.mapsLink)&&!hasRole("mobile-cta"))components.push(fallbackRole("mobile-cta"));
+
+  return {version:4,concept:clean(source.concept,220)||fallback.concept,creativeThesis:clean(source.creativeThesis,1600)||fallback.creativeThesis,conversionStrategy:clean(source.conversionStrategy,1600)||fallback.conversionStrategy,components:components.filter(Boolean).slice(0,MAX_COMPONENTS)};
 }
 function architectureRequest(site,instruction,currentPlan){
   return {
@@ -133,6 +148,8 @@ function architectureRequest(site,instruction,currentPlan){
       "FAQ, pricing e testimonials somente podem existir se os fatos fornecidos realmente sustentarem esse conteúdo.",
       "Mobile-first é obrigatório em 320px, 360px e 390px.",
       "Evite a sequência automática Hero/About/Services/Cards. Pense na jornada ideal deste lead.",
+      "A página precisa ser comercialmente completa: quando existirem fatos de serviços, prova, localização e contato, cubra essas responsabilidades na arquitetura, mas escolha nomes, ordem, composição e linguagem visual próprios.",
+      "Não entregue uma arquitetura mínima de 2 ou 3 blocos se existem dados suficientes para uma experiência comercial completa.",
       "Retorne somente JSON válido."
     ].join(" "),
     prompt:[
@@ -160,6 +177,9 @@ function validateComponent(name,source){
   if(/\sstyle\s*=/i.test(jsx))errors.push("style= e CSS inline são proibidos");
   if(/@tailwind|@apply/i.test(css))errors.push("Tailwind é proibido");
   if(/\b(interface|enum|implements)\b|React\.FC|:\s*(string|number|boolean)\b/.test(jsx))errors.push("TypeScript é proibido");
+  const needsClient=/\b(useState|useEffect|useLayoutEffect|useReducer|useRef|useMemo|useCallback|useTransition)\b|\b(window|document|requestAnimationFrame|cancelAnimationFrame)\b/.test(jsx);
+  const hasUseClient=/^\s*["']use client["'];/.test(jsx);
+  if(needsClient&&!hasUseClient)errors.push('componente usa hooks/API de browser e precisa começar com "use client";');
   if(!jsx.includes('import styles from "./'+name+'.module.css"')&&!jsx.includes("import styles from './"+name+".module.css'"))errors.push("importe o CSS Module próprio como styles");
   if(!/styles\./.test(jsx))errors.push("use classes do CSS Module");
   const imports=[...jsx.matchAll(/from\s+["']([^"']+)["']/g)].map(function(match){return match[1]});
@@ -178,6 +198,8 @@ function componentRequest(site,plan,component,errors){
       "Proibido: TypeScript, Tailwind, styled-components, emotion, CSS-in-JS, style=, bibliotecas de UI e dependências externas.",
       "O JSX deve importar exatamente ./"+component.name+".module.css como styles.",
       "Pode importar hooks de react e utilidades locais relativas. Use img em vez de next/image.",
+      "Se usar hooks React, window, document, requestAnimationFrame, listeners ou qualquer API de browser, a PRIMEIRA linha do JSX deve ser exatamente \"use client\";.",
+      "Se não precisar de interatividade no cliente, mantenha o componente como Server Component.",
       "O componente recebe a prop site. Use somente fatos existentes em site.",
       "Todo visual fica no CSS Module. CSS deve ser mobile-first; amplie com @media (min-width:...).",
       "Acessibilidade, foco visível e touch targets são obrigatórios.",
@@ -188,7 +210,7 @@ function componentRequest(site,plan,component,errors){
       "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy}),
       "COMPONENTE: "+JSON.stringify(component),
       "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --radius.",
-      "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\";",
+      "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\"; e chame sempre actionHref(action, site), por exemplo actionHref(site.ctas?.primary?.action, site).",
       errors.length?"CORRIJA ESTES ERROS: "+errors.join(" | "):""
     ].filter(Boolean).join("\n\n")
   };
@@ -198,12 +220,12 @@ function fallbackComponent(component){
   let body="";
   let importAction="";
   if(role==="hero"){
-    importAction='import { actionHref } from "../../lib/siteActions.js";\n';
+    importAction='"use client";\n\nimport { actionHref } from "../../lib/siteActions.js";\n';
     body='<section className={styles.root} id="top"><div className={styles.content}><p className={styles.kicker}>{site.eyebrow}</p><h1>{site.heroTitle}</h1><p>{site.heroText}</p><a className={styles.cta} href={actionHref(site.ctas?.primary?.action, site)}>{site.ctas?.primary?.label || "Falar agora"}</a></div>{site.images?.[0] ? <img className={styles.image} src={site.images[0]} alt={site.brandName} /> : null}</section>';
   }else if(role==="footer"){
     body='<footer className={styles.root}><strong>{site.brandName}</strong><span>{site.city || ""}</span></footer>';
   }else if(role==="mobile-cta"){
-    importAction='import { actionHref } from "../../lib/siteActions.js";\n';
+    importAction='"use client";\n\nimport { actionHref } from "../../lib/siteActions.js";\n';
     body='<div className={styles.root}><a href={actionHref(site.ctas?.primary?.action, site)}>{site.ctas?.primary?.label || "Contato"}</a></div>';
   }else{
     body='<section className={styles.root}><h2>{site.aboutTitle || site.brandName}</h2><p>{site.aboutText || site.proofText || site.contactText || ""}</p></section>';
@@ -233,7 +255,7 @@ async function concurrent(items,limit,fn){
   return output;
 }
 function actionLib(){
-  return 'export function actionHref(action, site = {}) {\n  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;\n  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\\d]/g, "");\n  if (action === "instagram" && site.instagram) return site.instagram;\n  if (action === "maps" && site.mapsLink) return site.mapsLink;\n  return "#contato";\n}\n';
+  return 'export function actionHref(actionInput, siteInput = {}) {\n  let action = actionInput;\n  let site = siteInput;\n  if (actionInput && typeof actionInput === "object" && typeof siteInput === "string") { site = actionInput; action = siteInput; }\n  else if (actionInput && typeof actionInput === "object" && actionInput.action) { action = actionInput.action; site = siteInput || {}; }\n  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;\n  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\\d]/g, "");\n  if (action === "instagram" && site.instagram) return site.instagram;\n  if (action === "maps" && site.mapsLink) return site.mapsLink;\n  return "#contato";\n}\n';
 }
 function pageSource(plan){
   const imports=plan.components.map(function(item){return 'import '+item.name+' from "../components/'+item.name+'/'+item.name+'.jsx";'}).join("\n");
@@ -282,7 +304,7 @@ async function writeProject(root,folderName,site,plan,sources){
 }
 async function reviewSources(site,plan,sources){
   const snapshot=plan.components.map(function(component,index){
-    return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,7000),css:clean(sources[index]?.css,7000)};
+    return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,3200),css:clean(sources[index]?.css,4200)};
   });
   const result=await generateWithDefaultProvider({
     model:roleModel("review"),
@@ -307,9 +329,18 @@ async function reviewSources(site,plan,sources){
   let data;
   try{data=await parseJsonWithRepair(result.text,"review")}catch{return[]}
   const known=new Set(plan.components.map(function(item){return item.name}));
-  return (Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
+  const severityOrder={high:0,medium:1};
+  const valid=(Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
     return known.has(issue?.component)&&["high","medium"].includes(String(issue?.severity||"").toLowerCase())&&clean(issue?.instruction,1200);
-  }).slice(0,5).map(function(issue){return{component:issue.component,note:"REVISÃO FINAL: "+clean(issue.instruction,1200)}});
+  }).sort(function(a,b){return severityOrder[String(a.severity).toLowerCase()]-severityOrder[String(b.severity).toLowerCase()]});
+  const grouped=new Map();
+  for(const issue of valid){
+    if(!grouped.has(issue.component))grouped.set(issue.component,[]);
+    grouped.get(issue.component).push("["+String(issue.severity).toUpperCase()+"] "+clean(issue.instruction,1200));
+  }
+  return [...grouped.entries()].slice(0,5).map(function(entry){
+    return {component:entry[0],note:"REVISÃO FINAL CONSOLIDADA:\n- "+entry[1].join("\n- ")};
+  });
 }
 async function rewriteComponents(root,plan,sources,names){
   for(const name of names){
