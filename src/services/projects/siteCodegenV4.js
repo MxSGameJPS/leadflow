@@ -385,9 +385,12 @@ async function validateProject(root,plan){
   return errors;
 }
 async function runBuild(root){
-  const nextBin=path.join(process.cwd(),"node_modules","next","dist","bin","next");
+  const generatedNext=path.join(root,"node_modules","next","dist","bin","next");
+  const rootNext=path.join(process.cwd(),"node_modules","next","dist","bin","next");
+  let nextBin=rootNext;
+  try{await fs.access(generatedNext);nextBin=generatedNext}catch{}
   try{
-    const result=await execFileAsync(process.execPath,[nextBin,"build"],{cwd:root,timeout:180000,maxBuffer:3*1024*1024,env:{...process.env,NEXT_TELEMETRY_DISABLED:"1"}});
+    const result=await execFileAsync(process.execPath,[nextBin,"build"],{cwd:root,timeout:180000,maxBuffer:3*1024*1024,env:{...process.env,NODE_ENV:"production",NEXT_TELEMETRY_DISABLED:"1"}});
     return{ok:true,log:(result.stdout||"")+"\n"+(result.stderr||"")};
   }catch(error){
     return{ok:false,log:clean((error.stdout||"")+"\n"+(error.stderr||"")+"\n"+error.message,80000)};

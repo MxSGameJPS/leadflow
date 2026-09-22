@@ -57,7 +57,7 @@ export async function ensureProjectPreviewServer(folderPath){
   const nextBin=path.join(process.cwd(),"node_modules","next","dist","bin","next");
   const child=spawn(process.execPath,[nextBin,"dev","-H","127.0.0.1","-p",String(port)],{
     cwd:key,
-    env:{...process.env,NEXT_TELEMETRY_DISABLED:"1"},
+    env:{...process.env,NODE_ENV:"development",NEXT_TELEMETRY_DISABLED:"1"},
     stdio:["ignore","pipe","pipe"],
     windowsHide:true,
   });
