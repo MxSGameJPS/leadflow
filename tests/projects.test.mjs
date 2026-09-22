@@ -10,10 +10,15 @@ const projectDir = path.join(root, "data", "projects");
 
 const { createSiteProject, deleteSiteProject, getSiteProject } = await import("../src/services/projects/projectStore.js");
 const { generateSiteFolder, parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
+const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV4.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
 assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
+assert.equal(parseCodegenJson('```json\n{"concept":"premium","components":[]}\n```').concept, "premium");
+assert.equal(parseCodegenJson('Texto antes\n{"concept":"editorial","components":[]}\nTexto depois').concept, "editorial");
+assert.equal(parseCodegenJson("{ concept: 'autoral', components: [], }").concept, "autoral");
+assert.equal(parseCodegenJson('<think>planejando</think>\n~~~json\n{"concept":"clean","components":[]}\n~~~').concept, "clean");
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");

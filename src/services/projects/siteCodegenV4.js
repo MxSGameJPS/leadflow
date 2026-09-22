@@ -13,14 +13,61 @@ function roleModel(role){
   const env={architect:"LEADFLOW_SITE_MODEL_ARCHITECT",code:"LEADFLOW_SITE_MODEL_CODE",review:"LEADFLOW_SITE_MODEL_REVIEW"};
   return clean(process.env[env[role]]||"",300);
 }
-function parseJson(text){
-  let raw=clean(text,400000);
-  const fence=raw.match(/^\s*~~~(?:json)?\s*([\s\S]*?)\s*~~~\s*$/i);
-  if(fence)raw=fence[1];
-  try{return JSON.parse(raw)}catch{}
+function stripReasoningAndFences(value){
+  let raw=clean(value,400000).replace(/^\uFEFF/,"").trim();
+  raw=raw.replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
+  const fullFence=raw.match(/^\s*(?:```|~~~)(?:json|javascript|js)?\s*([\s\S]*?)\s*(?:```|~~~)\s*$/i);
+  if(fullFence)raw=fullFence[1].trim();
+  else {
+    const anyFence=raw.match(/(?:```|~~~)(?:json|javascript|js)?\s*([\s\S]*?)\s*(?:```|~~~)/i);
+    if(anyFence)raw=anyFence[1].trim();
+  }
+  return raw;
+}
+function jsonCandidates(text){
+  const raw=stripReasoningAndFences(text);
+  const candidates=[raw];
   const start=raw.indexOf("{"),end=raw.lastIndexOf("}");
-  if(start>=0&&end>start){try{return JSON.parse(raw.slice(start,end+1))}catch{}}
-  throw new Error("A IA não retornou JSON válido.");
+  if(start>=0&&end>start)candidates.push(raw.slice(start,end+1));
+  return [...new Set(candidates.filter(Boolean))];
+}
+function relaxJson(raw){
+  return String(raw)
+    .replace(/\/\*[\s\S]*?\*\//g,"")
+    .replace(/(^|[^:])\/\/.*$/gm,"$1")
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'")
+    .replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$-]*)\s*:/g,'$1"$2":')
+    .replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*[,}])/g,function(_,value){return ': "'+String(value).replace(/"/g,'\\\"')+'"';})
+    .replace(/,\s*([}\]])/g,"$1");
+}
+export function parseCodegenJson(text){
+  let lastError=null;
+  for(const candidate of jsonCandidates(text)){
+    for(const attempt of [candidate,relaxJson(candidate)]){
+      try{
+        const parsed=JSON.parse(attempt);
+        if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed))return parsed;
+      }catch(error){lastError=error}
+    }
+  }
+  const detail=lastError?.message?": "+lastError.message:"";
+  throw new Error("A IA não retornou JSON válido"+detail+".");
+}
+function parseJson(text){return parseCodegenJson(text)}
+async function parseJsonWithRepair(text,role="review"){
+  try{return parseCodegenJson(text)}catch(firstError){
+    const repair=await generateWithDefaultProvider({
+      model:roleModel(role)||roleModel("architect"),
+      temperature:0,
+      maxTokens:12000,
+      systemPrompt:"Você é um reparador de JSON. Retorne SOMENTE JSON estrito RFC 8259, sem markdown, sem comentários, sem explicações e sem texto antes ou depois. Preserve fielmente todos os valores e a estrutura do conteúdo recebido.",
+      prompt:"Converta o conteúdo abaixo para JSON estrito válido. Não resuma e não invente campos.\n\n"+clean(text,50000),
+    });
+    try{return parseCodegenJson(repair.text)}catch(secondError){
+      throw new Error("A arquitetura retornou JSON inválido mesmo após reparo automático. Primeira falha: "+firstError.message+" Reparo: "+secondError.message);
+    }
+  }
 }
 function pascal(value){
   const parts=clean(value,80).replace(/([a-z])([A-Z])/g,"$1 $2").split(/[^a-zA-Z0-9]+/).filter(Boolean);
@@ -254,7 +301,7 @@ async function reviewSources(site,plan,sources){
     ].join("\n\n")
   });
   let data;
-  try{data=parseJson(result.text)}catch{return[]}
+  try{data=await parseJsonWithRepair(result.text,"review")}catch{return[]}
   const known=new Set(plan.components.map(function(item){return item.name}));
   return (Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
     return known.has(issue?.component)&&["high","medium"].includes(String(issue?.severity||"").toLowerCase())&&clean(issue?.instruction,1200);
@@ -307,8 +354,24 @@ export async function generateUniqueSiteCode(options={}){
   let plan;
   if(skipAi)plan=fallbackPlan(site);
   else{
-    const result=await generateWithDefaultProvider(architectureRequest(site,options.instruction||"",options.currentPlan||null));
-    plan=normalizePlan(parseJson(result.text),site);
+    const request=architectureRequest(site,options.instruction||"",options.currentPlan||null);
+    let result=await generateWithDefaultProvider(request);
+    try{
+      plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
+    }catch(firstError){
+      result=await generateWithDefaultProvider({
+        ...request,
+        temperature:0.35,
+        maxTokens:16000,
+        systemPrompt:request.systemPrompt+" ATENÇÃO: sua tentativa anterior não pôde ser interpretada. Retorne exclusivamente um objeto JSON estrito iniciado por { e terminado por }, sem cercas de código, comentários, raciocínio, texto introdutório ou conclusão.",
+        prompt:request.prompt+"\n\nEsta é uma nova tentativa porque a resposta anterior não era JSON válido. Obedeça rigorosamente ao formato JSON.",
+      });
+      try{
+        plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
+      }catch(secondError){
+        throw new Error("O arquiteto não conseguiu produzir a estrutura JSON do site após duas tentativas e reparo automático. "+secondError.message);
+      }
+    }
   }
   plan=normalizePlan(plan,site);
   const sources=await concurrent(plan.components,3,function(component){return generateComponent(site,plan,component,skipAi)});
