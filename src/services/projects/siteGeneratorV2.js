@@ -850,8 +850,8 @@ Skills do LeadFlow: ${(data.skills || []).join(", ") || "briefing-base"}
 Preserve apenas informações verificáveis. Não invente serviços, resultados, preços ou depoimentos.
 Aprimore composição, tipografia, imagens, responsividade, acessibilidade WCAG AA e movimento com propósito.
 Evite aparência de template, estética genérica de IA, excesso de cards, gradientes gratuitos e animações decorativas.
-Mantenha o runtime compartilhado leve: CSS, transform/opacity e IntersectionObserver; não introduza bibliotecas de animação sem necessidade.
-Antes de entregar, valide 320px, 768px, 1024px e 1440px, foco por teclado e prefers-reduced-motion.
+Mantenha o projeto componentizado: cada componente em sua própria pasta com JSX e CSS Module. Não use Tailwind, TypeScript, CSS inline ou style={{}}. Preserve a identidade específica deste lead e não transforme a página em um template genérico.
+Antes de entregar, valide 320px, 360px, 390px, 768px, 1024px e 1440px, foco por teclado e prefers-reduced-motion.
 \`\`\`
 `;
 }

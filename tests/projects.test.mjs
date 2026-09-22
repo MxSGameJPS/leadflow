@@ -79,14 +79,29 @@ const generated = await generateSiteFolder({
   skipAi: true,
   effects: ["entrance-motion", "section-reveal"],
 });
-const runtimeSource = await fs.readFile(path.join(root, "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx"), "utf8");
-const runtimeCssSource = await fs.readFile(path.join(root, "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.module.css"), "utf8");
-const exportedRuntime = await fs.readFile(path.join(root, generated.folderPath, "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx"), "utf8");
-const exportedRuntimeCss = await fs.readFile(path.join(root, generated.folderPath, "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.module.css"), "utf8");
-const exportedPage = await fs.readFile(path.join(root, generated.folderPath, "app", "page.js"), "utf8");
-assert.equal(exportedRuntime, runtimeSource);
-assert.equal(exportedRuntimeCss, runtimeCssSource);
-assert.match(exportedPage, /GeneratedSiteRuntime/);
+const generatedRoot = path.join(root, generated.folderPath);
+const exportedPage = await fs.readFile(path.join(generatedRoot, "app", "page.jsx"), "utf8");
+const exportedLayout = await fs.readFile(path.join(generatedRoot, "app", "layout.jsx"), "utf8");
+const exportedPackage = JSON.parse(await fs.readFile(path.join(generatedRoot, "package.json"), "utf8"));
+const generationFormat = JSON.parse(await fs.readFile(path.join(generatedRoot, "generation-format.json"), "utf8"));
+assert.equal(exportedPackage.dependencies.next, "latest");
+assert.equal(exportedPackage.dependencies.react, "latest");
+assert.equal(exportedPackage.dependencies["react-dom"], "latest");
+assert.equal(generationFormat.format, "unique-codegen-v4");
+assert.match(exportedPage, /components\//);
+assert.match(exportedLayout, /theme\.module\.css/);
+assert.ok(!exportedPage.includes("GeneratedSiteRuntime"));
+assert.ok(generated.siteData.codegenPlan?.components?.length >= 3);
+for (const component of generated.siteData.codegenPlan.components) {
+  const componentDir = path.join(generatedRoot, "components", component.name);
+  const jsx = await fs.readFile(path.join(componentDir, component.name + ".jsx"), "utf8");
+  const css = await fs.readFile(path.join(componentDir, component.name + ".module.css"), "utf8");
+  assert.match(jsx, new RegExp(component.name + "\\.module\\.css"));
+  assert.match(jsx, /styles\./);
+  assert.ok(!/\sstyle\s*=/.test(jsx), component.name + " não pode usar CSS inline");
+  assert.ok(!/@tailwind|@apply/.test(css), component.name + " não pode usar Tailwind");
+  assert.ok(css.length > 40);
+}
 assert.ok(generated.siteData.design.composition?.archetype);
 assert.equal(generated.siteData.blueprint?.version, 3);
 assert.equal(generated.siteData.blueprint?.sections?.[0]?.type, "hero");
@@ -94,11 +109,6 @@ assert.equal(generated.siteData.blueprint?.sections?.at(-1)?.type, "contact");
 assert.ok(!generated.siteData.blueprint.sections.some(section => section.type === "services"), "fallback sem serviços comprovados não deve renderizar seção de serviços");
 assert.ok(["whatsapp","phone","maps","instagram","contact"].includes(generated.siteData.ctas?.primary?.action));
 assert.ok(!generated.siteData.blueprint.sections.some(section => section.type === "location"), "sem endereço/maps não deve haver seção de localização");
-assert.match(runtimeSource, /MobileActionBar/);
-assert.match(runtimeCssSource, /max-width:768px/);
-assert.match(runtimeCssSource, /mobileActionBar/);
-assert.match(runtimeCssSource, /max-width:390px/);
-assert.match(runtimeCssSource, /scroll-snap-type:x mandatory/);
 await fs.rm(path.join(root, generated.folderPath), { recursive: true, force: true });
 
 const commercialFolder = `generated-sites/commercial-contract-${stamp}`;
