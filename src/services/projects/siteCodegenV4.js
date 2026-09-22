@@ -270,9 +270,10 @@ async function rewriteComponents(root,plan,sources,names){
   }
 }
 function componentNamesFromBuildLog(log,plan){
+  const normalized=String(log||"").replace(/\\\\/g,"/");
   const names=[];
   for(const component of plan.components){
-    if(String(log).includes("components/"+component.name+"/")||String(log).includes("components\\\\ "+component.name+"\\".replace(" ","")))names.push(component.name);
+    if(normalized.includes("components/"+component.name+"/"))names.push(component.name);
   }
   return [...new Set(names)].slice(0,4);
 }
