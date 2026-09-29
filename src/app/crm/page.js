@@ -16,6 +16,8 @@ export default async function CRMPage() {
       lastContactKind: workspaces[index].lastContactKind || "",
       contactCount: Number(workspaces[index].contactCount || 0),
       previewUrl: workspaces[index].previewUrl || "",
+      stageEnteredAt: workspaces[index].stageEnteredAt || "",
+      stageHistory: workspaces[index].stageHistory || [],
       commercialTrack: resolveCommercialTrack(lead, workspaces[index]),
       stageProbability: pipelineStage(lead.stage).probability,
       weightedValue: weightedPipelineValue(lead),
