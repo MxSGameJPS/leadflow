@@ -20,6 +20,16 @@ const DEFAULT_WORKSPACE = Object.freeze({
   lastContactAt: "",
   lastContactKind: "",
   contactCount: 0,
+  outreach: {
+    emailSubject: "",
+    emailBody: "",
+    instagram: "",
+    linkedin: "",
+    coldCall: "",
+    generatedAt: "",
+    providerName: "",
+    model: "",
+  },
   strategyMap: {
     nodes: [],
     edges: [],
@@ -154,6 +164,20 @@ function normalizeStrategyMap(value) {
   return { nodes, edges };
 }
 
+function normalizeOutreach(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return {
+    emailSubject: cleanText(input.emailSubject, 220).trim(),
+    emailBody: cleanText(input.emailBody, 5000).trim(),
+    instagram: cleanText(input.instagram, 1800).trim(),
+    linkedin: cleanText(input.linkedin, 1200).trim(),
+    coldCall: cleanText(input.coldCall, 2500).trim(),
+    generatedAt: cleanTimestamp(input.generatedAt),
+    providerName: cleanText(input.providerName, 180).trim(),
+    model: cleanText(input.model, 180).trim(),
+  };
+}
+
 function normalizeObjectionAssistant(value) {
   const input = value && typeof value === "object" ? value : {};
   const tone = ["natural", "short", "consultative", "direct"].includes(input.tone) ? input.tone : "natural";
@@ -207,6 +231,7 @@ function normalizeWorkspace(input = {}) {
     lastContactAt: cleanTimestamp(input.lastContactAt),
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
+    outreach: normalizeOutreach(input.outreach),
     strategyMap: normalizeStrategyMap(input.strategyMap),
     objectionAssistant: normalizeObjectionAssistant(input.objectionAssistant),
     appointment: {
@@ -278,6 +303,7 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
   const merged = normalizeWorkspace({
     ...current,
     ...patch,
+    outreach: { ...current.outreach, ...(patch.outreach || {}) },
     appointment: { ...current.appointment, ...(patch.appointment || {}) },
     sale: { ...current.sale, ...(patch.sale || {}) },
     consulting: { ...current.consulting, ...(patch.consulting || {}) },

@@ -24,6 +24,7 @@ const {
   buildObjectionAdvisorPrompt,
   analyzeLeadConversation,
 } = await import("../src/services/ai/objectionAdvisorService.js");
+const { buildLeadOutreachPrompt } = await import("../src/services/ai/leadOutreachService.js");
 
 let pass = 0, fail = 0;
 const t = (name, condition) => {
@@ -158,6 +159,14 @@ try {
   });
   t("gera última tentativa com IA", lastAttemptMessage.text.includes("mensagem gerada"));
   t("envia contexto de última tentativa ao provedor", requests.at(-1).body.messages[1].content.includes("última tentativa após duas mensagens sem resposta"));
+
+  const outreachPrompt = buildLeadOutreachPrompt({
+    lead: { name: "Mercado Silva", segment: "Mercado", city: "Dois Irmãos", googleRating: "4.8", googleReviews: "140" },
+    profile: { name: "Saulo", profession: "Desenvolvedor" },
+    workspace: { previewUrl: "https://preview.example.com" },
+  });
+  t("pacote multicanal inclui lead e prévia", outreachPrompt.prompt.includes("Mercado Silva") && outreachPrompt.prompt.includes("preview.example.com"));
+  t("pacote multicanal proíbe invenções", outreachPrompt.systemPrompt.includes("Não invente"));
 
   const objectionPrompt = buildObjectionAdvisorPrompt({
     lead: { name: "Mercado Silva", segment: "Mercado", proposalValue: 1500 },

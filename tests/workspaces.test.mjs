@@ -13,6 +13,7 @@ try {
   assert.equal(empty.lastContactAt, "");
   assert.equal(empty.lastContactKind, "");
   assert.equal(empty.contactCount, 0);
+  assert.equal(empty.outreach.emailBody, "");
   assert.deepEqual(empty.strategyMap, { nodes: [], edges: [] });
   assert.equal(empty.objectionAssistant.conversation, "");
   assert.equal(empty.objectionAssistant.tone, "natural");
@@ -52,6 +53,16 @@ try {
         { id: "invalida", from: "lead", to: "nao_existe" },
       ],
     },
+    outreach: {
+      emailSubject: "Uma ideia para o Mercado",
+      emailBody: "Mensagem de teste",
+      instagram: "Oi pelo Instagram",
+      linkedin: "Conexão",
+      coldCall: "Bom dia",
+      generatedAt: "2026-09-20T18:00:00.000Z",
+      providerName: "Teste",
+      model: "modelo-teste",
+    },
     objectionAssistant: {
       conversation: "CLIENTE: Achei caro.",
       tone: "consultative",
@@ -72,6 +83,8 @@ try {
   assert.equal(sanitized.strategyMap.edges.length, 1);
   assert.equal(sanitized.strategyMap.edges[0].from, "lead");
   assert.equal(sanitized.strategyMap.edges[0].to, "contato");
+  assert.equal(sanitized.outreach.emailSubject, "Uma ideia para o Mercado");
+  assert.equal(sanitized.outreach.model, "modelo-teste");
   assert.equal(sanitized.objectionAssistant.objectionType, "Preço");
   assert.equal(sanitized.objectionAssistant.interestLevel, "médio");
   assert.equal(sanitized.objectionAssistant.objective, "negotiate");

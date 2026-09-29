@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
+import { generateLeadOutreachPack } from "../../services/ai/leadOutreachService.js";
 import { analyzeLeadConversation } from "../../services/ai/objectionAdvisorService.js";
 import { getLead } from "../../repositories/leadRepository.js";
 import { getLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
@@ -46,6 +47,21 @@ export async function generateLeadMessageAction(payload) {
   return generateLeadMessage({ ...(payload || {}), profile });
 }
 
+export async function generateLeadOutreachPackAction(payload = {}) {
+  const leadId = String(payload.leadId || "").trim();
+  const lead = await getLead(leadId);
+  if (!lead) throw new Error("Lead não encontrado.");
+  const [profile, workspace] = await Promise.all([
+    getProfessionalProfile(),
+    getLeadWorkspace(lead.id),
+  ]);
+  return generateLeadOutreachPack({
+    lead,
+    profile,
+    workspace,
+    providerId: payload.providerId,
+  });
+}
 
 export async function analyzeLeadConversationAction(payload = {}) {
   const leadId = String(payload.leadId || "").trim();

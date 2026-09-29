@@ -95,6 +95,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const initialMessages = buildProfileMessages(initialLead, initialProfile, initialWorkspace.previewUrl);
   const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript({ ...initialLead, previewUrl: initialWorkspace.previewUrl }, initialProfile));
   const [whatsappMessage, setWhatsappMessage] = useState(initialWorkspace.whatsappMessage || initialMessages.initial);
+  const [outreach, setOutreach] = useState(initialWorkspace.outreach || {});
   const [instagram, setInstagram] = useState(initialLead.instagram || "");
   const [previewUrl, setPreviewUrl] = useState(initialWorkspace.previewUrl || "");
   const [proposalValue, setProposalValue] = useState(String(initialLead.proposalValue || ""));
@@ -201,6 +202,37 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
         await persistWorkspace({ whatsappMessage: result.text });
       }
       setNotice(`Conteúdo gerado por ${result.providerName}${result.model ? ` · ${result.model}` : ""}. Revise antes de usar.`);
+    } catch (error) {
+      setNotice(`IA: ${error.message}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generateOutreachPack() {
+    setBusy("outreach-pack");
+    setNotice("");
+    try {
+      const result = await AIActions.generateLeadOutreachPackAction({ leadId: lead.id });
+      const nextOutreach = {
+        emailSubject: result.emailSubject || "",
+        emailBody: result.emailBody || "",
+        instagram: result.instagram || "",
+        linkedin: result.linkedin || "",
+        coldCall: result.coldCall || "",
+        generatedAt: result.generatedAt || new Date().toISOString(),
+        providerName: result.providerName || "",
+        model: result.model || "",
+      };
+      setOutreach(nextOutreach);
+      if (result.whatsapp) setWhatsappMessage(result.whatsapp);
+      if (result.coldCall) setCallScript(result.coldCall);
+      await persistWorkspace({
+        outreach: nextOutreach,
+        ...(result.whatsapp ? { whatsappMessage: result.whatsapp } : {}),
+        ...(result.coldCall ? { callScript: result.coldCall } : {}),
+      });
+      setNotice(`Pacote multicanal gerado por ${result.providerName || "IA"}${result.model ? ` · ${result.model}` : ""}. Revise antes de usar.`);
     } catch (error) {
       setNotice(`IA: ${error.message}`);
     } finally {
@@ -363,6 +395,17 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
         <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
         <textarea value={whatsappMessage} onChange={event => setWhatsappMessage(event.target.value)} />
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "whatsapp"} onClick={() => generateAI("whatsapp")}>{busy === "whatsapp" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ whatsappMessage }, "Mensagem salva.")}>Salvar</button><button onClick={() => copy(whatsappMessage, "Mensagem copiada.")}>Copiar</button></div>
+      </div>
+
+      <div className={s.outreachPanel}>
+        <div className={s.outreachHeader}><div><span className={s.aiBadge}>✦ IA</span><h3>Pacote multicanal</h3><p>Gera uma abordagem coerente para e-mail, WhatsApp, Instagram, LinkedIn e ligação usando o contexto deste lead.</p></div><button className={s.primary} disabled={busy === "outreach-pack"} onClick={generateOutreachPack}>{busy === "outreach-pack" ? "Gerando..." : "Gerar pacote completo"}</button></div>
+        <div className={s.outreachGrid}>
+          <article className={s.outreachCard}><div><strong>E-mail</strong><button onClick={() => copy([outreach.emailSubject, outreach.emailBody].filter(Boolean).join("\n\n"), "E-mail copiado.")}>Copiar</button></div><input value={outreach.emailSubject || ""} onChange={event => setOutreach(current => ({ ...current, emailSubject: event.target.value }))} placeholder="Assunto" /><textarea value={outreach.emailBody || ""} onChange={event => setOutreach(current => ({ ...current, emailBody: event.target.value }))} placeholder="Corpo do e-mail" /></article>
+          <article className={s.outreachCard}><div><strong>Instagram DM</strong><button onClick={() => copy(outreach.instagram || "", "DM copiada.")}>Copiar</button></div><textarea value={outreach.instagram || ""} onChange={event => setOutreach(current => ({ ...current, instagram: event.target.value }))} placeholder="Mensagem para Instagram" /></article>
+          <article className={s.outreachCard}><div><strong>LinkedIn</strong><button onClick={() => copy(outreach.linkedin || "", "Mensagem LinkedIn copiada.")}>Copiar</button></div><textarea value={outreach.linkedin || ""} onChange={event => setOutreach(current => ({ ...current, linkedin: event.target.value }))} placeholder="Nota de conexão / primeira mensagem" /></article>
+          <article className={s.outreachCard}><div><strong>Abertura de ligação</strong><button onClick={() => copy(outreach.coldCall || "", "Abertura copiada.")}>Copiar</button></div><textarea value={outreach.coldCall || ""} onChange={event => setOutreach(current => ({ ...current, coldCall: event.target.value }))} placeholder="Abertura de ligação" /></article>
+        </div>
+        <div className={s.buttonRow}><button onClick={() => persistWorkspace({ outreach }, "Pacote multicanal salvo.")}>Salvar edições</button>{outreach.generatedAt && <span className={s.outreachMeta}>Gerado {new Date(outreach.generatedAt).toLocaleString("pt-BR")}{outreach.providerName ? ` · ${outreach.providerName}` : ""}{outreach.model ? ` · ${outreach.model}` : ""}</span>}</div>
       </div>
     </section>;
   }
