@@ -8,6 +8,7 @@ import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { evidenceDecision, scoreEvidence } from "../src/services/leads/evidenceLedger.js";
 import { automationEvent, evaluateAutomationConditions, runAutomationRules } from "../src/services/automation/automationEngine.js";
 import { operationalRisk } from "../src/services/leads/operationalRisk.js";
+import { normalizeCustomFieldDefinitions, normalizeCustomFieldValues, validateCustomFieldValue } from "../src/services/leads/customFields.js";
 import { daysInCurrentStage, leadInactivity, pipelineForecast, pipelineStage, weightedPipelineValue } from "../src/services/leads/pipelineIntelligence.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
@@ -165,3 +166,10 @@ const noNext=operationalRisk({stage:"contatado",nextAction:"",followUpAt:"",crea
 t("radar prioriza demanda aberta sem proximo passo",noNext.bucket==="no_next_action"&&noNext.priority===100);
 const inFlight=operationalRisk({stage:"contatado",nextAction:"Retornar",followUpAt:"2026-10-02",createdAt:"2026-09-28T10:00:00.000Z",updatedAt:"2026-09-28T10:00:00.000Z"},{},new Date("2026-09-29T12:00:00.000Z"));
 t("radar reconhece follow-up futuro como em voo",inFlight.bucket==="in_flight");
+
+const customDefs=normalizeCustomFieldDefinitions([{name:"Funcionários",label:"Funcionários",type:"number",required:true},{name:"concorrente atual",label:"Concorrente atual",type:"select",options:["Nenhum","Agência","Freelancer"]}]);
+t("campos customizados normalizam chaves estaveis",customDefs[0].name==="funcion_rios"||customDefs[0].name==="funcionrios");
+const customValues=normalizeCustomFieldValues(customDefs,{[customDefs[0].name]:"25",concorrente_atual:"Agência"});
+t("campos customizados validam e convertem tipos",customValues.valid===true&&customValues.values[customDefs[0].name]===25&&customValues.values.concorrente_atual==="Agência");
+t("select customizado rejeita valor fora das opcoes",validateCustomFieldValue(customDefs[1],"ERP desconhecido").valid===false);
+t("campo customizado obrigatorio acusa ausencia",normalizeCustomFieldValues(customDefs,{concorrente_atual:"Nenhum"}).valid===false);
