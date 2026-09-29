@@ -509,14 +509,14 @@ export default function CRMBoard({ initialLeads = [] }) {
               <span className={`${s.scoreBadge} ${s["grade" + lead.grade]}`}>{lead.score}</span>
               <div><strong>{lead.name}</strong><small>{lead.segment || "Sem categoria"} · {cityLabel(lead)}</small></div>
             </div>
-            <div><span className={s.stageBadge}><i style={{ background: STAGE_COLOR[lead.stage] || "#94a3b8" }} />{stage.label}</span></div>
+            <div><span className={s.stageBadge}><i style={{ background: STAGE_COLOR[lead.stage] || "#94a3b8" }} />{stage.label}</span><small>{lead.stageProbability}% · ponderado {BRL(lead.weightedValue || 0)}</small></div>
             <div className={s.presence}>
               <span className={lead.whatsapp || isPossibleMobile(lead.phone) ? s.presenceYes : ""}>WA</span>
               <span className={lead.instagram ? s.presenceYes : ""}>IG</span>
               <span className={lead.site && !lead.weakSite ? s.presenceYes : ""}>Site</span>
               <span className={["done", "sent"].includes(lead.landingStatus) ? s.presenceYes : ""}>Prévia</span>
             </div>
-            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}</div>
+            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}{lead.pipelineHealth?.stale ? <small>⚠ Estagnado há {lead.pipelineHealth.days ?? "?"} dias</small> : null}</div>
             <div className={s.nextActionCell}>{lead.nextAction || lead.followUpAt || priorityReason(lead)?.label || "Definir próximo passo"}</div>
           </article>;
         })}
@@ -568,7 +568,7 @@ export default function CRMBoard({ initialLeads = [] }) {
             <strong>{stage.label}</strong>
             <span>{byStage[stage.id]?.length || 0}</span>
           </div>
-          <small className={s.columnSub}>{stage.sub}</small>
+          <small className={s.columnSub}>{stage.sub} · {byStage[stage.id]?.[0]?.stageProbability ?? 0}% prob.</small>
           <div className={s.columnBody}>
             {(byStage[stage.id] || []).length === 0 ? <div className={s.pipelineEmpty}>Sem leads</div>
               : byStage[stage.id].map(lead => <article
@@ -581,7 +581,7 @@ export default function CRMBoard({ initialLeads = [] }) {
                 <div><span className={`${s.scoreBadge} ${s["grade" + lead.grade]}`}>{lead.score}</span><span className={s.tempLabel}>{GRADE_LABEL[lead.grade] || lead.grade}</span></div>
                 <h3>{lead.name}</h3>
                 <p>{lead.segment || "Sem categoria"} · {cityLabel(lead)}</p>
-                <small>{lastContactLabel(lead)}</small>
+                <small>{lastContactLabel(lead)}{lead.pipelineHealth?.stale ? " · ⚠ estagnado" : ""}{lead.proposalValue ? " · "+BRL(lead.weightedValue || 0)+" ponderado" : ""}</small>
               </article>)}
           </div>
         </div>)}
@@ -616,7 +616,7 @@ export default function CRMBoard({ initialLeads = [] }) {
         <select value={activeLead.stage} onChange={event => moveLead(activeLead.id, event.target.value)}>
           {STAGES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
-        <small>{stage.sub}</small>
+        <small>{stage.sub} · {activeLead.stageProbability}% de probabilidade padrão desta etapa</small>
       </div>
 
       <div className={s.quickFacts}>
