@@ -1,3 +1,4 @@
+const { buildQualificationCopilotPrompt } = await import("../src/services/ai/qualificationCopilotService.js");
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,3 +213,8 @@ try {
 
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
+
+const qualificationPrompt=buildQualificationCopilotPrompt({lead:{name:"Padaria Teste",stage:"novo",problem:"usa apenas Facebook"},workspace:{qualification:{budgetStatus:"unknown"},evidenceClaims:[{field:"site",value:"não encontrado",status:"suggested",band:"probable",score:.55,method:"website"}]}});
+assert.match(qualificationPrompt.systemPrompt,/nunca invente/i);
+assert.match(qualificationPrompt.prompt,/usa apenas Facebook/);
+assert.match(qualificationPrompt.prompt,/budgetStatus/);
