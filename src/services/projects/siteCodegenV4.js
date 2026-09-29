@@ -61,15 +61,17 @@ export function parseCodegenJson(text){
   throw new Error("A IA não retornou JSON válido"+detail+".");
 }
 function parseJson(text){return parseCodegenJson(text)}
-async function parseJsonWithRepair(text,role="review"){
+async function parseJsonWithRepair(text,role="review",onProgress=null){
   try{return parseCodegenJson(text)}catch(firstError){
+    try{await onProgress?.({phase:"architecture",title:"Normalizando resposta do arquiteto",detail:"A resposta veio fora do contrato JSON. Tentando extrair/reparar a estrutura sem perder o plano."})}catch{}
     const repair=await generateWithDefaultProvider({
       model:roleModel(role)||roleModel("architect"),
       temperature:0,
       maxTokens:7000,
       timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||180000),
-      retries:1,
-      systemPrompt:"Você é um reparador de JSON. Retorne SOMENTE JSON estrito RFC 8259, sem markdown, sem comentários, sem explicações e sem texto antes ou depois. Preserve fielmente todos os valores e a estrutura do conteúdo recebido.",
+      retries:0,
+      onAttempt:event=>onProgress?.({phase:"ai",title:event.status==="success"?"Reparo JSON concluído":event.status==="error"?"Reparo JSON falhou — fallback":"Reparando JSON",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"}),
+      systemPrompt:"Você é um serializador de dados. NÃO pesquise, NÃO use ferramentas, NÃO explique, NÃO converse. Sua única saída permitida é um objeto JSON RFC 8259. Retorne SOMENTE JSON estrito RFC 8259, sem markdown, sem comentários, sem explicações e sem texto antes ou depois. Preserve fielmente todos os valores e a estrutura do conteúdo recebido.",
       prompt:"Converta o conteúdo abaixo para JSON estrito válido. Não resuma e não invente campos.\n\n"+clean(text,50000),
     });
     try{return parseCodegenJson(repair.text)}catch(secondError){
@@ -524,7 +526,7 @@ async function reviewSources(site,plan,sources){
     ].join("\n\n")
   });
   let data;
-  try{data=await parseJsonWithRepair(result.text,"review")}catch{return[]}
+  try{data=await parseJsonWithRepair(result.text,"review",progress)}catch{return[]}
   const known=new Set(plan.components.map(function(item){return item.name}));
   const severityOrder={high:0,medium:1};
   const valid=(Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
@@ -608,8 +610,9 @@ export async function generateUniqueSiteCode(options={}){
     request.onAttempt=event=>progress({phase:"ai",title:event.status==="success"?"Arquiteto respondeu":event.status==="error"?"Arquiteto falhou — fallback":"Chamando arquiteto",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"});
     let result=await generateWithDefaultProvider(request);
     try{
-      plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
+      plan=normalizePlan(await parseJsonWithRepair(result.text,"review",progress),site);
     }catch(firstError){
+      await progress({phase:"architecture",title:"Arquiteto saiu do formato esperado",detail:"Executando nova tentativa com contrato JSON estrito antes de abortar."});
       result=await generateWithDefaultProvider({
         ...request,
         temperature:0.35,
@@ -618,7 +621,7 @@ export async function generateUniqueSiteCode(options={}){
         prompt:request.prompt+"\n\nEsta é uma nova tentativa porque a resposta anterior não era JSON válido. Obedeça rigorosamente ao formato JSON.",
       });
       try{
-        plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
+        plan=normalizePlan(await parseJsonWithRepair(result.text,"review",progress),site);
       }catch(secondError){
         throw new Error("O arquiteto não conseguiu produzir a estrutura JSON do site após duas tentativas e reparo automático. "+secondError.message);
       }
@@ -708,6 +711,7 @@ export async function generateUniqueSiteCode(options={}){
 }
 
 export async function refineUniqueSiteComponent(options={}){
+  const progress=async event=>{try{await options.onProgress?.(event)}catch{}};
   const root=path.resolve(process.cwd(),options.folderPath||"");
   const site=options.siteData||{};
   const plan=normalizePlan(options.currentPlan||site.codegenPlan||{},site);
@@ -722,6 +726,7 @@ export async function refineUniqueSiteComponent(options={}){
   try{currentJsx=await fs.readFile(jsxPath,"utf8");currentCss=await fs.readFile(cssPath,"utf8")}catch{throw new Error("Não foi possível carregar o componente selecionado.")}
   const siteDataPath=path.join(root,"data","siteData.js"),reportFile=path.join(root,"generation-report.json");
   return withFileTransaction([jsxPath,cssPath,siteDataPath,reportFile],async function(){
+  await progress({phase:"code",title:"Refinando "+name,detail:"O agente está preparando um patch incremental preservando o restante do componente.",file:"components/"+name+"/"+name+".jsx"});
   let patchResult=await generateComponentPatch(site,plan,component,{jsx:currentJsx,css:currentCss},instruction);
   let source=patchResult.source;
   const patchHistory=[{phase:"user",...patchResult.patch}];
