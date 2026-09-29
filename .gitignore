@@ -1,5 +1,6 @@
 node_modules
 .next
+data
 data/*.db
 data/*.db-journal
 data/*.db-wal

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { generateResilientWithDefaultProvider as generateWithDefaultProvider } from "../ai/providerService.js";
+import { generateSiteWithDefaultProvider as generateWithDefaultProvider } from "../ai/siteProviderService.js";
 import { productContractPrompt } from "./siteProductContract.js";
 import { runVisualQualityAudit } from "./siteVisualQa.js";
 import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
@@ -424,7 +424,7 @@ async function generateComponent(site,plan,component,skipAi,initialNotes=[],onAt
     try{result=await generateWithDefaultProvider({...componentRequest(site,plan,component,errors),onAttempt})}
     catch(error){
       const message=String(error?.message||error);
-      if(/tempo limite|timeout|HTTP (429|502|503|504)/i.test(message)){await onDegraded?.({component:component.name,reason:message});return fallbackComponent(component)}
+      if(["AI_TOOL_CALLS","AI_EMPTY_RESPONSE"].includes(error?.code)||/tempo limite|timeout|HTTP (429|502|503|504)/i.test(message)){await onDegraded?.({component:component.name,reason:message});return fallbackComponent(component)}
       throw error;
     }
     let source;
@@ -502,7 +502,7 @@ async function writeProject(root,folderName,site,plan,sources){
   }
   await Promise.all(writes);
 }
-async function reviewSources(site,plan,sources){
+async function reviewSources(site,plan,sources,progress){
   const snapshot=plan.components.map(function(component,index){
     return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,3200),css:clean(sources[index]?.css,4200)};
   });
@@ -510,7 +510,7 @@ async function reviewSources(site,plan,sources){
     model:roleModel("review"),
     temperature:.22,
     maxTokens:5000,
-    timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||180000),
+    timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||90000),
     retries:1,
     systemPrompt:[
       "Você é o revisor final de uma agência premium.",
@@ -527,7 +527,8 @@ async function reviewSources(site,plan,sources){
     ].join("\n\n")
   });
   let data;
-  try{data=await parseJsonWithRepair(result.text,"review",progress)}catch{return[]}
+  data=await parseJsonWithRepair(result.text,"review",progress);
+  if(!data || typeof data.pass!=="boolean" || !Array.isArray(data.issues))throw new Error("O reviewer retornou uma revisão sem o contrato esperado.");
   const known=new Set(plan.components.map(function(item){return item.name}));
   const severityOrder={high:0,medium:1};
   const valid=(Array.isArray(data.issues)?data.issues:[]).filter(function(issue){
@@ -632,7 +633,10 @@ export async function generateUniqueSiteCode(options={}){
   const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi,[],event=>progress({phase:"ai",title:event.status==="success"?component.name+" · modelo concluiu":event.status==="error"?component.name+" · modelo falhou":component.name+" · chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model",file:"components/"+component.name+"/"+component.name+".jsx"}),event=>progress({phase:"code",title:component.name+" · fallback seguro",detail:"O worker não respondeu ou retornou código inválido. O pipeline preservou a geração usando o plano arquitetural.",kind:"fallback",file:"components/"+component.name+"/"+component.name+".jsx"}));await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
   if(!skipAi){
     await progress({phase:"review",title:"Revisando código",detail:"O reviewer está procurando inconsistências antes do build."});
-    const review=await reviewSources(site,plan,sources);
+    let review=[];
+    try{review=await reviewSources(site,plan,sources,progress)}catch(error){
+      await progress({phase:"review",title:"Revisão por IA indisponível",detail:"Os componentes foram preservados. As validações de engenharia continuam; revisão por IA pendente. "+clean(error?.message,250),kind:"fallback"});
+    }
     if(review.length){
       await concurrent(review,2,async function(issue){
         const index=plan.components.findIndex(function(item){return item.name===issue.component});

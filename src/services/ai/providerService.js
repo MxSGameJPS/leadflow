@@ -90,8 +90,9 @@ function retryableProviderError(error) {
 function providerDelay(attempt) {
   return new Promise(resolve => setTimeout(resolve, 900 * Math.pow(2, attempt)));
 }
-async function requestJson(provider, { url, method = "POST", body, timeoutMs = null, retries = 0 }) {
+async function requestJson(provider, { url, method = "POST", body, timeoutMs = null, retries = 0, disableMemory = false }) {
   const headers = { Accept: "application/json", ...parseJsonObject(provider.headersJson, "Cabeçalhos adicionais") };
+  if (disableMemory) headers["x-omniroute-no-memory"] = "true";
   if (body !== undefined) headers["Content-Type"] = headers["Content-Type"] || "application/json";
   const target = authRequest(provider, url, headers);
   const effectiveTimeout = Math.round(clampNumber(timeoutMs ?? provider.timeout, provider.timeout || 60000, 1000, 900000));
@@ -132,15 +133,33 @@ function openAIUserContent(request) {
   if (!request.images.length) return request.prompt;
   return [{ type: "text", text: request.prompt }, ...request.images.flatMap(image => [{ type: "text", text: `Imagem de referência: ${image.label}` }, { type: "image_url", image_url: { url: image.dataUrl } }])];
 }
+function openAIEndpoint(baseUrl, endpoint) {
+  const base = baseUrl.replace(/\/+$/, "");
+  let suffix = "/" + endpoint.replace(/^\/+/, "");
+  if (/\/v1$/i.test(base) && /^\/v1\//i.test(suffix)) suffix = suffix.slice(3);
+  return base + suffix;
+}
+function completionText(content) {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content.filter(part => part?.type === "text" || part?.type === "output_text")
+    .map(part => typeof part.text === "string" ? part.text : "").join("\n").trim();
+}
+function generationResponseError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
 async function generateOpenAICompatible(provider, requestInput) {
   const request = normalizeGenerationRequest(requestInput), endpoint = provider.endpoint || "/chat/completions", messages = [];
   if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
   messages.push({ role: "user", content: openAIUserContent(request) });
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false, ...(request.disableTools ? { tool_choice: "none" } : {}) }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
+  const result = await requestJson(provider, { url: openAIEndpoint(provider.baseUrl, endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false, ...(request.disableTools ? { tool_choice: "none", tools: [] } : {}) }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0, disableMemory: request.disableTools });
   const message = getPath(result.data, "choices[0].message") || {};
-  const output = message.content ?? getPath(result.data, "choices[0].text") ?? getPath(result.data, "output_text");
-  if (request.disableTools && (Array.isArray(message.tool_calls) && message.tool_calls.length)) throw new Error("O provedor tentou executar ferramentas em uma geração stateless.");
-  if (typeof output !== "string" || !output.trim()) throw new Error(request.disableTools ? "O provedor não retornou conteúdo textual para a geração stateless." : "A resposta não contém texto no formato compatível com OpenAI.");
+  const hasToolCalls = message.tool_calls?.length || message.function_call || result.data?.content?.some?.(part => part.type === "tool_use");
+  if (hasToolCalls) throw generationResponseError("AI_TOOL_CALLS", "O provedor tentou executar ferramentas em uma geração de texto sem executor de ferramentas.");
+  const output = [message.content, getPath(result.data, "choices[0].text"), result.data?.output_text].map(completionText).find(Boolean);
+  if (!output) throw generationResponseError("AI_EMPTY_RESPONSE", "O provedor não retornou conteúdo textual utilizável no formato compatível com OpenAI.");
   return { ...result, text: output.trim() };
 }
 async function generateOllama(provider, requestInput) {
@@ -196,7 +215,7 @@ function fallbackModels(request={}){
   const primary=String(request.model||"").trim();
   return [...new Set([primary,...explicit,...env].filter(Boolean))];
 }
-function transientGenerationError(error){return retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)|ferramentas em uma geração stateless|não retornou conteúdo textual para a geração stateless/i.test(String(error?.message||""))}
+function transientGenerationError(error){return ["AI_TOOL_CALLS","AI_EMPTY_RESPONSE"].includes(error?.code)||retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)|ferramentas em uma geração stateless|não retornou conteúdo textual para a geração stateless/i.test(String(error?.message||""))}
 export async function generateResilientWithDefaultProvider(request={}){
   const providers=(await loadProviders()).filter(item=>item.enabled);
   const primary=providers.find(item=>item.isDefault)||providers[0];
@@ -207,11 +226,14 @@ export async function generateResilientWithDefaultProvider(request={}){
   for(const provider of providers){if(provider.id!==primary.id&&provider.model)routes.push({provider,model:provider.model})}
   const unique=routes.filter((route,index,list)=>list.findIndex(item=>item.provider.id===route.provider.id&&item.model===route.model)===index);
   const attempts=[];let lastError=null;
+  const deadline=request.disableTools ? Date.now()+Math.round(clampNumber(request.timeoutMs ?? primary.timeout,120000,1000,900000)) : Infinity;
   for(let index=0;index<unique.length;index++){
+    const remaining=deadline-Date.now();
+    if(remaining<1000)break;
     const {provider,model}=unique[index],started=Date.now();
     try{
       request.onAttempt?.({status:"start",model,providerName:provider.name,index:index+1,total:unique.length});
-      const result=await generateInternal(provider,{...request,model,retries:index===0?(request.retries??0):0});
+      const result=await generateInternal(provider,{...request,model,...(request.disableTools?{timeoutMs:remaining,retries:0}:{retries:index===0?(request.retries??0):0})});
       const item={model,status:"success",elapsedMs:Date.now()-started,providerName:result.providerName};
       attempts.push(item);request.onAttempt?.(item);
       return{...result,routingAttempts:attempts,fallbackUsed:index>0};

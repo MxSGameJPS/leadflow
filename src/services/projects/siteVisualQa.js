@@ -1,7 +1,7 @@
 import net from "node:net";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { generateWithDefaultProvider } from "../ai/providerService.js";
+import { generateSiteWithDefaultProvider as generateWithDefaultProvider } from "../ai/siteProviderService.js";
 
 const require=createRequire(import.meta.url);
 const START_TIMEOUT_MS=45000;

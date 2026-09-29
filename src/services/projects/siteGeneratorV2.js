@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateResilientWithDefaultProvider as generateWithDefaultProvider } from "../ai/providerService.js";
+import { generateSiteWithDefaultProvider as generateWithDefaultProvider } from "../ai/siteProviderService.js";
 import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
 import { enforceLatestPackage,generateUniqueSiteCode,hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
 import { buildProductContract,productContractPrompt } from "./siteProductContract.js";
