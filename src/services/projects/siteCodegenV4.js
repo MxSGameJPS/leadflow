@@ -420,11 +420,11 @@ function fallbackComponent(component){
     : '.root{padding:64px 20px;background:var(--color-background);color:var(--color-text)}.root h1,.root h2{font-family:var(--font-display);line-height:.95}.root p{max-width:680px;color:var(--color-muted)}.content{max-width:720px}.cta{display:inline-flex;margin-top:20px;padding:14px 20px;border-radius:var(--radius);background:var(--color-primary);color:#fff;text-decoration:none}.image{width:100%;max-height:620px;object-fit:cover;margin-top:28px;border-radius:var(--radius)}@media(min-width:768px){.root{padding:96px clamp(32px,6vw,96px)}}';
   return{jsx,css};
 }
-async function generateComponent(site,plan,component,skipAi,initialNotes=[]){
+async function generateComponent(site,plan,component,skipAi,initialNotes=[],onAttempt=null){
   if(skipAi)return fallbackComponent(component);
   let errors=[...initialNotes];
   for(let attempt=0;attempt<2;attempt++){
-    const result=await generateWithDefaultProvider(componentRequest(site,plan,component,errors));
+    const result=await generateWithDefaultProvider({...componentRequest(site,plan,component,errors),onAttempt});
     let source;
     try{source=normalizeComponentSource(parseComponent(result.text))}catch(error){errors=[error.message];continue}
     errors=validateComponent(component.name,source);
@@ -605,6 +605,7 @@ export async function generateUniqueSiteCode(options={}){
   else{
     await progress({phase:"architecture",title:"Projetando arquitetura",detail:"A IA está decidindo a composição e os componentes únicos deste site."});
     const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages);
+    request.onAttempt=event=>progress({phase:"ai",title:event.status==="success"?"Arquiteto respondeu":event.status==="error"?"Arquiteto falhou — fallback":"Chamando arquiteto",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"});
     let result=await generateWithDefaultProvider(request);
     try{
       plan=normalizePlan(await parseJsonWithRepair(result.text,"review"),site);
@@ -627,7 +628,7 @@ export async function generateUniqueSiteCode(options={}){
   await progress({phase:"architecture",title:"Arquitetura definida",detail:plan.components.length+" componentes planejados."});
   applyPlanCopy(site,plan);
   const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
-  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi);await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
+  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi,[],event=>progress({phase:"ai",title:event.status==="success"?component.name+" · modelo concluiu":event.status==="error"?component.name+" · modelo falhou":component.name+" · chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model",file:"components/"+component.name+"/"+component.name+".jsx"}));await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
   if(!skipAi){
     await progress({phase:"review",title:"Revisando código",detail:"O reviewer está procurando inconsistências antes do build."});
     const review=await reviewSources(site,plan,sources);
