@@ -1,3 +1,5 @@
+import { calculateOpportunityScore } from "../leads/opportunityScoring.js";
+
 const GOOGLE_PLACES_ENDPOINT = "https://places.googleapis.com/v1/places:searchText";
 
 const FIELD_MASK = [
@@ -80,29 +82,6 @@ export function isPossibleWhatsApp(phone, country = "BR") {
   return /^55\d{2}9\d{8}$/.test(digits);
 }
 
-function scorePlace({ phone, address, rating, reviews, presence, country }) {
-  let score = 10;
-  if (!presence.hasOwnSite && presence.type === "Sem presença encontrada") score += 42;
-  else if (presence.weak) score += 32;
-  else score += 6;
-
-  if (isPossibleWhatsApp(phone, country)) score += 22;
-  else if (phone) score += 10;
-  if (address) score += 5;
-  if (Number(rating) >= 4.5) score += 9;
-  else if (Number(rating) >= 4) score += 5;
-  if (Number(reviews) >= 500) score += 8;
-  else if (Number(reviews) >= 100) score += 4;
-  return Math.min(100, score);
-}
-
-function gradeFromOpportunityScore(score) {
-  if (score >= 80) return "A";
-  if (score >= 60) return "B";
-  if (score >= 40) return "C";
-  return "D";
-}
-
 function opportunityText(presence) {
   if (presence.type === "Sem presença encontrada") return "Não possui presença digital encontrada — oportunidade para oferecer um site do zero.";
   if (presence.hasOwnSite) return "Possui site próprio. Avalie qualidade, velocidade, SEO e conversão antes da abordagem.";
@@ -116,7 +95,17 @@ export function normalizePlaceLead(place, filters, { source = "Google Maps", rea
   const presence = classifyWebsite(site);
   const rating = parseNumeric(place.rating);
   const reviews = parseNumeric(place.reviews);
-  const score = scorePlace({ phone, address, rating, reviews, presence, country: filters.country });
+  const intelligence = calculateOpportunityScore({
+    phone,
+    address,
+    email: clean(place.email),
+    instagram: presence.type === "Instagram" ? site : null,
+    rating,
+    reviews,
+    presence,
+    country: filters.country,
+  });
+  const score = intelligence.score;
   const externalId = clean(place.externalId);
 
   return {
@@ -138,10 +127,12 @@ export function normalizePlaceLead(place, filters, { source = "Google Maps", rea
     googleReviews: reviews === null ? null : String(reviews),
     mapsLink: clean(place.mapsLink),
     score,
-    grade: gradeFromOpportunityScore(score),
+    grade: intelligence.grade,
     stage: "novo",
     problem: opportunityText(presence),
-    reason: reasonPrefix + ". Presença: " + presence.type + ".",
+    reason: reasonPrefix + ". Presença: " + presence.type + ". Score: " + intelligence.factors.join(" · ") + ".",
+    scoreFactors: intelligence.factors,
+    adjustedGoogleRating: intelligence.adjustedRating,
     offer: presence.hasOwnSite ? "Auditoria e reformulação de site" : "Site profissional próprio",
     presenceType: presence.type,
     hasOwnSite: presence.hasOwnSite,
