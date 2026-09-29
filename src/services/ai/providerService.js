@@ -68,7 +68,7 @@ function normalizeGenerationRequest(input) {
   const maxTokens = request.maxTokens == null ? null : Math.round(clampNumber(request.maxTokens, 1024, 1, 200000));
   const timeoutMs = request.timeoutMs == null ? null : Math.round(clampNumber(request.timeoutMs, 180000, 1000, 900000));
   const retries = request.retries == null ? null : Math.round(clampNumber(request.retries, 0, 0, 3));
-  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens, timeoutMs, retries };
+  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens, timeoutMs, retries, disableTools: request.disableTools === true };
 }
 function ensureReadyForGeneration(provider) { if (!provider.enabled) throw new Error("O provedor está desativado."); if (!provider.model && provider.type !== "custom-rest") throw new Error("Escolha um modelo antes de usar este provedor."); }
 function authRequest(provider, url, headers) {
@@ -136,9 +136,11 @@ async function generateOpenAICompatible(provider, requestInput) {
   const request = normalizeGenerationRequest(requestInput), endpoint = provider.endpoint || "/chat/completions", messages = [];
   if (request.systemPrompt) messages.push({ role: "system", content: request.systemPrompt });
   messages.push({ role: "user", content: openAIUserContent(request) });
-  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
-  const output = getPath(result.data, "choices[0].message.content") ?? getPath(result.data, "choices[0].text") ?? getPath(result.data, "output_text");
-  if (typeof output !== "string") throw new Error("A resposta não contém texto no formato compatível com OpenAI.");
+  const result = await requestJson(provider, { url: provider.baseUrl + (endpoint.startsWith("/") ? endpoint : "/" + endpoint), body: { model: request.model || provider.model, messages, temperature: request.temperature ?? provider.temperature, max_tokens: request.maxTokens ?? provider.maxTokens, stream: false, ...(request.disableTools ? { tool_choice: "none" } : {}) }, timeoutMs: request.timeoutMs, retries: request.retries ?? 0 });
+  const message = getPath(result.data, "choices[0].message") || {};
+  const output = message.content ?? getPath(result.data, "choices[0].text") ?? getPath(result.data, "output_text");
+  if (request.disableTools && (Array.isArray(message.tool_calls) && message.tool_calls.length)) throw new Error("O provedor tentou executar ferramentas em uma geração stateless.");
+  if (typeof output !== "string" || !output.trim()) throw new Error(request.disableTools ? "O provedor não retornou conteúdo textual para a geração stateless." : "A resposta não contém texto no formato compatível com OpenAI.");
   return { ...result, text: output.trim() };
 }
 async function generateOllama(provider, requestInput) {
