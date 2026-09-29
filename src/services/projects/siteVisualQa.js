@@ -14,6 +14,7 @@ function visualReviewModels(){
     process.env.LEADFLOW_SITE_MODEL_ARCHITECT,
     process.env.LEADFLOW_SITE_MODEL_CREATIVE,
     process.env.LEADFLOW_SITE_MODEL_REVIEW,
+    process.env.LEADFLOW_SITE_MODEL,
     "",
   ].map(value=>clean(value,300)).filter((value,index)=>value||index===4))];
 }
@@ -216,7 +217,7 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
   let lastError=null;
   for(const model of visualReviewModels()){
     try{
-      const result=await generateWithDefaultProvider({...baseRequest,model});
+      const result=await generateWithDefaultProvider({...baseRequest,model,siteRole:"visualReview"});
       return parseJudgeJson(result.text);
     }catch(error){lastError=error}
   }
