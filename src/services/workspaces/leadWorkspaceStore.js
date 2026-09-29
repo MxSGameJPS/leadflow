@@ -426,6 +426,51 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
   return merged;
 }
 
+export async function recordLeadEvidenceClaim(leadId, claim = {}) {
+  const id = safeLeadId(leadId);
+  const current = await getLeadWorkspace(id);
+  const normalized = normalizeEvidenceClaim(claim);
+  if (!normalized.field || !normalized.value || !normalized.band) {
+    return { stored: false, applied: false, claim: normalized };
+  }
+  const claims = current.evidenceClaims || [];
+  const duplicate = claims.find(item => item.field === normalized.field && item.value.toLowerCase() === normalized.value.toLowerCase() && ["applied", "suggested"].includes(item.status));
+  if (duplicate) return { stored: false, applied: duplicate.status === "applied", claim: duplicate };
+
+  let next = claims;
+  if (normalized.status === "applied") {
+    next = claims.map(item => item.field === normalized.field && ["applied", "suggested"].includes(item.status)
+      ? { ...item, status: "superseded", decidedAt: normalized.observedAt }
+      : item);
+  }
+  next = [normalized, ...next].slice(0, 120);
+  await saveLeadWorkspace(id, { evidenceClaims: next });
+  await appendLeadActivity(id, {
+    type: "qualification",
+    title: normalized.status === "applied" ? "Fato verificado por evidência" : "Sugestão aguardando validação",
+    detail: normalized.field + ": " + normalized.value + " · " + normalized.band + " (" + Math.round(normalized.score * 100) + "%)",
+    createdAt: normalized.observedAt,
+  });
+  return { stored: true, applied: normalized.status === "applied", claim: normalized };
+}
+
+export async function decideLeadEvidenceClaim(leadId, claimId, decision) {
+  const id = safeLeadId(leadId);
+  const current = await getLeadWorkspace(id);
+  const status = decision === "accept" ? "applied" : decision === "dismiss" ? "dismissed" : "";
+  if (!status) throw new Error("Decisão de evidência inválida.");
+  const now = new Date().toISOString();
+  let found = false;
+  const claims = (current.evidenceClaims || []).map(item => {
+    if (item.id !== claimId) return item;
+    found = true;
+    return { ...item, status, decidedAt: now };
+  });
+  if (!found) throw new Error("Sugestão não encontrada.");
+  await saveLeadWorkspace(id, { evidenceClaims: claims });
+  return claims.find(item => item.id === claimId);
+}
+
 export async function appendLeadActivity(leadId, activity = {}) {
   const id = safeLeadId(leadId);
   const current = await getLeadWorkspace(id);
