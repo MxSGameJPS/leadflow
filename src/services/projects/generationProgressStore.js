@@ -13,7 +13,7 @@ export async function startGenerationProgress(id,meta={}){
 export async function reportGenerationProgress(id,event={}){
   if(!safeId(id))return null;await fs.mkdir(ROOT,{recursive:true});
   const state=await readRaw(id)||{id:safeId(id),status:"running",startedAt:new Date().toISOString(),events:[],files:[]};
-  const item={at:new Date().toISOString(),phase:String(event.phase||"working"),title:String(event.title||"Processando"),detail:String(event.detail||""),kind:String(event.kind||"step"),file:String(event.file||"")};
+  const item={at:new Date().toISOString(),phase:String(event.phase||"working"),title:String(event.title||"Processando"),detail:String(event.detail||""),kind:String(event.kind||"step"),file:String(event.file||""),code:String(event.code||"").slice(0,2400)};
   state.updatedAt=item.at;state.current=item;state.events=[...(state.events||[]),item].slice(-120);
   if(item.file&&!state.files.includes(item.file))state.files=[...state.files,item.file].slice(-100);
   await fs.writeFile(fileFor(id),JSON.stringify(state,null,2),"utf8");return state;
