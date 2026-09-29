@@ -640,7 +640,6 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     skillMode: input.skillMode || "auto",
     skills: Array.isArray(input.skills) ? input.skills : [],
   };
-  placeData.productContract = buildProductContract({template:placeData.template,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
 
   return {
     systemPrompt: [
@@ -943,6 +942,8 @@ export async function generateSiteFolder(input = {}) {
     skillMode: input.skillMode || "auto",
     skills: Array.isArray(input.skills) ? input.skills : [],
   };
+
+  placeData.productContract = buildProductContract({template:placeData.template,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
 
   const skillRouting = resolveSiteSkills({
     mode: input.skillMode,
