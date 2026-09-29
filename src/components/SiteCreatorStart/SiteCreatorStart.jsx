@@ -37,7 +37,9 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[selectedComponent,setSelectedComponent]=useState("");
   const[generationId,setGenerationId]=useState("");
   const[pendingCreate,setPendingCreate]=useState(null);
+  const[pendingRefine,setPendingRefine]=useState(null);
   const createStartedRef=useRef("");
+  const refineStartedRef=useRef("");
 
   useEffect(()=>{
     setActiveProject(project);
@@ -103,18 +105,28 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     run();return()=>{alive=false};
   },[pendingCreate,router]);
 
-  async function refine(event){
-    event.preventDefault();if(!activeProject||!canRefine)return;setBusy("refine");setNotice("");
-    try{
-      const updated=await refineSiteProjectAction({
-        projectId:activeProject.id,instruction,effects,skillMode,
-        targetComponent:selectedComponent,
-        skills:skillMode==="auto"?autoSkillIds:selectedSkills,
-        referenceImages:pendingReferences,
-      });
-      setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
-    }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
+  function refine(event){
+    event.preventDefault();if(!activeProject||!canRefine||busy==="refine")return;
+    const liveId="refine_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,9);
+    setNotice("");setGenerationId(liveId);setBusy("refine");
+    setPendingRefine({generationId:liveId,projectId:activeProject.id,instruction,effects,skillMode,targetComponent:selectedComponent,skills:skillMode==="auto"?autoSkillIds:selectedSkills,referenceImages:pendingReferences});
   }
+
+  useEffect(()=>{
+    if(!pendingRefine||refineStartedRef.current===pendingRefine.generationId)return;
+    refineStartedRef.current=pendingRefine.generationId;
+    let alive=true;
+    const run=async()=>{
+      await new Promise(resolve=>setTimeout(resolve,30));
+      try{
+        const updated=await refineSiteProjectAction(pendingRefine);
+        if(!alive)return;
+        setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
+      }catch(error){if(alive)setNotice("Erro: "+error.message)}
+      finally{if(alive){setBusy("");setPendingRefine(null)}}
+    };
+    run();return()=>{alive=false};
+  },[pendingRefine,router]);
 
   async function restorePrevious(){
     if(!activeProject)return;
@@ -193,6 +205,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const quality=activeProject.siteData?.codegenQuality||null;
   const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
+    {generationId&&<GenerationLivePanel generationId={generationId} onClose={()=>setGenerationId("")}/>}
     <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
     <section className={s.builder}>
       <aside className={s.chatPanel}>
