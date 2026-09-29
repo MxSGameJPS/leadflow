@@ -16,7 +16,7 @@ function visualReviewModels(){
     process.env.LEADFLOW_SITE_MODEL_REVIEW,
     process.env.LEADFLOW_SITE_MODEL,
     "",
-  ].map(value=>clean(value,300)).filter((value,index)=>value||index===4))];
+  ].map(value=>clean(value,300)).filter((value,index,list)=>value||index===list.length-1))];
 }
 function parseJudgeJson(text){
   let raw=clean(text,60000).replace(/^\uFEFF/,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
