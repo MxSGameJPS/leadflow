@@ -7,6 +7,7 @@ import { runVisualQualityAudit } from "./siteVisualQa.js";
 import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
 import { applyUnifiedDiff } from "./sitePatchEngine.js";
 import { buildComponentEditContext, patchBudgetFor, validatePatchPreservation } from "./siteEditContext.js";
+import { withFileTransaction } from "./siteEditTransaction.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMPONENTS = 16;
@@ -700,6 +701,8 @@ export async function refineUniqueSiteComponent(options={}){
   const jsxPath=path.join(dir,name+".jsx"),cssPath=path.join(dir,name+".module.css");
   let currentJsx="",currentCss="";
   try{currentJsx=await fs.readFile(jsxPath,"utf8");currentCss=await fs.readFile(cssPath,"utf8")}catch{throw new Error("Não foi possível carregar o componente selecionado.")}
+  const siteDataPath=path.join(root,"data","siteData.js"),reportFile=path.join(root,"generation-report.json");
+  return withFileTransaction([jsxPath,cssPath,siteDataPath,reportFile],async function(){
   let patchResult=await generateComponentPatch(site,plan,component,{jsx:currentJsx,css:currentCss},instruction);
   let source=patchResult.source;
   const patchHistory=[{phase:"user",...patchResult.patch}];
@@ -740,14 +743,14 @@ export async function refineUniqueSiteComponent(options={}){
   await cleanupBuildArtifacts(root);
   site.codegenPlan=plan;
   site.codegenQuality=quality;
-  await fs.writeFile(path.join(root,"data","siteData.js"),'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8");
+  await fs.writeFile(siteDataPath,'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8");
   try{
-    const reportFile=path.join(root,"generation-report.json");
     const report=JSON.parse(await fs.readFile(reportFile,"utf8"));
     report.codegenPlan=plan;report.codegenQuality=quality;report.codegenBuildOk=true;report.lastTargetedRefinement={component:name,instruction,editingStrategy:"validated-unified-diff",patchHistory,at:new Date().toISOString()};
     await fs.writeFile(reportFile,JSON.stringify(report,null,2),"utf8");
   }catch{}
-  return{plan,quality,buildOk:true,componentName:name,editingStrategy:"validated-unified-diff",patchHistory};
+  return{plan,quality,buildOk:true,componentName:name,editingStrategy:"validated-unified-diff-atomic",patchHistory,atomic:true};
+  });
 }
 
 export async function hardenUniqueCodegenProject(folderPath){
