@@ -6,6 +6,8 @@ import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/mes
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
 import { STAGES, NEXT } from "../src/services/leads/stages.js";
 import { evidenceDecision, scoreEvidence } from "../src/services/leads/evidenceLedger.js";
+import { automationEvent, evaluateAutomationConditions, runAutomationRules } from "../src/services/automation/automationEngine.js";
+import { operationalRisk } from "../src/services/leads/operationalRisk.js";
 import { daysInCurrentStage, leadInactivity, pipelineForecast, pipelineStage, weightedPipelineValue } from "../src/services/leads/pipelineIntelligence.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
@@ -153,3 +155,13 @@ const suggestedEvidence=evidenceDecision([{kind:"website.cited_claim",detail:"PÃ
 t("evidencia intermediaria vira sugestao humana",suggestedEvidence.action==="suggest"&&suggestedEvidence.band==="probable");
 const contradictedEvidence=scoreEvidence([{kind:"business.official",detail:"Fonte oficial A"},{kind:"contradiction",detail:"Outra fonte discorda"}]);
 t("contradicao impede verificacao automatica",contradictedEvidence.band!=="verified"&&contradictedEvidence.contradicted===true);
+
+t("automacao avalia condicoes AND",evaluateAutomationConditions([{field:"lead.stage",op:"eq",value:"proposta"},{field:"lead.score",op:"gte",value:70}],{lead:{stage:"proposta",score:82}})===true);
+const automationRuns=await runAutomationRules({event:automationEvent("lead.stage_changed"),rules:[{id:"rule_1",name:"Criar follow-up",active:true,trigger:"lead.stage_changed",conditions:[{field:"lead.stage",op:"eq",value:"proposta"}],actions:[{type:"mark"}]}],context:{lead:{stage:"proposta"}},actions:{mark:async()=>({ok:true})}});
+t("automacao executa acao registrada",automationRuns.length===1&&automationRuns[0].status==="success");
+const loopBlocked=await runAutomationRules({event:automationEvent("lead.stage_changed",{}, {causedByRule:"rule_1"}),rules:[{id:"rule_1",active:true,trigger:"lead.stage_changed",actions:[{type:"mark"}]}],context:{},actions:{mark:async()=>({ok:true})}});
+t("automacao bloqueia loop regra para regra",loopBlocked[0]?.reason==="caused_by_rule");
+const noNext=operationalRisk({stage:"contatado",nextAction:"",followUpAt:"",createdAt:"2026-09-28T10:00:00.000Z",updatedAt:"2026-09-28T10:00:00.000Z"},{},new Date("2026-09-29T12:00:00.000Z"));
+t("radar prioriza demanda aberta sem proximo passo",noNext.bucket==="no_next_action"&&noNext.priority===100);
+const inFlight=operationalRisk({stage:"contatado",nextAction:"Retornar",followUpAt:"2026-10-02",createdAt:"2026-09-28T10:00:00.000Z",updatedAt:"2026-09-28T10:00:00.000Z"},{},new Date("2026-09-29T12:00:00.000Z"));
+t("radar reconhece follow-up futuro como em voo",inFlight.bucket==="in_flight");
