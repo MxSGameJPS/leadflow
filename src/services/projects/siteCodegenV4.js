@@ -383,9 +383,14 @@ function pageSource(plan){
   return 'import siteData from "../data/siteData.js";\nimport { localBusinessJsonLd } from "../lib/siteSeo.js";\n'+imports+'\n\nexport default function Home() {\n  const jsonLd=localBusinessJsonLd(siteData);\n  return (\n    <>\n      <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(jsonLd)}} />\n'+body+'\n    </>\n  );\n}\n';
 }
 function fontConfig(pair){
-  if(pair==="editorial"||pair==="luxury")return{imports:"Cormorant_Garamond, Manrope",display:'Cormorant_Garamond({ subsets: ["latin"], weight: ["500","600","700"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'};
-  if(pair==="humanist")return{imports:"Fraunces, DM_Sans",display:'Fraunces({ subsets: ["latin"], variable: "--font-display" })',body:'DM_Sans({ subsets: ["latin"], variable: "--font-body" })'};
-  return{imports:"Space_Grotesk, Manrope",display:'Space_Grotesk({ subsets: ["latin"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'};
+  const configs={
+    editorial:{imports:"Cormorant_Garamond, Manrope",display:'Cormorant_Garamond({ subsets: ["latin"], weight: ["500","600","700"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'},
+    modern:{imports:"Space_Grotesk, Manrope",display:'Space_Grotesk({ subsets: ["latin"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'},
+    geometric:{imports:"Montserrat, Inter",display:'Montserrat({ subsets: ["latin"], weight: ["500","600","700","800"], variable: "--font-display" })',body:'Inter({ subsets: ["latin"], variable: "--font-body" })'},
+    humanist:{imports:"Fraunces, DM_Sans",display:'Fraunces({ subsets: ["latin"], variable: "--font-display" })',body:'DM_Sans({ subsets: ["latin"], variable: "--font-body" })'},
+    luxury:{imports:"Playfair_Display, Manrope",display:'Playfair_Display({ subsets: ["latin"], weight: ["500","600","700"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'}
+  };
+  return configs[pair]||configs.modern;
 }
 function inspectorScript(){
   return '(function(){if(new URLSearchParams(location.search).get("leadflowInspect")!=="1")return;var current=null;function marker(event){return event.target&&event.target.closest?event.target.closest("[data-leadflow-component]"):null}function clear(){if(current)current.classList.remove("leadflow-inspect-selected");current=null}document.addEventListener("mouseover",function(event){var item=marker(event);if(item)item.classList.add("leadflow-inspect-hover")},true);document.addEventListener("mouseout",function(event){var item=marker(event);if(item)item.classList.remove("leadflow-inspect-hover")},true);document.addEventListener("click",function(event){var item=marker(event);if(!item)return;event.preventDefault();event.stopPropagation();clear();current=item;item.classList.add("leadflow-inspect-selected");window.top.postMessage({type:"leadflow:component-selected",component:item.getAttribute("data-leadflow-component")},"*")},true);window.addEventListener("keydown",function(event){if(event.key==="Escape"){clear();window.top.postMessage({type:"leadflow:component-selected",component:""},"*")}})})();';
