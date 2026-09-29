@@ -163,6 +163,9 @@ function normalizePlan(value,site){
     if(endIndex>=0)components.splice(endIndex,0,item); else components.push(item);
   };
 
+  if(site.productContract?.type==="delivery"&&!components.some(item=>item.name==="DeliveryOrderExperience"||/pedido|delivery|menu|cardap/i.test(item.purpose+" "+item.name))){
+    insertBeforeEnd({name:"DeliveryOrderExperience",role:"custom",purpose:"Materializar a jornada de delivery/pedido exigida pelo contrato funcional sem inventar cardápio ou preços.",content:site.productContract?.dataPolicy||"",layout:"Experiência de pedido visual e acionável, não seção institucional.",desktop:"Descoberta e ação de pedido com hierarquia de produto.",tablet:"Fluxo de pedido preservado.",mobile:"Ação de pedir dominante e alcançável com o polegar.",assetUsage:"Use somente imagens reais relevantes disponíveis em site.images.",interaction:"Conduzir ao canal real de pedido; não simular checkout inexistente.",accessibility:"Fluxo operável por teclado e controles nomeados.",acceptanceCriteria:"Deve parecer uma experiência de delivery antes de ler toda a copy; nenhum produto/preço inventado; CTA real de pedido visível.",visualHook:"Energia e identidade extraídas das evidências visuais da marca."});
+  }
   if(!hasRole("navigation")&&fallbackRole("navigation"))components.unshift(fallbackRole("navigation"));
   if(!hasRole("hero"))components.splice(Math.min(1,components.length),0,fallbackRole("hero"));
   if((site.aboutTitle||site.aboutText)&&!hasRole("story"))insertBeforeEnd(fallbackRole("story"));
