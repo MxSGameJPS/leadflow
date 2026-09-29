@@ -129,6 +129,8 @@ function priorityReason(lead) {
   return null;
 }
 
+function displayText(value){return String(value||"").replace(/\\\\n/g,"\n").replace(/\\n/g,"\n").trim()}
+
 export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
@@ -641,9 +643,9 @@ export default function CRMBoard({ initialLeads = [] }) {
       </div>
 
       {(activeLead.problem || activeLead.nextAction || activeLead.notes) && <div className={s.quickContext}>
-        {activeLead.problem && <div><span>Problema identificado</span><p>{activeLead.problem}</p></div>}
-        {activeLead.nextAction && <div><span>Próxima ação</span><p>{activeLead.nextAction}</p></div>}
-        {activeLead.notes && <div><span>Anotações</span><p>{activeLead.notes}</p></div>}
+        {activeLead.problem && <div><span>Problema identificado</span><p>{displayText(activeLead.problem)}</p></div>}
+        {activeLead.nextAction && <div><span>Próxima ação</span><p>{displayText(activeLead.nextAction)}</p></div>}
+        {activeLead.notes && <div><span>Anotações</span><p>{displayText(activeLead.notes)}</p></div>}
       </div>}
 
       <div className={s.quickFooter}>
