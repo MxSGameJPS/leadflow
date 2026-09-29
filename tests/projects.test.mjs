@@ -13,6 +13,7 @@ const { generateSiteFolder, parseAiJson } = await import("../src/services/projec
 const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV4.js");
 const { calculateVisualQualityScore } = await import("../src/services/projects/siteVisualQa.js");
 const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProjectSourceSnapshot } = await import("../src/services/projects/projectVersionStore.js");
+const { normalizeCodegenDesignSystem } = await import("../src/services/projects/siteDesignSystem.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -26,6 +27,11 @@ assert.equal(visualGood.pass,true);
 const visualOverflow=calculateVisualQualityScore({visualCraft:10,brandSpecificity:10,conversion:10,mobile:10,coherence:10,commercialReadiness:10},{desktop:{h1Count:1,brokenImages:0,horizontalOverflow:false,runtimeErrors:[]},mobile:{h1Count:1,brokenImages:0,horizontalOverflow:true,runtimeErrors:[]}},78);
 assert.equal(visualOverflow.pass,false);
 assert.ok(visualOverflow.score<=58);
+const normalizedDesignSystem=normalizeCodegenDesignSystem({signatureMotif:"Linha editorial própria",antiPatterns:["cards repetidos"]},{design:{colors:{primary:"#112233",accent:"#cc8844",background:"#f6f4ef",surface:"#ffffff",text:"#121212",muted:"#666666"},radius:"soft",composition:{density:"airy"}}});
+assert.equal(normalizedDesignSystem.signatureMotif,"Linha editorial própria");
+assert.equal(normalizedDesignSystem.tokens.primary,"#112233");
+assert.ok(normalizedDesignSystem.tokens.sectionSpace.includes("clamp"));
+assert.deepEqual(normalizedDesignSystem.antiPatterns,["cards repetidos"]);
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");
@@ -109,6 +115,10 @@ const inspectorSource = await fs.readFile(path.join(generatedRoot, "public", "le
 assert.match(inspectorSource, /leadflow:component-selected/);
 assert.ok(!exportedPage.includes("GeneratedSiteRuntime"));
 assert.ok(generated.siteData.codegenPlan?.components?.length >= 3);
+assert.ok(generated.siteData.codegenPlan?.designSystem?.signatureMotif);
+const themeModule = await fs.readFile(path.join(generatedRoot, "app", "theme.module.css"), "utf8");
+assert.match(themeModule, /--space-section:/);
+assert.match(themeModule, /--shadow-elevated:/);
 for (const component of generated.siteData.codegenPlan.components) {
   const componentDir = path.join(generatedRoot, "components", component.name);
   const jsx = await fs.readFile(path.join(componentDir, component.name + ".jsx"), "utf8");

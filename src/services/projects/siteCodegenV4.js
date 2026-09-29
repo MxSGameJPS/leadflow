@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
 import { runVisualQualityAudit } from "./siteVisualQa.js";
+import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMPONENTS = 16;
@@ -113,6 +114,7 @@ function fallbackPlan(site){
     imageStrategy:"Priorize as imagens reais do negócio e evite repetição da mesma foto em seções consecutivas.",
     motionStrategy:"Movimento discreto com transform e opacity, sempre respeitando prefers-reduced-motion.",
     responsiveStrategy:"Mobile-first em 320/360/390px; conteúdo essencial no fluxo normal; ampliar composição progressivamente em tablet e desktop.",
+    designSystem:fallbackCodegenDesignSystem(site),
     copy:{
       eyebrow:site.eyebrow||"",heroTitle:site.heroTitle||"",heroText:site.heroText||"",
       aboutTitle:site.aboutTitle||"",aboutText:site.aboutText||"",
@@ -177,6 +179,7 @@ function normalizePlan(value,site){
     imageStrategy:clean(source.imageStrategy,2200)||fallback.imageStrategy,
     motionStrategy:clean(source.motionStrategy,1800)||fallback.motionStrategy,
     responsiveStrategy:clean(source.responsiveStrategy,2200)||fallback.responsiveStrategy,
+    designSystem:normalizeCodegenDesignSystem(source.designSystem,site),
     copy:{
       eyebrow:clean(sourceCopy.eyebrow,120)||site.eyebrow||"",
       heroTitle:clean(sourceCopy.heroTitle,112)||site.heroTitle||"",
@@ -226,6 +229,9 @@ function architectureRequest(site,instruction,currentPlan,visualImages=[]){
       "Você pode reescrever a COPY-SEMENTE para torná-la mais comercial e específica, mas sem inventar tratamentos, serviços, credenciais ou resultados.",
       "Para cada componente descreva desktop, tablet e mobile separadamente. Mobile precisa funcionar em 320, 360 e 390px sem overflow horizontal.",
       "Cada acceptanceCriteria deve ser testável e específico. Evite frases vagas como 'ficar bonito' ou 'ser premium'.",
+      "Defina um DESIGN SYSTEM semântico antes dos componentes: linguagem de formas, superfícies, tipografia, espaçamento, tratamento de imagem, botões, um motivo visual de assinatura e uma lista de clichês a evitar.",
+      "A identidade precisa sobreviver quando as seções forem geradas por modelos diferentes. Portanto descreva regras reutilizáveis, não estilos isolados.",
+      "Evite paletas e clichês de IA por padrão: roxo/azul genérico, glassmorphism em excesso, grades de cards iguais e o mesmo raio em tudo, salvo quando houver justificativa real para a marca.",
       "Retorne somente JSON válido."
     ].join(" "),
     prompt:[
@@ -240,6 +246,7 @@ function architectureRequest(site,instruction,currentPlan,visualImages=[]){
       "FORMATO: "+JSON.stringify({
         version:4,concept:"",creativeThesis:"",conversionStrategy:"",
         visualSystem:"",imageStrategy:"",motionStrategy:"",responsiveStrategy:"",
+        designSystem:{signatureMotif:"",shapeLanguage:"",surfaceLanguage:"",typeHierarchy:"",spacingRhythm:"",imageTreatment:"",buttonLanguage:"",antiPatterns:[""]},
         copy:{eyebrow:"",heroTitle:"",heroText:"",aboutTitle:"",aboutText:"",proofTitle:"",proofText:"",contactTitle:"",contactText:"",primaryCtaLabel:"",secondaryCtaLabel:""},
         components:[{name:"NomeAutoral",role:"hero",purpose:"",content:"",layout:"",desktop:"",tablet:"",mobile:"",assetUsage:"Use /images/arquivo.jpg...",interaction:"",accessibility:"",acceptanceCriteria:"",visualHook:""}]
       })
@@ -279,6 +286,10 @@ function validateComponent(name,source){
   const imports=[...jsx.matchAll(/from\s+["']([^"']+)["']/g)].map(function(match){return match[1]});
   for(const imp of imports){if(imp==="react"||imp.startsWith("./")||imp.startsWith("../"))continue;errors.push("import externo proibido: "+imp)}
   if(!/export\s+default/.test(jsx))errors.push("export default obrigatório");
+  if(/\b(?:images\.unsplash\.com|source\.unsplash\.com|picsum\.photos|via\.placeholder\.com|placehold(?:er)?\.com)\b/i.test(jsx))errors.push("imagens placeholder ou externas hardcoded são proibidas; use site.images");
+  if(/\blorem\s+ipsum\b/i.test(jsx))errors.push("Lorem Ipsum é proibido");
+  const imageTags=[...jsx.matchAll(/<img\b[^>]*>/gi)].map(match=>match[0]);
+  if(imageTags.some(tag=>!/alt\s*=/.test(tag)))errors.push("toda imagem deve declarar alt");
   if(css.length<40)errors.push("CSS Module insuficiente");
   return errors;
 }
@@ -299,6 +310,8 @@ function componentRequest(site,plan,component,errors){
       "Se usar hooks React, window, document, requestAnimationFrame, listeners ou qualquer API de browser, a PRIMEIRA linha do JSX deve ser exatamente \"use client\";.",
       "Se não precisar de interatividade no cliente, mantenha o componente como Server Component.",
       "O componente recebe a prop site. Use somente fatos existentes em site.",
+      "Use as variáveis semânticas globais do design system antes de inventar valores locais. Valores únicos são permitidos quando fazem parte do visualHook específico da seção.",
+      "Não use imagens placeholder, Lorem Ipsum, domínios de imagem aleatórios ou fotos externas hardcoded. Use exclusivamente site.images e fatos presentes em site.",
       "Todo visual fica no CSS Module. CSS deve ser mobile-first; amplie com @media (min-width:...).",
       "Em 320px, 360px e 390px: zero overflow horizontal; evite larguras fixas; prefira min(), max(), clamp(), minmax() e fluxo normal para conteúdo essencial. Composição desktop complexa deve ter uma transformação mobile explicitamente coerente.",
       "Acessibilidade, foco visível e touch targets são obrigatórios.",
@@ -306,14 +319,14 @@ function componentRequest(site,plan,component,errors){
     ].join(" "),
     prompt:[
       "SITE: "+JSON.stringify(facts(site)),
-      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy}),
+      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy,designSystem:plan.designSystem}),
       "SEQUÊNCIA DA PÁGINA: "+JSON.stringify(plan.components.map(item=>({name:item.name,role:item.role,purpose:item.purpose}))),
       "CONTEXTO ADJACENTE: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
       "GOAL: implemente fielmente este componente do dossiê, com identidade própria e transição coerente com os componentes vizinhos.",
-      "MUST HOLD: "+JSON.stringify({component,globalVisualSystem:plan.visualSystem,responsiveStrategy:plan.responsiveStrategy,imageStrategy:plan.imageStrategy,conversionStrategy:plan.conversionStrategy}),
+      "MUST HOLD: "+JSON.stringify({component,globalVisualSystem:plan.visualSystem,designSystem:plan.designSystem,responsiveStrategy:plan.responsiveStrategy,imageStrategy:plan.imageStrategy,conversionStrategy:plan.conversionStrategy}),
       "OUT OF SCOPE: não redefina a arquitetura, não invente conteúdo, não troque o stack, não simplifique a composição para cards genéricos e não altere outros componentes.",
       "DONE WHEN: JSX e CSS Module compilam, cumprem acceptanceCriteria, funcionam em 320/360/390/768/1024/1440px, não geram overflow horizontal, preservam acessibilidade e parecem parte do mesmo sistema visual.",
-      "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --radius.",
+      "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --space-section, --space-section-compact, --space-gutter, --content-max, --content-narrow, --radius-sm, --radius-md, --radius-lg, --radius-pill, --shadow-soft, --shadow-elevated, --transition-fast, --transition-base, --focus-ring, --button-height, --reading-measure.",
       "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\"; e chame sempre actionHref(action, site), por exemplo actionHref(site.ctas?.primary?.action, site).",
       errors.length?"CORRIJA ESTES ERROS: "+errors.join(" | "):""
     ].filter(Boolean).join("\n\n")
@@ -379,10 +392,7 @@ function layoutSource(site){
   return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(site.seoTitle||site.brandName||"Site")+', description: '+JSON.stringify(site.seoDescription||site.heroText||"")+' };\n\nexport default function RootLayout({ children }) {\n  const inspector=process.env.NODE_ENV==="development";\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}{inspector ? <script src="/leadflow-inspector.js" defer /> : null}</body></html>;\n}\n';
 }
 function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}.leadflow-component-marker{display:contents}.leadflow-inspect-hover>*{outline:2px dashed rgba(37,99,235,.72)!important;outline-offset:-2px}.leadflow-inspect-selected>*{outline:3px solid #2563eb!important;outline-offset:-3px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
-function themeCss(site){
-  const c=site.design?.colors||{},radius=site.design?.radius==="sharp"?"4px":site.design?.radius==="rounded"?"28px":"14px";
-  return '.body{--color-primary:'+(c.primary||"#17324D")+';--color-accent:'+(c.accent||"#D59B42")+';--color-background:'+(c.background||"#F5F5F3")+';--color-surface:'+(c.surface||"#FFFFFF")+';--color-text:'+(c.text||"#14202A")+';--color-muted:'+(c.muted||"#66717D")+';--radius:'+radius+';margin:0;background:var(--color-background);color:var(--color-text);font-family:var(--font-body),Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}';
-}
+function themeCss(site,plan){return codegenThemeCss(site,plan)}
 function packageSource(folderName){return JSON.stringify({name:folderName,version:"1.0.0",private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:"latest",react:"latest","react-dom":"latest"}},null,2)}
 function readme(site,plan){return '# '+(site.brandName||"Site")+'\n\nProjeto exclusivo gerado pelo LeadFlow para este lead.\n\nStack: Next latest, React latest, JavaScript JSX, CSS Modules, sem Tailwind, sem TypeScript e sem CSS inline.\n\nCada seção possui sua própria pasta em components, com JSX e module.css.\n\nConceito: '+plan.concept+'\n\nPara executar: npm install e depois npm run dev.\n\nAntes de publicar, confirme os dados comerciais com o cliente.\n'}
 async function clearCode(root){for(const name of ["app","components","data","lib"])await fs.rm(path.join(root,name),{recursive:true,force:true})}
@@ -393,7 +403,7 @@ async function writeProject(root,folderName,site,plan,sources){
     fs.writeFile(path.join(root,"app","layout.jsx"),layoutSource(site),"utf8"),
     fs.writeFile(path.join(root,"app","page.jsx"),pageSource(plan),"utf8"),
     fs.writeFile(path.join(root,"app","globals.css"),globalsCss(),"utf8"),
-    fs.writeFile(path.join(root,"app","theme.module.css"),themeCss(site),"utf8"),
+    fs.writeFile(path.join(root,"app","theme.module.css"),themeCss(site,plan),"utf8"),
     fs.writeFile(path.join(root,"data","siteData.js"),'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8"),
     fs.writeFile(path.join(root,"lib","siteActions.js"),actionLib(),"utf8"),
     fs.writeFile(path.join(root,"package.json"),packageSource(folderName),"utf8"),
@@ -429,7 +439,7 @@ async function reviewSources(site,plan,sources){
       "Retorne somente JSON válido no formato solicitado."
     ].join(" "),
     prompt:[
-      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy}),
+      "DIREÇÃO: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy,designSystem:plan.designSystem}),
       "DADOS: "+JSON.stringify(facts(site)),
       "COMPONENTES: "+JSON.stringify(snapshot),
       "Retorne: "+JSON.stringify({pass:true,issues:[{component:"Nome",severity:"high",instruction:"Correção objetiva para este componente"}]})
