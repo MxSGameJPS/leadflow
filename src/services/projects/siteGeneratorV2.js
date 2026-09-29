@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateWithDefaultProvider } from "../ai/providerService.js";
+import { generateResilientWithDefaultProvider as generateWithDefaultProvider } from "../ai/providerService.js";
 import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
 import { enforceLatestPackage,generateUniqueSiteCode,hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
+import { buildProductContract,productContractPrompt } from "./siteProductContract.js";
 
 const GENERATED_ROOT = path.join(process.cwd(), "generated-sites");
 const RUNTIME_COMPONENT_PATH = path.join(process.cwd(), "src", "components", "GeneratedSiteRuntime", "GeneratedSiteRuntime.jsx");
@@ -632,12 +633,14 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
     existingWebsite: input.existingWebsite,
     instagram: input.instagram,
     template: input.template,
+    productContract: input.productContract || {},
     internalLeadContext: input.description,
     requestedChanges: clean(instruction, 5000),
     effects: normalizeEffects(input.effects),
     skillMode: input.skillMode || "auto",
     skills: Array.isArray(input.skills) ? input.skills : [],
   };
+  placeData.productContract = buildProductContract({template:placeData.template,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
 
   return {
     systemPrompt: [
@@ -659,6 +662,8 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Use variance como coragem compositiva (1 conservador, 10 muito autoral), motion como intensidade de movimento e densityDial como densidade informacional. Eles devem ser coerentes com o negócio, não aleatórios.",
       "Planeje composição, paleta, tipografia e movimento antes de escrever. O hero deve funcionar como uma tese visual do negócio.",
       "A paleta NÃO pode nascer apenas do nicho. Quando houver fotos reais, extraia delas pistas de cor, contraste, materialidade e temperatura para que a identidade pareça pertencer àquele negócio específico.",
+      "Antes de escolher paleta e estilo, faça BRAND EXTRACTION das imagens: identifique cores dominantes, logo/arte, energia, linguagem, produto/ambiente e confiança de cada observação. Preserve a identidade observada em vez de reinventar a marca.",
+      "Se o usuário selecionou um tipo funcional como delivery, o contrato funcional é soberano: estética deve servir a experiência, nunca substituir o produto por uma landing genérica.",
       "Evite combinações estereotipadas de categoria sem evidência visual (por exemplo wellness sempre verde/rosa, tecnologia sempre azul/roxo, luxo sempre preto/dourado). A escolha deve ser específica ao lead.",
       "Escolha a família tipográfica como parte da personalidade da marca. Os pares editorial, modern, geometric, humanist e luxury produzem fontes realmente diferentes no código final; use essa diferença intencionalmente.",
       "As animações devem usar transform e opacity, respeitar prefers-reduced-motion e reforçar hierarquia, continuidade espacial ou feedback. Não anime por decorar.",
@@ -671,6 +676,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Retorne apenas um objeto JSON válido, sem markdown, comentários ou texto fora do JSON.",
     ].join(" "),
     prompt: [
+      productContractPrompt(input.productContract),
       "Crie a direção completa de conteúdo e design para uma landing page comercial premium.",
       "A página será implementada em Next.js App Router com next@latest, React, JavaScript JSX e CSS Modules. Sem Tailwind, TypeScript, CSS inline ou bibliotecas de animação obrigatórias.",
       "Escolha valores somente entre os enums informados e mantenha contraste suficiente.",
@@ -968,9 +974,10 @@ export async function generateSiteFolder(input = {}) {
           ...request,
           model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
           temperature: 0.72,
-          maxTokens: 16000,
-          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 240000),
-          retries: 1,
+          maxTokens: 12000,
+          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 120000),
+          retries: 0,
+          onAttempt: event=>progress({phase:"ai",title:event.status==="success"?"Modelo concluiu":event.status==="error"?"Modelo falhou — avaliando fallback":"Chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"}),
         });
       } catch (imageError) {
         if (!request.images?.length || !isImageCapabilityError(imageError)) throw imageError;
@@ -979,9 +986,10 @@ export async function generateSiteFolder(input = {}) {
           images: [],
           model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
           temperature: 0.72,
-          maxTokens: 16000,
-          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 240000),
-          retries: 1,
+          maxTokens: 12000,
+          timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 120000),
+          retries: 0,
+          onAttempt: event=>progress({phase:"ai",title:event.status==="success"?"Modelo concluiu":event.status==="error"?"Modelo falhou — avaliando fallback":"Chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"}),
         });
         aiWarning = "O modelo configurado não aceitou entrada multimodal; a direção criativa foi gerada apenas com o briefing textual.";
       }
@@ -998,6 +1006,9 @@ export async function generateSiteFolder(input = {}) {
 
   const siteData = {
     ...spec,
+    template: placeData.template,
+    productContract: placeData.productContract,
+    brandEvidence: spec.brandEvidence || {},
     segment: placeData.segment,
     city: placeData.city,
     address: placeData.address,
