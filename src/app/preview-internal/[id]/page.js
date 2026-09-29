@@ -7,8 +7,10 @@ import SitePreview from "../../../components/SitePreview/SitePreview.jsx";
 export const dynamic="force-dynamic";
 export const metadata={robots:{index:false,follow:false,nocache:true}};
 
-export default async function InternalPreviewPage({params}){
+export default async function InternalPreviewPage({params,searchParams}){
   const{id}=await params;
+  const query=await searchParams;
+  const inspect=String(query?.inspect||"")==="1";
   let project;
   try{project=await getSiteProject(id)}catch{notFound()}
   if(!project?.siteData)notFound();
@@ -18,5 +20,5 @@ export default async function InternalPreviewPage({params}){
       return <SitePreview project={project} previewError={error.message}/>;
     }
   }
-  return <SitePreview project={project} previewUrl={previewUrl}/>;
+  return <SitePreview project={project} previewUrl={previewUrl} inspect={inspect}/>;
 }
