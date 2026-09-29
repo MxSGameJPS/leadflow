@@ -289,7 +289,7 @@ function validateComponent(name,source){
   if(/\b(?:images\.unsplash\.com|source\.unsplash\.com|picsum\.photos|via\.placeholder\.com|placehold(?:er)?\.com)\b/i.test(jsx))errors.push("imagens placeholder ou externas hardcoded são proibidas; use site.images");
   if(/\blorem\s+ipsum\b/i.test(jsx))errors.push("Lorem Ipsum é proibido");
   const imageTags=[...jsx.matchAll(/<img\b[^>]*>/gi)].map(match=>match[0]);
-  if(imageTags.some(tag=>!/alt\s*=/.test(tag)))errors.push("toda imagem deve declarar alt");
+  if(imageTags.some(tag=>!/\balt\s*=/.test(tag)))errors.push("toda imagem deve declarar alt");
   if(css.length<40)errors.push("CSS Module insuficiente");
   return errors;
 }
