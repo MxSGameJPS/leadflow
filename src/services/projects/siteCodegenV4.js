@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { generateWithDefaultProvider } from "../ai/providerService.js";
+import { generateResilientWithDefaultProvider as generateWithDefaultProvider } from "../ai/providerService.js";
+import { productContractPrompt } from "./siteProductContract.js";
 import { runVisualQualityAudit } from "./siteVisualQa.js";
 import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
 import { applyUnifiedDiff } from "./sitePatchEngine.js";
@@ -84,7 +85,7 @@ function pascal(value){
 function normalizeRole(value){const role=clean(value,40).toLowerCase();return ALLOWED_ROLES.has(role)?role:"custom"}
 function facts(site){
   return {
-    brandName:site.brandName||"",segment:site.segment||"",city:site.city||"",address:site.address||"",
+    brandName:site.brandName||"",segment:site.segment||"",city:site.city||"",address:site.address||"",template:site.template||"landing",productContract:site.productContract||{},brandEvidence:site.brandEvidence||{},
     phone:site.phone||"",whatsapp:site.whatsapp||"",instagram:site.instagram||"",mapsLink:site.mapsLink||"",
     rating:site.rating||"",reviews:site.reviews||"",hours:Array.isArray(site.hours)?site.hours:[],
     services:Array.isArray(site.services)?site.services:[],images:Array.isArray(site.images)?site.images:[],
@@ -215,11 +216,14 @@ function applyPlanCopy(site,plan){
 }
 function architectureRequest(site,instruction,currentPlan,visualImages=[]){
   return {
-    model:roleModel("architect"),temperature:.72,maxTokens:15000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||240000),retries:1,
+    model:roleModel("architect"),temperature:.72,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||120000),retries:0,
     images:Array.isArray(visualImages)?visualImages.slice(0,6):[],
     systemPrompt:[
       "Você é diretor de criação, arquiteto de experiência e estrategista de conversão.",
       "Crie um DOSSIÊ DE IMPLEMENTAÇÃO próprio para este negócio. Não escolha nem adapte um template.",
+      "O tipo de produto solicitado tem autoridade sobre a arquitetura. Se productContract.hardRequirement=true, descumpri-lo é falha de produto, mesmo que a página fique bonita.",
+      "Quando productContract.type=delivery, a experiência precisa parecer e funcionar como delivery/pedido. NÃO a reduza a Hero+Sobre+Localização+Contato.",
+      "Use brandEvidence extraída das imagens como evidência de identidade. Preserve cores, energia, linguagem e sinais visuais observados; qualquer desvio forte precisa ser deliberado e justificado no visualSystem.",
       "Você está entregando especificações para desenvolvedores executores mais simples. Portanto tome AGORA todas as decisões difíceis de direção visual, copy, composição, fotografia, responsividade, interação e conversão.",
       "Cada item da arquitetura virará um componente React real com JSX e CSS próprios.",
       "Use apenas fatos fornecidos. Não invente serviços, preços, depoimentos, profissionais, certificações, equipamentos, resultados ou números.",
@@ -246,6 +250,7 @@ function architectureRequest(site,instruction,currentPlan,visualImages=[]){
       instruction?"PEDIDO DE ALTERAÇÃO: "+clean(instruction,5000):"",
       currentPlan?"ARQUITETURA ATUAL: "+JSON.stringify(currentPlan):"",
       "DADOS VERIFICADOS E COPY-SEMENTE: "+JSON.stringify(facts(site)),
+      productContractPrompt(site.productContract),
       "FORMATO: "+JSON.stringify({
         version:4,concept:"",creativeThesis:"",conversionStrategy:"",
         visualSystem:"",imageStrategy:"",motionStrategy:"",responsiveStrategy:"",
@@ -301,7 +306,7 @@ function componentRequest(site,plan,component,errors){
   const previous=index>0?plan.components[index-1]:null;
   const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   return {
-    model:roleModel("code"),temperature:.64,maxTokens:9000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
+    model:roleModel("code"),temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
@@ -321,12 +326,13 @@ function componentRequest(site,plan,component,errors){
       "Retorne somente <JSX>...</JSX><CSS>...</CSS>."
     ].join(" "),
     prompt:[
-      "SITE: "+JSON.stringify(facts(site)),
-      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy,designSystem:plan.designSystem}),
-      "SEQUÊNCIA DA PÁGINA: "+JSON.stringify(plan.components.map(item=>({name:item.name,role:item.role,purpose:item.purpose}))),
+      "SITE ESSENCIAL: "+JSON.stringify(facts(site)),
+      productContractPrompt(site.productContract),
+      "DIREÇÃO MESTRE ENXUTA: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,designSystem:plan.designSystem}),
+      "SEQUÊNCIA: "+JSON.stringify(plan.components.map(item=>({name:item.name,role:item.role}))),
       "CONTEXTO ADJACENTE: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
       "GOAL: implemente fielmente este componente do dossiê, com identidade própria e transição coerente com os componentes vizinhos.",
-      "MUST HOLD: "+JSON.stringify({component,globalVisualSystem:plan.visualSystem,designSystem:plan.designSystem,responsiveStrategy:plan.responsiveStrategy,imageStrategy:plan.imageStrategy,conversionStrategy:plan.conversionStrategy}),
+      "MUST HOLD: "+JSON.stringify({component,designSystem:plan.designSystem,responsiveStrategy:plan.responsiveStrategy}),
       "OUT OF SCOPE: não redefina a arquitetura, não invente conteúdo, não troque o stack, não simplifique a composição para cards genéricos e não altere outros componentes.",
       "DONE WHEN: JSX e CSS Module compilam, cumprem acceptanceCriteria, funcionam em 320/360/390/768/1024/1440px, não geram overflow horizontal, preservam acessibilidade e parecem parte do mesmo sistema visual.",
       "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --space-section, --space-section-compact, --space-gutter, --content-max, --content-narrow, --radius-sm, --radius-md, --radius-lg, --radius-pill, --shadow-soft, --shadow-elevated, --transition-fast, --transition-base, --focus-ring, --button-height, --reading-measure.",
