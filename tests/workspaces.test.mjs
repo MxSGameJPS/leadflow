@@ -6,7 +6,7 @@ const root = process.cwd();
 const leadId = `test_contact_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const workspaceFile = path.join(root, "data", "lead-workspaces", `${leadId}.json`);
 
-const { getLeadWorkspace, saveLeadWorkspace } = await import("../src/services/workspaces/leadWorkspaceStore.js");
+const { appendLeadActivity, getLeadWorkspace, saveLeadWorkspace } = await import("../src/services/workspaces/leadWorkspaceStore.js");
 
 try {
   const empty = await getLeadWorkspace(leadId);
@@ -14,6 +14,7 @@ try {
   assert.equal(empty.lastContactKind, "");
   assert.equal(empty.contactCount, 0);
   assert.equal(empty.outreach.emailBody, "");
+  assert.deepEqual(empty.activities, []);
   assert.deepEqual(empty.strategyMap, { nodes: [], edges: [] });
   assert.equal(empty.objectionAssistant.conversation, "");
   assert.equal(empty.objectionAssistant.tone, "natural");
@@ -35,10 +36,16 @@ try {
   assert.equal(second.lastContactKind, "followup");
   assert.equal(second.contactCount, 2);
 
+  await appendLeadActivity(leadId, { type: "contact", title: "Contato registrado", detail: "WhatsApp", createdAt: "2026-08-10T10:00:00.000Z" });
+  await appendLeadActivity(leadId, { type: "stage", title: "Etapa alterada", detail: "novo → contatado", createdAt: "2026-08-11T10:00:00.000Z" });
+
   const loaded = await getLeadWorkspace(leadId);
   assert.equal(loaded.lastContactAt, "2026-08-09T14:30:00.000Z");
   assert.equal(loaded.lastContactKind, "followup");
   assert.equal(loaded.contactCount, 2);
+  assert.equal(loaded.activities.length, 2);
+  assert.equal(loaded.activities[0].type, "stage");
+  assert.equal(loaded.activities[1].type, "contact");
 
   const sanitized = await saveLeadWorkspace(leadId, {
     lastContactKind: "tipo-invalido",

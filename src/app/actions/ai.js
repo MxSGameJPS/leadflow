@@ -5,7 +5,7 @@ import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
 import { generateLeadOutreachPack } from "../../services/ai/leadOutreachService.js";
 import { analyzeLeadConversation } from "../../services/ai/objectionAdvisorService.js";
 import { getLead } from "../../repositories/leadRepository.js";
-import { getLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
+import { appendLeadActivity, getLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
 import { getProfessionalProfile } from "../../services/profile/profileStore.js";
 import {
   listProviderModels,
@@ -55,12 +55,19 @@ export async function generateLeadOutreachPackAction(payload = {}) {
     getProfessionalProfile(),
     getLeadWorkspace(lead.id),
   ]);
-  return generateLeadOutreachPack({
+  const result = await generateLeadOutreachPack({
     lead,
     profile,
     workspace,
     providerId: payload.providerId,
   });
+  await appendLeadActivity(lead.id, {
+    type: "outreach",
+    title: "Pacote multicanal gerado",
+    detail: [result.providerName, result.model].filter(Boolean).join(" · "),
+    createdAt: result.generatedAt,
+  });
+  return result;
 }
 
 export async function analyzeLeadConversationAction(payload = {}) {

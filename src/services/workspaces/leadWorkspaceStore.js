@@ -11,6 +11,7 @@ const CONSULTING_STATUSES = new Set([
 ]);
 const STRATEGY_NODE_TYPES = new Set(["lead", "action", "contact", "decision", "result"]);
 const STRATEGY_NODE_STATUSES = new Set(["planned", "active", "done", "skipped"]);
+const ACTIVITY_TYPES = new Set(["contact", "stage", "follow_up", "proposal", "site", "outreach", "note", "system"]);
 
 const DEFAULT_WORKSPACE = Object.freeze({
   commercialTrack: "auto",
@@ -20,6 +21,7 @@ const DEFAULT_WORKSPACE = Object.freeze({
   lastContactAt: "",
   lastContactKind: "",
   contactCount: 0,
+  activities: [],
   outreach: {
     emailSubject: "",
     emailBody: "",
@@ -164,6 +166,23 @@ function normalizeStrategyMap(value) {
   return { nodes, edges };
 }
 
+function normalizeActivities(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 200).map((item, index) => {
+    const input = item && typeof item === "object" ? item : {};
+    const type = ACTIVITY_TYPES.has(input.type) ? input.type : "system";
+    const createdAt = cleanTimestamp(input.createdAt) || new Date(0).toISOString();
+    const id = cleanText(input.id || ("activity_" + index), 100).replace(/[^a-zA-Z0-9_-]/g, "_") || ("activity_" + index);
+    return {
+      id,
+      type,
+      title: cleanText(input.title || "Atividade", 180).trim() || "Atividade",
+      detail: cleanText(input.detail, 1200).trim(),
+      createdAt,
+    };
+  }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 function normalizeOutreach(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
@@ -231,6 +250,7 @@ function normalizeWorkspace(input = {}) {
     lastContactAt: cleanTimestamp(input.lastContactAt),
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
+    activities: normalizeActivities(input.activities),
     outreach: normalizeOutreach(input.outreach),
     strategyMap: normalizeStrategyMap(input.strategyMap),
     objectionAssistant: normalizeObjectionAssistant(input.objectionAssistant),
@@ -316,6 +336,20 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
   await fs.writeFile(temporary, JSON.stringify(merged, null, 2), "utf8");
   await fs.rename(temporary, target);
   return merged;
+}
+
+export async function appendLeadActivity(leadId, activity = {}) {
+  const id = safeLeadId(leadId);
+  const current = await getLeadWorkspace(id);
+  const createdAt = cleanTimestamp(activity.createdAt) || new Date().toISOString();
+  const entry = {
+    id: cleanText(activity.id || ("act_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)), 100).replace(/[^a-zA-Z0-9_-]/g, "_"),
+    type: ACTIVITY_TYPES.has(activity.type) ? activity.type : "system",
+    title: cleanText(activity.title || "Atividade", 180).trim() || "Atividade",
+    detail: cleanText(activity.detail, 1200).trim(),
+    createdAt,
+  };
+  return saveLeadWorkspace(id, { activities: [entry, ...(current.activities || [])].slice(0, 200) });
 }
 
 export async function listLeadWorkspaces() {

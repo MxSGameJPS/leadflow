@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import * as repo from "../../repositories/leadRepository.js";
 import { parseLeads } from "../../services/imports/parseLeads.js";
-import { getLeadWorkspace, saveLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
+import { appendLeadActivity, getLeadWorkspace, saveLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
 
 const MAX_IMPORT_SIZE = 5_000_000;
 const CLEAR_CONFIRMATION = "APAGAR";
@@ -20,11 +20,50 @@ export async function createLeadAction(data) { const r = await repo.createLead(d
 export async function updateLeadAction(id, patch) { const r = await repo.updateLead(id, patch); refresh(); return r; }
 export async function deleteLeadAction(id) { await repo.deleteLead(id); refresh(); }
 export async function deleteLeadsAction(ids) { const r = await repo.deleteLeads(ids); refresh(); return r; }
-export async function moveStageAction(id, stage) { await repo.moveStage(id, stage); refresh(); }
-export async function setLandingAction(id, status) { await repo.setLanding(id, status); refresh(); }
-export async function setGradeAction(id, grade) { await repo.setGrade(id, grade); refresh(); }
-export async function setFollowUpAction(id, date) { await repo.setFollowUp(id, date); refresh(); }
-export async function setProposalValueAction(id, value) { await repo.setProposalValue(id, value); refresh(); }
+export async function moveStageAction(id, stage) {
+  const before = await repo.getLead(String(id || ""));
+  const saved = await repo.moveStage(id, stage);
+  if (before?.stage !== saved?.stage) await appendLeadActivity(id, {
+    type: "stage",
+    title: "Etapa alterada",
+    detail: (before?.stage || "novo") + " → " + (saved?.stage || stage),
+  });
+  refresh();
+  return saved;
+}
+export async function setLandingAction(id, status) {
+  const before = await repo.getLead(String(id || ""));
+  const saved = await repo.setLanding(id, status);
+  if (before?.landingStatus !== saved?.landingStatus) await appendLeadActivity(id, {
+    type: "site",
+    title: "Status da prévia alterado",
+    detail: (before?.landingStatus || "none") + " → " + (saved?.landingStatus || status),
+  });
+  refresh();
+  return saved;
+}
+export async function setGradeAction(id, grade) { const saved = await repo.setGrade(id, grade); refresh(); return saved; }
+export async function setFollowUpAction(id, date) {
+  const saved = await repo.setFollowUp(id, date);
+  await appendLeadActivity(id, {
+    type: "follow_up",
+    title: saved?.followUpAt ? "Follow-up agendado" : "Follow-up removido",
+    detail: saved?.followUpAt || "",
+  });
+  refresh();
+  return saved;
+}
+export async function setProposalValueAction(id, value) {
+  const before = await repo.getLead(String(id || ""));
+  const saved = await repo.setProposalValue(id, value);
+  if (Number(before?.proposalValue || 0) !== Number(saved?.proposalValue || 0)) await appendLeadActivity(id, {
+    type: "proposal",
+    title: "Valor da proposta atualizado",
+    detail: "R$ " + Number(saved?.proposalValue || 0).toLocaleString("pt-BR"),
+  });
+  refresh();
+  return saved;
+}
 export async function setNotesAction(id, notes) { await repo.setNotes(id, notes); refresh(); }
 
 export async function recordContactAction(id, kind = "manual") {
@@ -32,10 +71,17 @@ export async function recordContactAction(id, kind = "manual") {
   if (!lead) throw new Error("Lead não encontrado.");
 
   const workspace = await getLeadWorkspace(lead.id);
+  const now = new Date().toISOString();
   const saved = await saveLeadWorkspace(lead.id, {
-    lastContactAt: new Date().toISOString(),
+    lastContactAt: now,
     lastContactKind: kind,
     contactCount: Number(workspace.contactCount || 0) + 1,
+  });
+  await appendLeadActivity(lead.id, {
+    type: "contact",
+    title: "Contato registrado",
+    detail: String(kind || "manual"),
+    createdAt: now,
   });
   refresh();
   return {

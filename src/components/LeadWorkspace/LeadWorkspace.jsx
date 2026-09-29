@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES } from "../../services/leads/stages.js";
 import { buildProfileMessages } from "../../services/leads/profileMessages.js";
@@ -74,6 +74,17 @@ function formatLastContact(value, count = 0) {
   return total > 0 ? `${formatted} · ${total} contato${total === 1 ? "" : "s"}` : formatted;
 }
 
+function activityWhen(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function defaultCallScript(lead, profile) {
   const location = [lead.city, lead.location].filter(Boolean).join(" / ");
   const intro = [profile?.name, profile?.profession].filter(Boolean).join(", ") || "trabalho com desenvolvimento de sites";
@@ -114,6 +125,10 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [objectionAnalysis, setObjectionAnalysis] = useState(initialWorkspace.objectionAssistant || {});
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    setWorkspace(initialWorkspace);
+  }, [initialWorkspace]);
 
   const currentStage = useMemo(() => STAGES.find(item => item.id === lead.stage), [lead.stage]);
   const status = lead.stage === "ganho" ? "won" : lead.stage === "perdido" ? "lost" : "open";
@@ -364,6 +379,18 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
         <label><span>Instagram do cliente</span><input value={instagram} onChange={event => setInstagram(event.target.value)} placeholder="https://instagram.com/perfil" /></label>
         <label><span>Link da prévia após o deploy</span><input value={previewUrl} onChange={event => setPreviewUrl(event.target.value)} placeholder="https://previa-cliente.vercel.app" /></label>
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "digital"} onClick={saveDigitalData}>{busy === "digital" ? "Salvando..." : "Salvar dados digitais"}</button>{previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a>}</div>
+      </div>
+
+      <div className={s.activityPanel}>
+        <div className={s.activityHeading}><div><h3>Histórico comercial</h3><p>Contatos, mudanças de etapa, follow-ups, proposta, site e ações de IA.</p></div><span>{workspace.activities?.length || 0} registros</span></div>
+        <div className={s.activityList}>
+          {(workspace.activities || []).slice(0, 20).map(item => <article key={item.id} className={s.activityItem}>
+            <span className={s["activity_" + item.type]} aria-hidden="true" />
+            <div><strong>{item.title}</strong>{item.detail && <p>{item.detail}</p>}</div>
+            <time>{activityWhen(item.createdAt)}</time>
+          </article>)}
+          {!workspace.activities?.length && <div className={s.activityEmpty}>O histórico será criado automaticamente conforme a prospecção avançar.</div>}
+        </div>
       </div>
     </section>;
   }
