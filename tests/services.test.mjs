@@ -5,6 +5,7 @@ import { recommend, defaultLanding } from "../src/services/leads/recommend.js";
 import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/messages.js";
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
 import { STAGES, NEXT } from "../src/services/leads/stages.js";
+import { evidenceDecision, scoreEvidence } from "../src/services/leads/evidenceLedger.js";
 import { daysInCurrentStage, leadInactivity, pipelineForecast, pipelineStage, weightedPipelineValue } from "../src/services/leads/pipelineIntelligence.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
@@ -143,3 +144,12 @@ const stageClockLead={id:"velocity_1",stage:"proposta",createdAt:"2026-09-01T10:
 t("pipeline calcula dias na etapa pelo relogio comercial",daysInCurrentStage(stageClockLead,{stageEnteredAt:"2026-09-20T10:00:00.000Z"},new Date("2026-09-29T12:00:00.000Z"))===9);
 const stageStuck=leadInactivity(stageClockLead,{lastContactAt:"2026-09-28T10:00:00.000Z",stageEnteredAt:"2026-09-20T10:00:00.000Z"},new Date("2026-09-29T12:00:00.000Z"));
 t("contato recente nao mascara lead travado na etapa",stageStuck.stale===true&&stageStuck.reason==="stage_stuck"&&stageStuck.stageDays===9);
+
+const verifiedEvidence=scoreEvidence([{kind:"business.official",detail:"Site oficial informa o dado"}]);
+t("evidencia primaria forte verifica fato",verifiedEvidence.band==="verified"&&verifiedEvidence.hasPrimary===true);
+const inferredEvidence=evidenceDecision([{kind:"ai.inference",detail:"Modelo inferiu pelo contexto"}]);
+t("inferencia isolada da IA nao vira fato do CRM",inferredEvidence.action==="discard");
+const suggestedEvidence=evidenceDecision([{kind:"website.cited_claim",detail:"Página externa afirma o dado",sourceUrl:"https://example.com"}]);
+t("evidencia intermediaria vira sugestao humana",suggestedEvidence.action==="suggest"&&suggestedEvidence.band==="probable");
+const contradictedEvidence=scoreEvidence([{kind:"business.official",detail:"Fonte oficial A"},{kind:"contradiction",detail:"Outra fonte discorda"}]);
+t("contradicao impede verificacao automatica",contradictedEvidence.band!=="verified"&&contradictedEvidence.contradicted===true);
