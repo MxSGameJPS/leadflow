@@ -7,6 +7,7 @@ import { refineUniqueSiteComponent } from "../../services/projects/siteCodegenV4
 import { normalizeSiteSkillIds,normalizeSiteSkillMode } from "../../services/projects/siteSkills.js";
 import { collectLeadAssetUrls } from "../../services/projects/assetCollector.js";
 import { clearReferenceImages,listReferenceImages,saveReferenceImages } from "../../services/projects/referenceImageStore.js";
+import { createProjectSourceSnapshot,restoreLatestProjectSourceSnapshot } from "../../services/projects/projectVersionStore.js";
 
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
 const VALID_EFFECTS=new Set(["entrance-motion","section-reveal","parallax-hero","glass-header","hover-lift","ambient-glow","cta-pulse","smooth-scroll"]);
@@ -50,6 +51,7 @@ export async function refineSiteProjectAction(input={}){
   let generatorInput={...(project.generatorInput||{}),effects,skillMode,skills};
   if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template},mode:"lead",assetUrls:await collectLeadAssetUrls(lead),effects,skillMode,skills})}
 
+  await createProjectSourceSnapshot(project);
   const targetComponent=String(input.targetComponent||"").trim();
   const canTarget=Boolean(targetComponent&&instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged&&project.folderPath&&project.siteData?.codegenPlan);
   if(canTarget){
@@ -80,3 +82,26 @@ export async function clearSiteReferenceImagesAction(projectId){
 }
 
 export async function deleteSiteProjectAction(id){const project=await deleteSiteProject(String(id||""));revalidatePath("/projetos");revalidatePath("/criar-site");if(project.leadId)revalidatePath("/crm/"+project.leadId);return{id:project.id}}
+
+export async function restorePreviousSiteProjectVersionAction(projectId){
+  const project=await getSiteProject(String(projectId||""));
+  const snapshot=await restoreLatestProjectSourceSnapshot(project);
+  const previous=snapshot.project||{};
+  const updated=await updateSiteProject(project.id,{
+    status:"ready",
+    warning:previous.warning,
+    imageCount:previous.imageCount,
+    aiUsed:previous.aiUsed,
+    siteData:previous.siteData,
+    generatorInput:previous.generatorInput,
+    instructions:[...(Array.isArray(previous.instructions)?previous.instructions:[]),`Versão ${snapshot.sourceVersion} restaurada.`],
+    version:Number(project.version||1)+1,
+    effects:previous.effects,
+    skillMode:previous.skillMode,
+    skills:previous.skills,
+    referenceScope:previous.referenceScope,
+    referenceImages:previous.referenceImages,
+  });
+  refreshProject(updated);
+  return updated;
+}
