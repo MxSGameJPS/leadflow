@@ -11,6 +11,7 @@ const projectDir = path.join(root, "data", "projects");
 const { createSiteProject, deleteSiteProject, getSiteProject } = await import("../src/services/projects/projectStore.js");
 const { generateSiteFolder, parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
 const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV4.js");
+const { calculateVisualQualityScore } = await import("../src/services/projects/siteVisualQa.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -19,6 +20,11 @@ assert.equal(parseCodegenJson('```json\n{"concept":"premium","components":[]}\n`
 assert.equal(parseCodegenJson('Texto antes\n{"concept":"editorial","components":[]}\nTexto depois').concept, "editorial");
 assert.equal(parseCodegenJson("{ concept: 'autoral', components: [], }").concept, "autoral");
 assert.equal(parseCodegenJson('<think>planejando</think>\n~~~json\n{"concept":"clean","components":[]}\n~~~').concept, "clean");
+const visualGood=calculateVisualQualityScore({visualCraft:9,brandSpecificity:9,conversion:8,mobile:9,coherence:9,commercialReadiness:9},{desktop:{h1Count:1,brokenImages:0,horizontalOverflow:false,runtimeErrors:[]},mobile:{h1Count:1,brokenImages:0,horizontalOverflow:false,runtimeErrors:[]}},78);
+assert.equal(visualGood.pass,true);
+const visualOverflow=calculateVisualQualityScore({visualCraft:10,brandSpecificity:10,conversion:10,mobile:10,coherence:10,commercialReadiness:10},{desktop:{h1Count:1,brokenImages:0,horizontalOverflow:false,runtimeErrors:[]},mobile:{h1Count:1,brokenImages:0,horizontalOverflow:true,runtimeErrors:[]}},78);
+assert.equal(visualOverflow.pass,false);
+assert.ok(visualOverflow.score<=58);
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");
@@ -94,7 +100,10 @@ assert.equal(exportedPackage.dependencies.react, "latest");
 assert.equal(exportedPackage.dependencies["react-dom"], "latest");
 assert.equal(generationFormat.format, "unique-codegen-v4");
 assert.match(exportedPage, /components\//);
+assert.match(exportedPage, /data-leadflow-component/);
 assert.match(exportedLayout, /theme\.module\.css/);
+const nextConfig = await fs.readFile(path.join(generatedRoot, "next.config.mjs"), "utf8");
+assert.match(nextConfig, /LEADFLOW_BUILD_DIST_DIR/);
 assert.ok(!exportedPage.includes("GeneratedSiteRuntime"));
 assert.ok(generated.siteData.codegenPlan?.components?.length >= 3);
 for (const component of generated.siteData.codegenPlan.components) {

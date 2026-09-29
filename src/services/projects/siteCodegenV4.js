@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
+import { runVisualQualityAudit } from "./siteVisualQa.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMPONENTS = 16;
@@ -282,6 +283,9 @@ function validateComponent(name,source){
   return errors;
 }
 function componentRequest(site,plan,component,errors){
+  const index=plan.components.findIndex(item=>item.name===component.name);
+  const previous=index>0?plan.components[index-1]:null;
+  const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   return {
     model:roleModel("code"),temperature:.64,maxTokens:9000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
     systemPrompt:[
@@ -303,7 +307,12 @@ function componentRequest(site,plan,component,errors){
     prompt:[
       "SITE: "+JSON.stringify(facts(site)),
       "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,conversionStrategy:plan.conversionStrategy,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,motionStrategy:plan.motionStrategy,responsiveStrategy:plan.responsiveStrategy}),
-      "COMPONENTE: "+JSON.stringify(component),
+      "SEQUÊNCIA DA PÁGINA: "+JSON.stringify(plan.components.map(item=>({name:item.name,role:item.role,purpose:item.purpose}))),
+      "CONTEXTO ADJACENTE: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
+      "GOAL: implemente fielmente este componente do dossiê, com identidade própria e transição coerente com os componentes vizinhos.",
+      "MUST HOLD: "+JSON.stringify({component,globalVisualSystem:plan.visualSystem,responsiveStrategy:plan.responsiveStrategy,imageStrategy:plan.imageStrategy,conversionStrategy:plan.conversionStrategy}),
+      "OUT OF SCOPE: não redefina a arquitetura, não invente conteúdo, não troque o stack, não simplifique a composição para cards genéricos e não altere outros componentes.",
+      "DONE WHEN: JSX e CSS Module compilam, cumprem acceptanceCriteria, funcionam em 320/360/390/768/1024/1440px, não geram overflow horizontal, preservam acessibilidade e parecem parte do mesmo sistema visual.",
       "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --radius.",
       "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\"; e chame sempre actionHref(action, site), por exemplo actionHref(site.ctas?.primary?.action, site).",
       errors.length?"CORRIJA ESTES ERROS: "+errors.join(" | "):""
@@ -354,7 +363,7 @@ function actionLib(){
 }
 function pageSource(plan){
   const imports=plan.components.map(function(item){return 'import '+item.name+' from "../components/'+item.name+'/'+item.name+'.jsx";'}).join("\n");
-  const body=plan.components.map(function(item){return '      <'+item.name+' site={siteData} />';}).join("\n");
+  const body=plan.components.map(function(item){return '      <div className="leadflow-component-marker" data-leadflow-component="'+item.name+'><'+item.name+' site={siteData} /></div>';}).join("\n");
   return 'import siteData from "../data/siteData.js";\n'+imports+'\n\nexport default function Home() {\n  return (\n    <>\n'+body+'\n    </>\n  );\n}\n';
 }
 function fontConfig(pair){
@@ -366,7 +375,7 @@ function layoutSource(site){
   const fonts=fontConfig(site.design?.fontPair);
   return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(site.seoTitle||site.brandName||"Site")+', description: '+JSON.stringify(site.seoDescription||site.heroText||"")+' };\n\nexport default function RootLayout({ children }) {\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}</body></html>;\n}\n';
 }
-function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
+function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}.leadflow-component-marker{display:contents}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
 function themeCss(site){
   const c=site.design?.colors||{},radius=site.design?.radius==="sharp"?"4px":site.design?.radius==="rounded"?"28px":"14px";
   return '.body{--color-primary:'+(c.primary||"#17324D")+';--color-accent:'+(c.accent||"#D59B42")+';--color-background:'+(c.background||"#F5F5F3")+';--color-surface:'+(c.surface||"#FFFFFF")+';--color-text:'+(c.text||"#14202A")+';--color-muted:'+(c.muted||"#66717D")+';--radius:'+radius+';margin:0;background:var(--color-background);color:var(--color-text);font-family:var(--font-body),Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}';
@@ -385,9 +394,10 @@ async function writeProject(root,folderName,site,plan,sources){
     fs.writeFile(path.join(root,"data","siteData.js"),'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8"),
     fs.writeFile(path.join(root,"lib","siteActions.js"),actionLib(),"utf8"),
     fs.writeFile(path.join(root,"package.json"),packageSource(folderName),"utf8"),
+    fs.writeFile(path.join(root,"next.config.mjs"),'const nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next"};\nexport default nextConfig;\n',"utf8"),
     fs.writeFile(path.join(root,"README.md"),readme(site,plan),"utf8"),
     fs.writeFile(path.join(root,"generation-format.json"),JSON.stringify({format:"unique-codegen-v4",generatedAt:new Date().toISOString(),plan},null,2),"utf8"),
-    fs.writeFile(path.join(root,".gitignore"),"node_modules\n.next\n.env*\n","utf8")
+    fs.writeFile(path.join(root,".gitignore"),"node_modules\n.next\n.leadflow-build\n.env*\n","utf8")
   ];
   for(let i=0;i<plan.components.length;i++){
     const item=plan.components[i],source=sources[i],dir=path.join(root,"components",item.name);
@@ -468,16 +478,21 @@ async function validateProject(root,plan){
   }
   return errors;
 }
-async function runBuild(root){
+async function resolveBuildNext(root){
   const generatedNext=path.join(root,"node_modules","next","dist","bin","next");
   const rootNext=path.join(process.cwd(),"node_modules","next","dist","bin","next");
-  let nextBin=rootNext;
-  try{await fs.access(generatedNext);nextBin=generatedNext}catch{}
+  try{await fs.access(generatedNext);return generatedNext}catch{return rootNext}
+}
+async function cleanupBuildArtifacts(root){await fs.rm(path.join(root,".leadflow-build"),{recursive:true,force:true})}
+async function runBuild(root){
+  const nextBin=await resolveBuildNext(root);
+  await cleanupBuildArtifacts(root);
   try{
-    const result=await execFileAsync(process.execPath,[nextBin,"build"],{cwd:root,timeout:180000,maxBuffer:3*1024*1024,env:{...process.env,NODE_ENV:"production",NEXT_TELEMETRY_DISABLED:"1"}});
-    return{ok:true,log:(result.stdout||"")+"\n"+(result.stderr||"")};
+    const result=await execFileAsync(process.execPath,[nextBin,"build"],{cwd:root,timeout:180000,maxBuffer:3*1024*1024,env:{...process.env,NODE_ENV:"production",NEXT_TELEMETRY_DISABLED:"1",LEADFLOW_BUILD_DIST_DIR:".leadflow-build"}});
+    return{ok:true,log:(result.stdout||"")+"\n"+(result.stderr||""),nextBin};
   }catch(error){
-    return{ok:false,log:clean((error.stdout||"")+"\n"+(error.stderr||"")+"\n"+error.message,80000)};
+    await cleanupBuildArtifacts(root);
+    return{ok:false,log:clean((error.stdout||"")+"\n"+(error.stderr||"")+"\n"+error.message,80000),nextBin};
   }
 }
 
@@ -539,15 +554,50 @@ export async function generateUniqueSiteCode(options={}){
         if(!errors.length)build=await runBuild(root);
       }
     }
-    if(!build.ok)throw new Error("O código foi gerado, mas falhou no build automático: "+clean(build.log,3500));
+    if(!build.ok){
+      await cleanupBuildArtifacts(root);
+      throw new Error("O código foi gerado, mas falhou no build automático: "+clean(build.log,3500));
+    }
   }
-  return{plan,format:"unique-codegen-v4",buildOk:build.ok};
+
+  let quality={available:false,pass:true,score:null,threshold:Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||78),judgeUsed:false,skippedReason:skipAi?"Auditoria visual ignorada no modo de teste/fallback.":"Build visual não executado."};
+  if(build.ok&&!skipAi&&options.visualQa!==false){
+    quality=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
+    const repair=quality.available
+      ? quality.issues.filter(issue=>["high","medium"].includes(issue.severity)).slice(0,4)
+      : [];
+    if(repair.length){
+      await concurrent(repair,2,async function(issue){
+        const index=plan.components.findIndex(item=>item.name===issue.component);
+        if(index<0)return;
+        const note="AUDITORIA VISUAL DO SITE RENDERIZADO ["+issue.severity.toUpperCase()+"]: "+issue.instruction+(issue.evidence?" Evidência: "+issue.evidence:"");
+        sources[index]=await generateComponent(site,plan,plan.components[index],false,[note]);
+      });
+      const affected=[...new Set(repair.map(issue=>issue.component))];
+      await rewriteComponents(root,plan,sources,affected);
+      errors=await validateProject(root,plan);
+      if(errors.length){
+        await cleanupBuildArtifacts(root);
+        throw new Error("Projeto reprovado após correção visual: "+errors.join(" | "));
+      }
+      build=await runBuild(root);
+      if(!build.ok){
+        await cleanupBuildArtifacts(root);
+        throw new Error("A correção visual quebrou o build: "+clean(build.log,3500));
+      }
+      const second=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
+      quality={...second,attempts:2,initialScore:quality.score,initialSummary:quality.summary||""};
+    }else quality={...quality,attempts:quality.available?1:0};
+  }
+  await cleanupBuildArtifacts(root);
+  return{plan,format:"unique-codegen-v4",buildOk:build.ok,quality};
 }
 
 export async function hardenUniqueCodegenProject(folderPath){
   const root=path.resolve(process.cwd(),folderPath);
   let changed=0;
   try{
+    await cleanupBuildArtifacts(root);
     const componentsRoot=path.join(root,"components");
     const dirs=await fs.readdir(componentsRoot,{withFileTypes:true});
     for(const dir of dirs){

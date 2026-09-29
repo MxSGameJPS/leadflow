@@ -1013,6 +1013,7 @@ export async function generateSiteFolder(input = {}) {
     validateBuild: input.validateBuild !== false,
   });
   siteData.codegenPlan = codegen.plan;
+  siteData.codegenQuality = codegen.quality || null;
   siteData.generatorFormat = codegen.format;
 
   const report = {
@@ -1027,6 +1028,7 @@ export async function generateSiteFolder(input = {}) {
     runtimeIntegrity: "unique-codegen-v4",
     codegenPlan: codegen.plan,
     codegenBuildOk: codegen.buildOk,
+    codegenQuality: codegen.quality || null,
     qualityContract: {
       mobileFirst: true,
       targetViewports: [320, 360, 390, 768, 1024, 1440],
@@ -1044,6 +1046,15 @@ export async function generateSiteFolder(input = {}) {
     photoAttributions: media.attributions,
     validationRequired: true,
   };
+
+  if (codegen.quality?.available && codegen.quality.score !== null && !codegen.quality.pass) {
+    const qualityMessage = `Auditoria visual: ${codegen.quality.score}/100 (mínimo ${codegen.quality.threshold}). O site foi entregue, mas ainda merece revisão visual.`;
+    aiWarning = [aiWarning, qualityMessage].filter(Boolean).join(" ");
+    report.aiWarning = aiWarning;
+  } else if (codegen.quality?.skippedReason && !input.skipAi) {
+    aiWarning = [aiWarning, codegen.quality.skippedReason].filter(Boolean).join(" ");
+    report.aiWarning = aiWarning;
+  }
 
   await Promise.all([
     fs.writeFile(path.join(folder.absolutePath, "generation-report.json"), JSON.stringify(report, null, 2), "utf8"),
