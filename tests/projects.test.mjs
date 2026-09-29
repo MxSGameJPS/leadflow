@@ -22,6 +22,9 @@ const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
 assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
+assert.equal(parseAiJson('<think>rascunho</think>\nResposta:\n~~~json\n{"brandName":"Oficina Premium","nested":{"ok":true}}\n~~~\nObservação final').nested.ok,true);
+assert.equal(parseAiJson('texto com {ruido} antes do objeto válido {"brandName":"Segundo objeto","colors":{"primary":"#111111"}} depois').brandName,"Segundo objeto");
+assert.equal(parseAiJson('prefácio\n{"brandName":"Chave } dentro da string","copy":"Use { identidade } própria"}\nrodapé').copy,"Use { identidade } própria");
 assert.equal(parseCodegenJson('```json\n{"concept":"premium","components":[]}\n```').concept, "premium");
 assert.equal(parseCodegenJson('Texto antes\n{"concept":"editorial","components":[]}\nTexto depois').concept, "editorial");
 assert.equal(parseCodegenJson("{ concept: 'autoral', components: [], }").concept, "autoral");
