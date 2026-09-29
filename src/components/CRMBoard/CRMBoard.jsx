@@ -518,7 +518,7 @@ export default function CRMBoard({ initialLeads = [] }) {
               <span className={lead.site && !lead.weakSite ? s.presenceYes : ""}>Site</span>
               <span className={["done", "sent"].includes(lead.landingStatus) ? s.presenceYes : ""}>Prévia</span>
             </div>
-            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}{lead.pipelineHealth?.stale ? <small>⚠ {lead.pipelineHealth.reason === "stage_stuck" ? `Há ${lead.pipelineHealth.stageDays ?? "?"} dias nesta etapa` : `Estagnado há ${lead.pipelineHealth.days ?? "?"} dias`}</small> : null}</div>
+            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}{lead.operationalRisk?.bucket === "no_next_action" ? <small>⚠ Sem próximo passo definido</small> : lead.operationalRisk?.bucket === "in_flight" ? <small>↗ Retorno já programado</small> : lead.pipelineHealth?.stale ? <small>⚠ {lead.pipelineHealth.reason === "stage_stuck" ? `Há ${lead.pipelineHealth.stageDays ?? "?"} dias nesta etapa` : `Estagnado há ${lead.pipelineHealth.days ?? "?"} dias`}</small> : null}</div>
             <div className={s.nextActionCell}>{lead.nextAction || lead.followUpAt || priorityReason(lead)?.label || "Definir próximo passo"}</div>
           </article>;
         })}
@@ -583,7 +583,7 @@ export default function CRMBoard({ initialLeads = [] }) {
                 <div><span className={`${s.scoreBadge} ${s["grade" + lead.grade]}`}>{lead.score}</span><span className={s.tempLabel}>{GRADE_LABEL[lead.grade] || lead.grade}</span></div>
                 <h3>{lead.name}</h3>
                 <p>{lead.segment || "Sem categoria"} · {cityLabel(lead)}</p>
-                <small>{lastContactLabel(lead)}{lead.pipelineHealth?.stageDays != null ? " · "+lead.pipelineHealth.stageDays+"d na etapa" : ""}{lead.pipelineHealth?.stale ? " · ⚠ estagnado" : ""}{lead.proposalValue ? " · "+BRL(lead.weightedValue || 0)+" ponderado" : ""}</small>
+                <small>{lastContactLabel(lead)}{lead.pipelineHealth?.stageDays != null ? " · "+lead.pipelineHealth.stageDays+"d na etapa" : ""}{lead.operationalRisk?.bucket === "no_next_action" ? " · ⚠ sem próximo passo" : lead.operationalRisk?.bucket === "in_flight" ? " · ↗ em voo" : lead.pipelineHealth?.stale ? " · ⚠ estagnado" : ""}{lead.proposalValue ? " · "+BRL(lead.weightedValue || 0)+" ponderado" : ""}</small>
               </article>)}
           </div>
         </div>)}
