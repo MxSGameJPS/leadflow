@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { generateWithDefaultProvider } from "../ai/providerService.js";
 import { runVisualQualityAudit } from "./siteVisualQa.js";
 import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
+import { applyUnifiedDiff } from "./sitePatchEngine.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMPONENTS = 16;
@@ -332,6 +333,54 @@ function componentRequest(site,plan,component,errors){
     ].filter(Boolean).join("\n\n")
   };
 }
+function componentPatchRequest(site,plan,component,currentSource,instruction,errors=[]){
+  const index=plan.components.findIndex(item=>item.name===component.name);
+  const previous=index>0?plan.components[index-1]:null;
+  const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
+  const jsxPath="components/"+component.name+"/"+component.name+".jsx";
+  const cssPath="components/"+component.name+"/"+component.name+".module.css";
+  return{
+    model:roleModel("code"),temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
+    systemPrompt:[
+      "Você é um engenheiro sênior editando código existente com precisão cirúrgica.",
+      "Retorne SOMENTE unified git diff. Não retorne arquivos completos, markdown explicativo, JSON ou comentários fora do diff.",
+      "Modifique somente os arquivos explicitamente permitidos. Não renomeie arquivos e não altere arquitetura, outros componentes ou dados do site.",
+      "Preserve tudo que não precisa mudar para cumprir o pedido. Hunk context e linhas removidas devem copiar EXATAMENTE o código atual.",
+      "Stack obrigatória: Next App Router, JavaScript JSX e CSS Modules. Proibido TypeScript, Tailwind, CSS inline, UI kits ou novas dependências.",
+      "O resultado deve continuar responsivo em 320/360/390/768/1024/1440px, acessível e coerente com o design system.",
+      "Use somente fatos e imagens já existentes em site. Sem placeholders ou conteúdo inventado."
+    ].join(" "),
+    prompt:[
+      "PEDIDO: "+instruction,
+      "ARQUIVOS PERMITIDOS: "+JSON.stringify([jsxPath,cssPath]),
+      "COMPONENTE: "+JSON.stringify(component),
+      "DIREÇÃO GLOBAL: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,visualSystem:plan.visualSystem,designSystem:plan.designSystem,imageStrategy:plan.imageStrategy,responsiveStrategy:plan.responsiveStrategy,conversionStrategy:plan.conversionStrategy}),
+      "VIZINHOS: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
+      "DADOS VERIFICADOS: "+JSON.stringify(facts(site)),
+      "ARQUIVO ATUAL "+jsxPath+":\n"+clean(currentSource.jsx,18000),
+      "ARQUIVO ATUAL "+cssPath+":\n"+clean(currentSource.css,24000),
+      errors.length?"ERROS DA TENTATIVA ANTERIOR. Reescreva apenas o diff problemático e não repita o erro:\n- "+errors.join("\n- "):"",
+      "Formato obrigatório: --- a/"+jsxPath+" / +++ b/"+jsxPath+" e/ou --- a/"+cssPath+" / +++ b/"+cssPath+" com hunks @@. Use o menor diff que resolva o pedido."
+    ].filter(Boolean).join("\n\n")
+  };
+}
+async function generateComponentPatch(site,plan,component,currentSource,instruction,initialErrors=[]){
+  const jsxPath="components/"+component.name+"/"+component.name+".jsx";
+  const cssPath="components/"+component.name+"/"+component.name+".module.css";
+  let errors=[...initialErrors];
+  for(let attempt=0;attempt<3;attempt++){
+    const result=await generateWithDefaultProvider(componentPatchRequest(site,plan,component,currentSource,instruction,errors));
+    try{
+      const applied=applyUnifiedDiff({[jsxPath]:currentSource.jsx,[cssPath]:currentSource.css},result.text,[jsxPath,cssPath]);
+      const candidate=normalizeComponentSource({jsx:applied.files[jsxPath],css:applied.files[cssPath]});
+      const validation=validateComponent(component.name,candidate);
+      if(validation.length){errors=validation.map(error=>"Validação: "+error);continue}
+      return{source:candidate,patch:{attempts:attempt+1,changedPaths:applied.changedPaths,changedLines:applied.changedLines}};
+    }catch(error){errors=[clean(error.message,1800)]}
+  }
+  throw new Error("A IA não conseguiu produzir um diff aplicável para "+component.name+" após 3 tentativas: "+errors.join(" | "));
+}
+
 function fallbackComponent(component){
   const name=component.name,role=component.role;
   let body="";
@@ -494,7 +543,14 @@ async function validateProject(root,plan){
   const errors=[];
   const pkg=JSON.parse(await fs.readFile(path.join(root,"package.json"),"utf8"));
   if(pkg.dependencies?.next!=="latest")errors.push("next deve ser latest");
+  let page="";
+  try{page=await fs.readFile(path.join(root,"app","page.jsx"),"utf8")}catch{errors.push("app/page.jsx ausente")}
+  for(const required of ["app/layout.jsx","app/theme.module.css","data/siteData.js","lib/siteActions.js","lib/siteSeo.js"]){
+    try{await fs.access(path.join(root,...required.split("/")))}catch{errors.push(required+" ausente")}
+  }
   for(const item of plan.components){
+    if(page&&!page.includes("../components/"+item.name+"/"+item.name+".jsx"))errors.push("page.jsx não importa "+item.name);
+    if(page&&!page.includes('data-leadflow-component="'+item.name+'"'))errors.push("page.jsx não marca "+item.name+" para inspeção");
     try{
       const jsx=await fs.readFile(path.join(root,"components",item.name,item.name+".jsx"),"utf8");
       const css=await fs.readFile(path.join(root,"components",item.name,item.name+".module.css"),"utf8");
@@ -636,21 +692,17 @@ export async function refineUniqueSiteComponent(options={}){
   const jsxPath=path.join(dir,name+".jsx"),cssPath=path.join(dir,name+".module.css");
   let currentJsx="",currentCss="";
   try{currentJsx=await fs.readFile(jsxPath,"utf8");currentCss=await fs.readFile(cssPath,"utf8")}catch{throw new Error("Não foi possível carregar o componente selecionado.")}
-  const note=[
-    "REFINAMENTO VISUAL DIRECIONADO. Altere somente este componente e preserve o restante do site.",
-    "PEDIDO DO USUÁRIO: "+instruction,
-    "CÓDIGO JSX ATUAL:\n"+clean(currentJsx,12000),
-    "CSS MODULE ATUAL:\n"+clean(currentCss,16000),
-    "Mantenha o que já funciona e faça uma mudança cirúrgica, coerente com a direção mestre e com os componentes vizinhos."
-  ].join("\n\n");
-  let source=await generateComponent(site,plan,component,false,[note]);
+  let patchResult=await generateComponentPatch(site,plan,component,{jsx:currentJsx,css:currentCss},instruction);
+  let source=patchResult.source;
+  const patchHistory=[{phase:"user",...patchResult.patch}];
   await fs.writeFile(jsxPath,source.jsx,"utf8");
   await fs.writeFile(cssPath,source.css,"utf8");
   let errors=await validateProject(root,plan);
   if(errors.length)throw new Error("Refinamento reprovado: "+errors.join(" | "));
   let build=await runBuild(root);
   if(!build.ok){
-    source=await generateComponent(site,plan,component,false,[note,"BUILD FALHOU. Corrija este componente sem alterar a intenção visual. Log: "+clean(build.log,2200)]);
+    patchResult=await generateComponentPatch(site,plan,component,source,"Corrija somente os problemas de build sem desfazer a alteração solicitada pelo usuário.",["BUILD FALHOU: "+clean(build.log,2200)]);
+    source=patchResult.source;patchHistory.push({phase:"build",...patchResult.patch});
     await fs.writeFile(jsxPath,source.jsx,"utf8");
     await fs.writeFile(cssPath,source.css,"utf8");
     errors=await validateProject(root,plan);
@@ -661,9 +713,12 @@ export async function refineUniqueSiteComponent(options={}){
   let quality=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
   const ownIssue=quality.available?quality.issues.find(issue=>issue.component===name&&["high","medium"].includes(issue.severity)):null;
   if(ownIssue){
-    source=await generateComponent(site,plan,component,false,[note,"AUDITORIA DO RENDER APÓS A ALTERAÇÃO: "+ownIssue.instruction+(ownIssue.evidence?" Evidência: "+ownIssue.evidence:"")]);
+    patchResult=await generateComponentPatch(site,plan,component,source,"Corrija o problema encontrado na auditoria visual preservando a alteração aprovada e todo o restante do componente.",["AUDITORIA DO RENDER: "+ownIssue.instruction+(ownIssue.evidence?" Evidência: "+ownIssue.evidence:"")]);
+    source=patchResult.source;patchHistory.push({phase:"visual",...patchResult.patch});
     await fs.writeFile(jsxPath,source.jsx,"utf8");
     await fs.writeFile(cssPath,source.css,"utf8");
+    errors=await validateProject(root,plan);
+    if(errors.length){await cleanupBuildArtifacts(root);throw new Error("Autocorreção visual reprovada: "+errors.join(" | "))}
     build=await runBuild(root);
     if(!build.ok){await cleanupBuildArtifacts(root);throw new Error("A autocorreção visual falhou no build: "+clean(build.log,3500))}
     const second=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
@@ -681,10 +736,10 @@ export async function refineUniqueSiteComponent(options={}){
   try{
     const reportFile=path.join(root,"generation-report.json");
     const report=JSON.parse(await fs.readFile(reportFile,"utf8"));
-    report.codegenPlan=plan;report.codegenQuality=quality;report.codegenBuildOk=true;report.lastTargetedRefinement={component:name,instruction,at:new Date().toISOString()};
+    report.codegenPlan=plan;report.codegenQuality=quality;report.codegenBuildOk=true;report.lastTargetedRefinement={component:name,instruction,editingStrategy:"validated-unified-diff",patchHistory,at:new Date().toISOString()};
     await fs.writeFile(reportFile,JSON.stringify(report,null,2),"utf8");
   }catch{}
-  return{plan,quality,buildOk:true,componentName:name};
+  return{plan,quality,buildOk:true,componentName:name,editingStrategy:"validated-unified-diff",patchHistory};
 }
 
 export async function hardenUniqueCodegenProject(folderPath){

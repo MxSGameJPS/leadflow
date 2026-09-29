@@ -14,6 +14,7 @@ const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV
 const { calculateVisualQualityScore } = await import("../src/services/projects/siteVisualQa.js");
 const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProjectSourceSnapshot } = await import("../src/services/projects/projectVersionStore.js");
 const { normalizeCodegenDesignSystem } = await import("../src/services/projects/siteDesignSystem.js");
+const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/projects/sitePatchEngine.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -37,6 +38,22 @@ assert.equal(normalizedDesignSystem.signatureMotif,"Linha editorial própria");
 assert.equal(normalizedDesignSystem.tokens.primary,"#112233");
 assert.ok(normalizedDesignSystem.tokens.sectionSpace.includes("clamp"));
 assert.deepEqual(normalizedDesignSystem.antiPatterns,["cards repetidos"]);
+const patchOriginal={"components/Hero/Hero.jsx":"import styles from \"./Hero.module.css\";\n\nexport default function Hero(){\n  return <h1 className={styles.title}>Antes</h1>;\n}\n","components/Hero/Hero.module.css":".title{font-size:2rem}\n"};
+const patchText=`\`\`\`diff
+--- a/components/Hero/Hero.jsx
++++ b/components/Hero/Hero.jsx
+@@ -99,3 +99,3 @@
+ export default function Hero(){
+-  return <h1 className={styles.title}>Antes</h1>;
++  return <h1 className={styles.title}>Depois</h1>;
+ }
+\`\`\``;
+assert.equal(parseUnifiedDiff(patchText).length,1);
+const patched=applyUnifiedDiff(patchOriginal,patchText,Object.keys(patchOriginal));
+assert.match(patched.files["components/Hero/Hero.jsx"],/>Depois</);
+assert.deepEqual(patched.changedPaths,["components/Hero/Hero.jsx"]);
+assert.ok(patched.changedLines>=2);
+assert.throws(()=>applyUnifiedDiff(patchOriginal,`--- a/app/page.jsx\n+++ b/app/page.jsx\n@@ -1,1 +1,1 @@\n-old\n+new`,Object.keys(patchOriginal)),/fora do escopo/);
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");
