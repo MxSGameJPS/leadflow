@@ -52,7 +52,8 @@ export async function refineSiteProjectAction(input={}){
   if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template},mode:"lead",assetUrls:await collectLeadAssetUrls(lead),effects,skillMode,skills})}
 
   await createProjectSourceSnapshot(project);
-  const targetComponent=String(input.targetComponent||"").trim();
+  try {
+    const targetComponent=String(input.targetComponent||"").trim();
   const canTarget=Boolean(targetComponent&&instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged&&project.folderPath&&project.siteData?.codegenPlan);
   if(canTarget){
     const refined=await refineUniqueSiteComponent({
@@ -71,8 +72,12 @@ export async function refineSiteProjectAction(input={}){
   }
 
   const generated=await generateSiteFolder({...generatorInput,folderPath:project.folderPath,existingSiteData:project.siteData,instruction,referenceImages:references,skipAi:!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged});
-  const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:generated.aiUsed||project.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[...(project.instructions||[]),instruction]:(project.instructions||[]),version:Number(project.version||1)+1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
-  refreshProject(updated);return updated;
+    const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:generated.aiUsed||project.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[...(project.instructions||[]),instruction]:(project.instructions||[]),version:Number(project.version||1)+1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
+    refreshProject(updated);return updated;
+  } catch (error) {
+    try { await restoreLatestProjectSourceSnapshot(project); } catch {}
+    throw error;
+  }
 }
 
 export async function clearSiteReferenceImagesAction(projectId){
