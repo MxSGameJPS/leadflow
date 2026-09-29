@@ -196,7 +196,7 @@ function fallbackModels(request={}){
   const primary=String(request.model||"").trim();
   return [...new Set([primary,...explicit,...env].filter(Boolean))];
 }
-function transientGenerationError(error){return retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)/i.test(String(error?.message||""))}
+function transientGenerationError(error){return retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)|ferramentas em uma geração stateless|não retornou conteúdo textual para a geração stateless/i.test(String(error?.message||""))}
 export async function generateResilientWithDefaultProvider(request={}){
   const providers=(await loadProviders()).filter(item=>item.enabled);
   const primary=providers.find(item=>item.isDefault)||providers[0];
