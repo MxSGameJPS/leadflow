@@ -3,6 +3,7 @@ import path from "node:path";
 import { normalizeConsultingStage } from "../consulting/stages.js";
 import { validateCommercialTrack } from "../leads/commercialTrack.js";
 import { normalizeEvidenceClaim } from "../leads/evidenceLedger.js";
+import { normalizeCustomFieldDefinitions, normalizeCustomFieldValues } from "../leads/customFields.js";
 
 const WORKSPACE_DIR = path.join(process.cwd(), "data", "lead-workspaces");
 const CONTACT_KINDS = new Set(["initial", "followup", "last_attempt", "recovery", "call", "whatsapp", "manual"]);
@@ -26,6 +27,8 @@ const DEFAULT_WORKSPACE = Object.freeze({
   stageEnteredAt: "",
   stageHistory: [],
   evidenceClaims: [],
+  customFieldDefinitions: [],
+  customFields: {},
   activities: [],
   qualification: {
     budgetStatus: "unknown",
@@ -334,6 +337,8 @@ function normalizeWorkspace(input = {}) {
       days: cleanInteger(item?.days, 0, 0, 10000),
     })).filter(item => item.stage && item.enteredAt) : [],
     evidenceClaims: Array.isArray(input.evidenceClaims) ? input.evidenceClaims.slice(0, 120).map(normalizeEvidenceClaim).filter(item => item.field && item.value && item.band) : [],
+    customFieldDefinitions: normalizeCustomFieldDefinitions(input.customFieldDefinitions),
+    customFields: normalizeCustomFieldValues(normalizeCustomFieldDefinitions(input.customFieldDefinitions), input.customFields).values,
     activities: normalizeActivities(input.activities),
     qualification: normalizeQualification(input.qualification),
     salesIntel: normalizeSalesIntel(input.salesIntel),
