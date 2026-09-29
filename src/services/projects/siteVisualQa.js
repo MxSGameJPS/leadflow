@@ -8,7 +8,15 @@ const START_TIMEOUT_MS=45000;
 
 function clean(value,max=12000){return String(value??"").replace(/\u0000/g,"").trim().slice(0,max)}
 function clamp(value,min=0,max=10){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):0}
-function visualReviewModel(){return clean(process.env.LEADFLOW_SITE_MODEL_VISUAL_REVIEW||process.env.LEADFLOW_SITE_MODEL_REVIEW||process.env.LEADFLOW_SITE_MODEL_ARCHITECT||"",300)}
+function visualReviewModels(){
+  return [...new Set([
+    process.env.LEADFLOW_SITE_MODEL_VISUAL_REVIEW,
+    process.env.LEADFLOW_SITE_MODEL_ARCHITECT,
+    process.env.LEADFLOW_SITE_MODEL_CREATIVE,
+    process.env.LEADFLOW_SITE_MODEL_REVIEW,
+    "",
+  ].map(value=>clean(value,300)).filter((value,index)=>value||index===4))];
+}
 function parseJudgeJson(text){
   let raw=clean(text,60000).replace(/^\uFEFF/,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
   const fence=raw.match(/(?:```|~~~)(?:json)?\s*([\s\S]*?)\s*(?:```|~~~)/i);
@@ -134,8 +142,7 @@ function objectiveIssues(metrics,known){
 }
 async function judgeScreenshots({site,plan,metrics,desktopImage,mobileImage}){
   const known=plan.components.map(item=>item.name);
-  const result=await generateWithDefaultProvider({
-    model:visualReviewModel(),
+  const baseRequest={
     temperature:.12,
     maxTokens:5000,
     timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_VISUAL_REVIEW_MS||180000),
@@ -160,8 +167,15 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobileImage}){
       "Avalie de 0 a 10: visualCraft, brandSpecificity, conversion, mobile, coherence, commercialReadiness.",
       "FORMATO: "+JSON.stringify({dimensions:{visualCraft:0,brandSpecificity:0,conversion:0,mobile:0,coherence:0,commercialReadiness:0},summary:"",issues:[{component:known[0]||"LeadHero",severity:"high",instruction:"correção objetiva baseada no render",evidence:"o que foi visto"}]})
     ].join("\n\n")
-  });
-  return parseJudgeJson(result.text);
+  };
+  let lastError=null;
+  for(const model of visualReviewModels()){
+    try{
+      const result=await generateWithDefaultProvider({...baseRequest,model});
+      return parseJudgeJson(result.text);
+    }catch(error){lastError=error}
+  }
+  throw lastError||new Error("Nenhum modelo conseguiu concluir a auditoria visual.");
 }
 function normalizeJudge(raw,known){
   const dimensions={};
