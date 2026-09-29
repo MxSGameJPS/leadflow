@@ -43,6 +43,10 @@ export async function createSiteProjectAction(input={}){
 
 export async function refineSiteProjectAction(input={}){
   const project=await getSiteProject(String(input.projectId||""));
+  const generationId=String(input.generationId||"").trim();
+  if(generationId)await startGenerationProgress(generationId,{name:project.name,projectId:project.id,leadId:project.leadId||null,mode:"refine"});
+  const onProgress=generationId?(event)=>reportGenerationProgress(generationId,event):null;
+  if(onProgress)await onProgress({phase:"refine",title:"Preparando alteração",detail:"Carregando projeto, contexto e escopo solicitado."});
   const instruction=String(input.instruction||"").trim();
   const effects=normalizeEffects(input.effects,project.effects||[]);
   const skillMode=normalizeSiteSkillMode(input.skillMode??project.skillMode);
@@ -68,20 +72,22 @@ export async function refineSiteProjectAction(input={}){
       currentPlan:project.siteData.codegenPlan,
       componentName:targetComponent,
       instruction,
+      onProgress,
     });
     const siteData={...(project.siteData||{}),codegenPlan:refined.plan,codegenQuality:refined.quality};
     const warning=refined.quality?.available&&refined.quality.score!==null&&!refined.quality.pass
       ? `Auditoria visual: ${refined.quality.score}/100. O componente foi corrigido, mas o site ainda merece revisão visual.`
       : project.warning;
     const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:true,warning,siteData,generatorInput,instructions:[...(project.instructions||[]),`[${targetComponent}] ${instruction}`],version:Number(project.version||1)+1,effects,skillMode,skills,referenceScope,referenceImages:references});
-    refreshProject(updated);return updated;
+    if(generationId)await finishGenerationProgress(generationId,{projectId:updated.id,version:updated.version});refreshProject(updated);return updated;
   }
 
-  const generated=await generateSiteFolder({...generatorInput,folderPath:project.folderPath,existingSiteData:project.siteData,instruction,referenceImages:references,skipAi:!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged});
+  const generated=await generateSiteFolder({...generatorInput,folderPath:project.folderPath,existingSiteData:project.siteData,instruction,referenceImages:references,skipAi:!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged,onProgress});
     const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:generated.aiUsed||project.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[...(project.instructions||[]),instruction]:(project.instructions||[]),version:Number(project.version||1)+1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
-    refreshProject(updated);return updated;
+    if(generationId)await finishGenerationProgress(generationId,{projectId:updated.id,version:updated.version});refreshProject(updated);return updated;
   } catch (error) {
     try { await restoreLatestProjectSourceSnapshot(project); } catch {}
+    if(generationId)await failGenerationProgress(generationId,error);
     throw error;
   }
 }
