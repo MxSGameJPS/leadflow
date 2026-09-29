@@ -5,6 +5,7 @@ import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
 import { generateLeadOutreachPack } from "../../services/ai/leadOutreachService.js";
 import { analyzeLeadConversation } from "../../services/ai/objectionAdvisorService.js";
 import { generateSalesIntelDocument } from "../../services/ai/salesIntelService.js";
+import { generateQualificationCopilot } from "../../services/ai/qualificationCopilotService.js";
 import { getLead } from "../../repositories/leadRepository.js";
 import { appendLeadActivity, getLeadWorkspace, saveLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
 import { getProfessionalProfile } from "../../services/profile/profileStore.js";
@@ -129,4 +130,15 @@ export async function analyzeLeadConversationAction(payload = {}) {
     previousResponse: payload.previousResponse,
     providerId: payload.providerId,
   });
+}
+
+export async function generateQualificationCopilotAction(payload={}){
+  const leadId=String(payload.leadId||"").trim();
+  const lead=await getLead(leadId);if(!lead)throw new Error("Lead não encontrado.");
+  const workspace=await getLeadWorkspace(lead.id);
+  const result=await generateQualificationCopilot({lead,workspace,providerId:payload.providerId});
+  const saved=await saveLeadWorkspace(lead.id,{qualificationCopilot:result});
+  await appendLeadActivity(lead.id,{type:"qualification",title:"Plano de descoberta gerado com IA",detail:[result.providerName,result.model].filter(Boolean).join(" · "),createdAt:result.generatedAt});
+  revalidatePath("/crm/"+lead.id);
+  return{...result,qualificationCopilot:saved.qualificationCopilot};
 }

@@ -111,6 +111,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [outreach, setOutreach] = useState(initialWorkspace.outreach || {});
   const [qualification, setQualification] = useState(initialWorkspace.qualification || {});
   const [salesIntel, setSalesIntel] = useState(initialWorkspace.salesIntel || {});
+  const [qualificationCopilot,setQualificationCopilot]=useState(initialWorkspace.qualificationCopilot||{});
   const [instagram, setInstagram] = useState(initialLead.instagram || "");
   const [previewUrl, setPreviewUrl] = useState(initialWorkspace.previewUrl || "");
   const [proposalValue, setProposalValue] = useState(String(initialLead.proposalValue || ""));
@@ -134,6 +135,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     setWorkspace(initialWorkspace);
     setQualification(initialWorkspace.qualification || {});
     setSalesIntel(initialWorkspace.salesIntel || {});
+    setQualificationCopilot(initialWorkspace.qualificationCopilot||{});
   }, [initialWorkspace]);
 
   const qualificationResult = useMemo(() => calculateSalesQualification(lead, qualification), [lead, qualification]);
@@ -282,6 +284,16 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     } finally {
       setBusy("");
     }
+  }
+
+  async function generateQualificationHelp(){
+    setBusy("qualification-ai");setNotice("");
+    try{
+      const result=await AIActions.generateQualificationCopilotAction({leadId:lead.id});
+      setQualificationCopilot(result.qualificationCopilot||result);
+      setWorkspace(current=>({...current,qualificationCopilot:result.qualificationCopilot||result}));
+      setNotice(`Plano de descoberta gerado por ${result.providerName||"IA"}${result.model?` · ${result.model}`:""}. Nenhum campo BANT/MEDDIC foi preenchido automaticamente.`);
+    }catch(error){setNotice(`IA: ${error.message}`)}finally{setBusy("")}
   }
 
   async function generateSalesDocument(kind) {
@@ -478,6 +490,13 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
         <article><span>MEDDIC</span><strong>{meddic.overall}%</strong><small>completude</small></article>
         <article><span>Confiança</span><strong>{qualificationResult.confidence.level}</strong><small>{qualificationResult.confidence.score}% dos sinais</small></article>
         <article className={s.qualNext}><span>Próximo passo</span><p>{qualificationResult.nextStep}</p></article>
+      </div>
+
+      <div className={s.qualCopilot}>
+        <div className={s.qualCopilotHead}><div><span className={s.aiBadge}>✦ IA · COPILOTO DE DESCOBERTA</span><h3>Como conseguir as informações que faltam</h3><p>A IA usa os dados, histórico e evidências deste lead para sugerir o que perguntar. Ela não preenche BANT/MEDDIC sem confirmação.</p></div><button className={s.primary} disabled={busy==="qualification-ai"} onClick={generateQualificationHelp}>{busy==="qualification-ai"?"Analisando...":qualificationCopilot.generatedAt?"Atualizar plano":"Me ajude a qualificar este lead"}</button></div>
+        {qualificationCopilot.nextBestQuestion&&<div className={s.nextQuestion}><span>PRÓXIMA PERGUNTA RECOMENDADA</span><strong>{qualificationCopilot.nextBestQuestion}</strong><p>{qualificationCopilot.nextBestReason}</p><button onClick={()=>copy(qualificationCopilot.nextBestQuestion,"Pergunta copiada.")}>Copiar pergunta</button></div>}
+        {qualificationCopilot.summary&&<p className={s.qualAiSummary}>{qualificationCopilot.summary}</p>}
+        {qualificationCopilot.items?.length>0&&<div className={s.discoveryGrid}>{qualificationCopilot.items.map(item=><article key={item.field}><div className={s.discoveryTop}><strong>{item.label}</strong><span className={s["evidence_"+item.state]}>{item.state==="confirmed"?"Confirmado":item.state==="evidence"?"Evidência":item.state==="hypothesis"?"Hipótese":"Desconhecido"}</span></div>{item.known&&<p><b>O que sabemos:</b> {item.known}</p>}<p><b>Por que descobrir:</b> {item.why}</p><div className={s.discoveryQuestion}><small>{item.channel} · prioridade {item.priority}</small><strong>{item.question}</strong><button onClick={()=>copy(item.question,"Pergunta copiada.")}>Copiar</button></div></article>)}</div>}
       </div>
 
       <div className={s.bantGrid}>

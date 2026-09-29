@@ -51,6 +51,7 @@ const DEFAULT_WORKSPACE = Object.freeze({
     decisionProcess: "",
     updatedAt: "",
   },
+  qualificationCopilot: { summary: "", nextBestQuestion: "", nextBestReason: "", items: [], providerName: "", model: "", generatedAt: "" },
   salesIntel: {
     meetingPrep: "",
     proposal: "",
@@ -250,6 +251,11 @@ function normalizeQualification(value) {
   };
 }
 
+function normalizeQualificationCopilot(value){
+  const input=value&&typeof value==="object"?value:{};
+  return{summary:cleanText(input.summary,1800).trim(),nextBestQuestion:cleanText(input.nextBestQuestion,1200).trim(),nextBestReason:cleanText(input.nextBestReason,1000).trim(),items:(Array.isArray(input.items)?input.items:[]).slice(0,10).map((item,index)=>({field:cleanText(item?.field,80).trim(),label:cleanText(item?.label,100).trim(),state:["confirmed","evidence","hypothesis","unknown"].includes(item?.state)?item.state:"unknown",known:cleanText(item?.known,1200).trim(),why:cleanText(item?.why,1000).trim(),question:cleanText(item?.question,1200).trim(),channel:["WhatsApp","Ligação","Reunião"].includes(item?.channel)?item.channel:"WhatsApp",priority:cleanInteger(item?.priority,index+1,1,99)})).filter(item=>item.field),providerName:cleanText(input.providerName,180).trim(),model:cleanText(input.model,180).trim(),generatedAt:cleanTimestamp(input.generatedAt)};
+}
+
 function normalizeSalesIntel(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
@@ -341,6 +347,7 @@ function normalizeWorkspace(input = {}) {
     customFields: normalizeCustomFieldValues(normalizeCustomFieldDefinitions(input.customFieldDefinitions), input.customFields).values,
     activities: normalizeActivities(input.activities),
     qualification: normalizeQualification(input.qualification),
+    qualificationCopilot: normalizeQualificationCopilot(input.qualificationCopilot),
     salesIntel: normalizeSalesIntel(input.salesIntel),
     outreach: normalizeOutreach(input.outreach),
     strategyMap: normalizeStrategyMap(input.strategyMap),
@@ -416,6 +423,7 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
     ...patch,
     qualification: { ...current.qualification, ...(patch.qualification || {}) },
     salesIntel: { ...current.salesIntel, ...(patch.salesIntel || {}) },
+    qualificationCopilot: patch.qualificationCopilot || current.qualificationCopilot,
     outreach: { ...current.outreach, ...(patch.outreach || {}) },
     appointment: { ...current.appointment, ...(patch.appointment || {}) },
     sale: { ...current.sale, ...(patch.sale || {}) },
