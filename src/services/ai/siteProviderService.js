@@ -1,6 +1,30 @@
 import { generateResilientWithDefaultProvider } from "./providerService.js";
 
-// Builder stages generate artifacts; none has a tool-execution loop.
+function clean(value) {
+  return String(value || "").trim().slice(0, 300);
+}
+
+export function siteModelForRole(role = "") {
+  const key = {
+    creative: "LEADFLOW_SITE_MODEL_CREATIVE",
+    architect: "LEADFLOW_SITE_MODEL_ARCHITECT",
+    code: "LEADFLOW_SITE_MODEL_CODE",
+    review: "LEADFLOW_SITE_MODEL_REVIEW",
+    visualReview: "LEADFLOW_SITE_MODEL_VISUAL_REVIEW",
+  }[role];
+  return clean((key && process.env[key]) || process.env.LEADFLOW_SITE_MODEL || "");
+}
+
+// Site generation is intentionally isolated from the general LeadFlow AI route.
+// OmniRoute owns failover inside the selected site combo; LeadFlow must not leak
+// into LEADFLOW_AI_FALLBACK_MODELS or secondary providers after that combo fails.
 export function generateSiteWithDefaultProvider(request = {}) {
-  return generateResilientWithDefaultProvider({ ...request, disableTools: true, retries: 0 });
+  const model = clean(request.model) || siteModelForRole(request.siteRole);
+  return generateResilientWithDefaultProvider({
+    ...request,
+    model,
+    disableTools: true,
+    isolatedRouting: true,
+    retries: 0,
+  });
 }
