@@ -371,11 +371,14 @@ function fontConfig(pair){
   if(pair==="humanist")return{imports:"Fraunces, DM_Sans",display:'Fraunces({ subsets: ["latin"], variable: "--font-display" })',body:'DM_Sans({ subsets: ["latin"], variable: "--font-body" })'};
   return{imports:"Space_Grotesk, Manrope",display:'Space_Grotesk({ subsets: ["latin"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'};
 }
+function inspectorScript(){
+  return '(function(){if(new URLSearchParams(location.search).get("leadflowInspect")!=="1")return;var current=null;function marker(event){return event.target&&event.target.closest?event.target.closest("[data-leadflow-component]"):null}function clear(){if(current)current.classList.remove("leadflow-inspect-selected");current=null}document.addEventListener("mouseover",function(event){var item=marker(event);if(item)item.classList.add("leadflow-inspect-hover")},true);document.addEventListener("mouseout",function(event){var item=marker(event);if(item)item.classList.remove("leadflow-inspect-hover")},true);document.addEventListener("click",function(event){var item=marker(event);if(!item)return;event.preventDefault();event.stopPropagation();clear();current=item;item.classList.add("leadflow-inspect-selected");window.top.postMessage({type:"leadflow:component-selected",component:item.getAttribute("data-leadflow-component")},"*")},true);window.addEventListener("keydown",function(event){if(event.key==="Escape"){clear();window.top.postMessage({type:"leadflow:component-selected",component:""},"*")}})})();';
+}
 function layoutSource(site){
   const fonts=fontConfig(site.design?.fontPair);
-  return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(site.seoTitle||site.brandName||"Site")+', description: '+JSON.stringify(site.seoDescription||site.heroText||"")+' };\n\nexport default function RootLayout({ children }) {\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}</body></html>;\n}\n';
+  return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(site.seoTitle||site.brandName||"Site")+', description: '+JSON.stringify(site.seoDescription||site.heroText||"")+' };\n\nexport default function RootLayout({ children }) {\n  const inspector=process.env.NODE_ENV==="development";\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}{inspector ? <script src="/leadflow-inspector.js" defer /> : null}</body></html>;\n}\n';
 }
-function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}.leadflow-component-marker{display:contents}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
+function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}.leadflow-component-marker{display:contents}.leadflow-inspect-hover>*{outline:2px dashed rgba(37,99,235,.72)!important;outline-offset:-2px}.leadflow-inspect-selected>*{outline:3px solid #2563eb!important;outline-offset:-3px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
 function themeCss(site){
   const c=site.design?.colors||{},radius=site.design?.radius==="sharp"?"4px":site.design?.radius==="rounded"?"28px":"14px";
   return '.body{--color-primary:'+(c.primary||"#17324D")+';--color-accent:'+(c.accent||"#D59B42")+';--color-background:'+(c.background||"#F5F5F3")+';--color-surface:'+(c.surface||"#FFFFFF")+';--color-text:'+(c.text||"#14202A")+';--color-muted:'+(c.muted||"#66717D")+';--radius:'+radius+';margin:0;background:var(--color-background);color:var(--color-text);font-family:var(--font-body),Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}';
@@ -385,7 +388,7 @@ function readme(site,plan){return '# '+(site.brandName||"Site")+'\n\nProjeto exc
 async function clearCode(root){for(const name of ["app","components","data","lib"])await fs.rm(path.join(root,name),{recursive:true,force:true})}
 async function writeProject(root,folderName,site,plan,sources){
   await clearCode(root);
-  for(const name of ["app","components","data","lib"])await fs.mkdir(path.join(root,name),{recursive:true});
+  for(const name of ["app","components","data","lib","public"])await fs.mkdir(path.join(root,name),{recursive:true});
   const writes=[
     fs.writeFile(path.join(root,"app","layout.jsx"),layoutSource(site),"utf8"),
     fs.writeFile(path.join(root,"app","page.jsx"),pageSource(plan),"utf8"),
@@ -395,6 +398,7 @@ async function writeProject(root,folderName,site,plan,sources){
     fs.writeFile(path.join(root,"lib","siteActions.js"),actionLib(),"utf8"),
     fs.writeFile(path.join(root,"package.json"),packageSource(folderName),"utf8"),
     fs.writeFile(path.join(root,"next.config.mjs"),'const nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next"};\nexport default nextConfig;\n',"utf8"),
+    fs.writeFile(path.join(root,"public","leadflow-inspector.js"),inspectorScript(),"utf8"),
     fs.writeFile(path.join(root,"README.md"),readme(site,plan),"utf8"),
     fs.writeFile(path.join(root,"generation-format.json"),JSON.stringify({format:"unique-codegen-v4",generatedAt:new Date().toISOString(),plan},null,2),"utf8"),
     fs.writeFile(path.join(root,".gitignore"),"node_modules\n.next\n.leadflow-build\n.env*\n","utf8")
@@ -593,6 +597,65 @@ export async function generateUniqueSiteCode(options={}){
   return{plan,format:"unique-codegen-v4",buildOk:build.ok,quality};
 }
 
+export async function refineUniqueSiteComponent(options={}){
+  const root=path.resolve(process.cwd(),options.folderPath||"");
+  const site=options.siteData||{};
+  const plan=normalizePlan(options.currentPlan||site.codegenPlan||{},site);
+  const name=clean(options.componentName,80);
+  const instruction=clean(options.instruction,5000);
+  const index=plan.components.findIndex(item=>item.name===name);
+  if(index<0)throw new Error("O componente selecionado não existe mais na arquitetura atual.");
+  if(!instruction)throw new Error("Descreva o que deve mudar no componente selecionado.");
+  const component=plan.components[index],dir=path.join(root,"components",name);
+  const jsxPath=path.join(dir,name+".jsx"),cssPath=path.join(dir,name+".module.css");
+  let currentJsx="",currentCss="";
+  try{currentJsx=await fs.readFile(jsxPath,"utf8");currentCss=await fs.readFile(cssPath,"utf8")}catch{throw new Error("Não foi possível carregar o componente selecionado.")}
+  const note=[
+    "REFINAMENTO VISUAL DIRECIONADO. Altere somente este componente e preserve o restante do site.",
+    "PEDIDO DO USUÁRIO: "+instruction,
+    "CÓDIGO JSX ATUAL:\n"+clean(currentJsx,12000),
+    "CSS MODULE ATUAL:\n"+clean(currentCss,16000),
+    "Mantenha o que já funciona e faça uma mudança cirúrgica, coerente com a direção mestre e com os componentes vizinhos."
+  ].join("\n\n");
+  let source=await generateComponent(site,plan,component,false,[note]);
+  await fs.writeFile(jsxPath,source.jsx,"utf8");
+  await fs.writeFile(cssPath,source.css,"utf8");
+  let errors=await validateProject(root,plan);
+  if(errors.length)throw new Error("Refinamento reprovado: "+errors.join(" | "));
+  let build=await runBuild(root);
+  if(!build.ok){
+    source=await generateComponent(site,plan,component,false,[note,"BUILD FALHOU. Corrija este componente sem alterar a intenção visual. Log: "+clean(build.log,2200)]);
+    await fs.writeFile(jsxPath,source.jsx,"utf8");
+    await fs.writeFile(cssPath,source.css,"utf8");
+    errors=await validateProject(root,plan);
+    if(errors.length){await cleanupBuildArtifacts(root);throw new Error("Refinamento reprovado após correção: "+errors.join(" | "))}
+    build=await runBuild(root);
+  }
+  if(!build.ok){await cleanupBuildArtifacts(root);throw new Error("O refinamento direcionado falhou no build: "+clean(build.log,3500))}
+  let quality=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
+  const ownIssue=quality.available?quality.issues.find(issue=>issue.component===name&&["high","medium"].includes(issue.severity)):null;
+  if(ownIssue){
+    source=await generateComponent(site,plan,component,false,[note,"AUDITORIA DO RENDER APÓS A ALTERAÇÃO: "+ownIssue.instruction+(ownIssue.evidence?" Evidência: "+ownIssue.evidence:"")]);
+    await fs.writeFile(jsxPath,source.jsx,"utf8");
+    await fs.writeFile(cssPath,source.css,"utf8");
+    build=await runBuild(root);
+    if(!build.ok){await cleanupBuildArtifacts(root);throw new Error("A autocorreção visual falhou no build: "+clean(build.log,3500))}
+    const second=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
+    quality={...second,attempts:2,initialScore:quality.score,initialSummary:quality.summary||""};
+  }else quality={...quality,attempts:quality.available?1:0};
+  await cleanupBuildArtifacts(root);
+  site.codegenPlan=plan;
+  site.codegenQuality=quality;
+  await fs.writeFile(path.join(root,"data","siteData.js"),'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8");
+  try{
+    const reportFile=path.join(root,"generation-report.json");
+    const report=JSON.parse(await fs.readFile(reportFile,"utf8"));
+    report.codegenPlan=plan;report.codegenQuality=quality;report.codegenBuildOk=true;report.lastTargetedRefinement={component:name,instruction,at:new Date().toISOString()};
+    await fs.writeFile(reportFile,JSON.stringify(report,null,2),"utf8");
+  }catch{}
+  return{plan,quality,buildOk:true,componentName:name};
+}
+
 export async function hardenUniqueCodegenProject(folderPath){
   const root=path.resolve(process.cwd(),folderPath);
   let changed=0;
@@ -614,6 +677,8 @@ export async function hardenUniqueCodegenProject(folderPath){
     }
     const libDir=path.join(root,"lib");
     await fs.mkdir(libDir,{recursive:true});
+    await fs.mkdir(path.join(root,"public"),{recursive:true});
+    await fs.writeFile(path.join(root,"public","leadflow-inspector.js"),inspectorScript(),"utf8");
     const actionsPath=path.join(libDir,"siteActions.js");
     const expectedActions=actionLib();
     let currentActions="";
