@@ -447,6 +447,12 @@ function normalizeDesign(value, fallback) {
   };
 }
 
+function normalizeBrandEvidence(value){
+  const data=value&&typeof value==="object"&&!Array.isArray(value)?value:{};
+  const colors=list=>Array.isArray(list)?list.map(item=>safeColor(item,"")).filter(Boolean).slice(0,8):[];
+  return{dominantColors:colors(data.dominantColors),accentColors:colors(data.accentColors),energy:clean(data.energy,220),visualLanguage:clean(data.visualLanguage,500),observations:(Array.isArray(data.observations)?data.observations:[]).slice(0,12).map(item=>({fact:clean(item?.fact,400),confidence:["high","medium","low"].includes(item?.confidence)?item.confidence:"low",image:clean(item?.image,300)})).filter(item=>item.fact),avoid:(Array.isArray(data.avoid)?data.avoid:[]).map(item=>clean(item,180)).filter(Boolean).slice(0,8)};
+}
+
 function normalizeSpec(value, input) {
   const fallback = fallbackSpec(input);
   const data = value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -455,6 +461,7 @@ function normalizeSpec(value, input) {
   const ctas = normalizeCtas(data.ctas, input, fallback.ctas);
   return {
     brandName: clean(data.brandName, 120) || fallback.brandName,
+    brandEvidence: normalizeBrandEvidence(data.brandEvidence),
     audience: clean(data.audience, 220) || fallback.audience,
     pageJob: clean(data.pageJob, 220) || fallback.pageJob,
     eyebrow: clean(data.eyebrow, 100) || fallback.eyebrow,
@@ -683,6 +690,7 @@ function buildAiPrompt(input, currentSiteData = null, instruction = "") {
       "Formato obrigatório:",
       JSON.stringify({
         brandName: "", audience: "", pageJob: "", eyebrow: "", heroTitle: "", heroText: "", primaryCta: "", secondaryCta: "",
+        brandEvidence:{dominantColors:["#000000"],accentColors:["#000000"],energy:"",visualLanguage:"",observations:[{fact:"",confidence:"high | medium | low",image:"/images/arquivo.jpg"}],avoid:[""]},
         ctas: {
           primary: { label: "", action: "whatsapp | phone | maps | instagram | contact" },
           secondary: { label: "", action: "whatsapp | phone | maps | instagram | contact" }
