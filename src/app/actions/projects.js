@@ -8,6 +8,7 @@ import { normalizeSiteSkillIds,normalizeSiteSkillMode } from "../../services/pro
 import { collectLeadAssetUrls } from "../../services/projects/assetCollector.js";
 import { clearReferenceImages,listReferenceImages,saveReferenceImages } from "../../services/projects/referenceImageStore.js";
 import { createProjectSourceSnapshot,restoreLatestProjectSourceSnapshot } from "../../services/projects/projectVersionStore.js";
+import { failGenerationProgress,finishGenerationProgress,reportGenerationProgress,startGenerationProgress } from "../../services/projects/generationProgressStore.js";
 
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
 const VALID_EFFECTS=new Set(["entrance-motion","section-reveal","parallax-hero","glass-header","hover-lift","ambient-glow","cta-pulse","smooth-scroll"]);
@@ -30,9 +31,14 @@ export async function createSiteProjectAction(input={}){
   const references=await listReferenceImages(referenceScope,{withData:true});
   const generatorInput=generatorInputFor({lead,input,mode,assetUrls:lead?await collectLeadAssetUrls(lead):[],effects,skillMode,skills});
   const instruction=String(input.instruction||"").trim();
-  const generated=await generateSiteFolder({...generatorInput,instruction,referenceImages:references});
+  const generationId=String(input.generationId||"").trim();
+  if(generationId)await startGenerationProgress(generationId,{name,leadId:lead?.id||null});
+  const onProgress=generationId?(event)=>reportGenerationProgress(generationId,event):null;
+  let generated;
+  try{generated=await generateSiteFolder({...generatorInput,instruction,referenceImages:references,onProgress});}
+  catch(error){if(generationId)await failGenerationProgress(generationId,error);throw error}
   const project=await createSiteProject({leadId:lead?.id||null,name,segment:generatorInput.segment,city:generatorInput.city,mode,source:mode==="lead"?(lead?.instagram||lead?.site||lead?.mapsLink||lead?.problem||"Dados do CRM"):input.source,template:generatorInput.template,status:"ready",folderPath:generated.folderPath,aiUsed:generated.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[instruction]:["Gerar landing page premium usando os dados verificados deste lead."],version:1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
-  if(lead)await setLanding(lead.id,"done");refreshProject(project);return project;
+  if(lead)await setLanding(lead.id,"done");if(generationId)await finishGenerationProgress(generationId,{projectId:project.id,version:project.version});refreshProject(project);return project;
 }
 
 export async function refineSiteProjectAction(input={}){

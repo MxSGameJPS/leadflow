@@ -19,9 +19,18 @@ const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/pro
 const { analyzeComponentContract, buildComponentEditContext, patchBudgetFor, validatePatchPreservation } = await import("../src/services/projects/siteEditContext.js");
 const { withFileTransaction } = await import("../src/services/projects/siteEditTransaction.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
+const { startGenerationProgress,reportGenerationProgress,finishGenerationProgress,getGenerationProgress } = await import("../src/services/projects/generationProgressStore.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
 assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
+const progressId="test_progress_"+stamp;
+await startGenerationProgress(progressId,{name:"Teste"});
+await reportGenerationProgress(progressId,{phase:"code",title:"Criando Hero",file:"components/Hero/Hero.jsx",code:"export default function Hero(){}"});
+await finishGenerationProgress(progressId,{projectId:"project-test"});
+const progressState=await getGenerationProgress(progressId);
+assert.equal(progressState.status,"done");
+assert.equal(progressState.files[0],"components/Hero/Hero.jsx");
+assert.match(progressState.events[0].code,/function Hero/);
 assert.equal(parseAiJson('<think>rascunho</think>\nResposta:\n~~~json\n{"brandName":"Oficina Premium","nested":{"ok":true}}\n~~~\nObservação final').nested.ok,true);
 assert.equal(parseAiJson('texto com {ruido} antes do objeto válido {"brandName":"Segundo objeto","colors":{"primary":"#111111"}} depois').brandName,"Segundo objeto");
 assert.equal(parseAiJson('prefácio\n{"brandName":"Chave } dentro da string","copy":"Use { identidade } própria"}\nrodapé').copy,"Use { identidade } própria");

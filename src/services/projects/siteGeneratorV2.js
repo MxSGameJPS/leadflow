@@ -779,6 +779,7 @@ async function outputFolder(name, folderPath) {
   if (!absolutePath.startsWith(GENERATED_ROOT + path.sep) || absolutePath === GENERATED_ROOT) throw new Error("A pasta existente do projeto é inválida.");
   await fs.mkdir(path.join(absolutePath, "app"), { recursive: true });
   await fs.mkdir(path.join(absolutePath, "public"), { recursive: true });
+  await progress({phase:"complete",title:"Site pronto",detail:"Código, build e validações concluídos."});
   return { folderName: path.basename(absolutePath), absolutePath };
 }
 
@@ -849,6 +850,7 @@ export async function syncGeneratedSiteRuntime(folderPath, siteData) {
 
   const appDir = path.join(absolutePath, "app");
   const runtimeDir = path.join(absolutePath, "components", "GeneratedSiteRuntime");
+  await progress({phase:"finalize",title:"Finalizando arquivos",detail:"Gravando relatório, dados e metadados do projeto.",file:"generation-report.json"});
   await Promise.all([
     fs.mkdir(appDir, { recursive: true }),
     fs.mkdir(runtimeDir, { recursive: true }),
@@ -904,13 +906,16 @@ Antes de entregar, valide 320px, 360px, 390px, 768px, 1024px e 1440px, foco por 
 }
 
 export async function generateSiteFolder(input = {}) {
+  const progress=async event=>{try{await input.onProgress?.(event)}catch{}};
   const name = clean(input.name, 220);
   if (!name) throw new Error("Informe o nome do negócio.");
+  await progress({phase:"prepare",title:"Preparando workspace",detail:"Criando a estrutura inicial do projeto."});
   const folder = await outputFolder(name, input.folderPath);
   const publicDir = path.join(folder.absolutePath, "public");
   await fs.mkdir(path.join(folder.absolutePath, "app"), { recursive: true });
   await fs.mkdir(publicDir, { recursive: true });
 
+  await progress({phase:"research",title:"Lendo dados reais do lead",detail:"CRM, Google Places e ativos visuais estão sendo organizados."});
   const place = await fetchPlaceDetails(clean(input.placeId, 300));
   const placeData = {
     name: clean(place?.displayName?.text, 220) || name,
@@ -943,6 +948,7 @@ export async function generateSiteFolder(input = {}) {
   placeData.skillMode = skillRouting.mode;
   placeData.skills = skillRouting.skills;
 
+  await progress({phase:"assets",title:"Coletando identidade visual",detail:"Baixando e preparando fotos reais e referências do negócio.",file:"public/images/"});
   const media = await downloadPlacePhotos(place, publicDir);
   const externalImages = await downloadExternalImages(input.assetUrls, publicDir);
   const businessImages = [...media.images, ...externalImages].slice(0, 8);
@@ -954,6 +960,7 @@ export async function generateSiteFolder(input = {}) {
   let spec = input.existingSiteData ? normalizeSpec(input.existingSiteData, placeData) : fallbackSpec(placeData);
   try {
     if (!input.skipAi) {
+      await progress({phase:"creative",title:"Diretor criativo trabalhando",detail:"Definindo conceito, linguagem visual, copy e estratégia comercial."});
       const request = buildAiPrompt(placeData, input.existingSiteData, input.instruction);
       let result;
       try {
@@ -979,6 +986,7 @@ export async function generateSiteFolder(input = {}) {
         aiWarning = "O modelo configurado não aceitou entrada multimodal; a direção criativa foi gerada apenas com o briefing textual.";
       }
       spec = normalizeSpec(await parseAiJsonWithRepair(result.text), placeData);
+      await progress({phase:"creative",title:"Direção criativa aprovada",detail:"Conceito e sistema visual estruturados."});
       aiUsed = true;
     }
   } catch (error) {
@@ -1008,6 +1016,7 @@ export async function generateSiteFolder(input = {}) {
     skills: skillRouting.skills,
   };
 
+  await progress({phase:"architecture",title:"Arquiteto montando o site",detail:"Definindo seções, componentes, hierarquia e contratos de implementação."});
   const codegen = await generateUniqueSiteCode({
     folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"),
     folderName: folder.folderName,
@@ -1020,6 +1029,7 @@ export async function generateSiteFolder(input = {}) {
     ].filter(item => item?.dataUrl).slice(0, 6),
     skipAi: Boolean(input.skipAi),
     validateBuild: input.validateBuild !== false,
+    onProgress: input.onProgress,
   });
   siteData.codegenPlan = codegen.plan;
   siteData.codegenQuality = codegen.quality || null;

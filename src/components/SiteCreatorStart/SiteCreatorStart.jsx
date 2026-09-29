@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { clearSiteReferenceImagesAction,createSiteProjectAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
 import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
 import s from "./SiteCreatorStart.module.css";
+import GenerationLivePanel from "../GenerationLivePanel/GenerationLivePanel.jsx";
 
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
 const EFFECT_OPTIONS=[
@@ -34,6 +35,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[selectedSkills,setSelectedSkills]=useState(Array.isArray(project?.skills)?project.skills:[]);
   const[pendingReferences,setPendingReferences]=useState([]);
   const[selectedComponent,setSelectedComponent]=useState("");
+  const[generationId,setGenerationId]=useState("");
 
   useEffect(()=>{
     setActiveProject(project);
@@ -76,8 +78,10 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
 
   async function createProject(event){
     event.preventDefault();if(!leadId)return;setBusy("create");setNotice("");
+    const liveId="site_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,9);setGenerationId(liveId);
     try{
       const created=await createSiteProjectAction({
+        generationId:liveId,
         mode:"lead",leadId,template,instruction,effects,skillMode,
         skills:skillMode==="auto"?autoSkillIds:selectedSkills,
         referenceImages:pendingReferences,
@@ -156,6 +160,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   </section>;
 
   if(!activeProject)return <main className={s.startPage}>
+    {generationId&&<GenerationLivePanel generationId={generationId} onClose={()=>setGenerationId("")}/>}
     <section className={s.startHero}><span>✦</span><h1>Criar site para um lead</h1><p>O LeadFlow usa dados do CRM, imagens reais do negócio, referências visuais e uma equipe de skills especializadas para montar uma landing page premium.</p></section>
     <form className={s.startCard} onSubmit={createProject}>
       <label><span>Lead</span><select required value={leadId} onChange={e=>setLeadId(e.target.value)}><option value="">Selecione...</option>{leads.map(lead=><option key={lead.id} value={lead.id}>{lead.name} · {lead.city||lead.location||"Local não informado"}</option>)}</select></label>
