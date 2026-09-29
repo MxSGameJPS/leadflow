@@ -86,7 +86,13 @@ function facts(site){
   };
 }
 function fallbackPlan(site){
-  const list=[
+  const delivery=site.productContract?.type==="delivery";
+  const list=delivery?[
+    {name:"BrandHeader",role:"navigation",purpose:"Navegação e ação principal de pedido",layout:"Cabeçalho compacto orientado à conversão",interaction:"Âncoras e CTA de pedido",mobile:"Marca e pedir sem overflow"},
+    {name:"DeliveryHero",role:"hero",purpose:"Comunicar imediatamente que o visitante pode pedir",content:site.productContract?.dataPolicy||"",layout:"Primeira dobra apetitosa orientada a pedido com fotografia real e CTA dominante",interaction:"Abrir canal real de pedido",mobile:"CTA de pedido dominante acima da dobra"},
+    {name:"DeliveryDiscovery",role:"showcase",purpose:"Criar descoberta visual honesta sem inventar cardápio ou preços",content:"Use somente fatos e imagens verificadas; quando não houver itens verificados, conduza à consulta do cardápio pelo canal real.",layout:"Vitrine visual de delivery baseada nas imagens reais",interaction:"Consultar cardápio/fazer pedido no WhatsApp",mobile:"Descoberta vertical com ação sempre próxima"},
+    {name:"HowToOrder",role:"benefits",purpose:"Explicar como avançar para o pedido sem simular checkout inexistente",layout:"Fluxo curto de pedido até o WhatsApp",interaction:"CTA para iniciar pedido",mobile:"Passos curtos e acionáveis"}
+  ]:[
     {name:"BrandHeader",role:"navigation",purpose:"Navegação e contato principal",layout:"Cabeçalho leve e próprio da identidade",interaction:"Âncoras e CTA",mobile:"Marca e ação sem overflow"},
     {name:"LeadHero",role:"hero",purpose:"Apresentar a proposta principal",layout:"Composição autoral de headline, imagem e CTA",interaction:"Microinterações discretas",mobile:"Fluxo em coluna com CTA visível"},
     {name:"BrandStory",role:"story",purpose:"Apresentar a história e o contexto real",layout:"Seção editorial",interaction:"Reveal opcional",mobile:"Leitura confortável"}
@@ -603,23 +609,19 @@ export async function generateUniqueSiteCode(options={}){
     await progress({phase:"architecture",title:"Projetando arquitetura",detail:"A IA está decidindo a composição e os componentes únicos deste site."});
     const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages);
     request.onAttempt=event=>progress({phase:"ai",title:event.status==="success"?"Arquiteto respondeu":event.status==="error"?"Arquiteto falhou — fallback":"Chamando arquiteto",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"});
-    let result=await generateWithDefaultProvider(request);
+    let firstError=null,result=null;
     try{
+      result=await generateWithDefaultProvider(request);
       plan=normalizePlan(await parseJsonWithRepair(result.text,"review",progress),site);
-    }catch(firstError){
-      await progress({phase:"architecture",title:"Arquiteto saiu do formato esperado",detail:"Executando nova tentativa com contrato JSON estrito antes de abortar."});
-      result=await generateWithDefaultProvider({
-        ...request,
-        temperature:0.35,
-    disableTools:true,
-        maxTokens:12000,
-        systemPrompt:request.systemPrompt+" ATENÇÃO: sua tentativa anterior não pôde ser interpretada. Retorne exclusivamente um objeto JSON estrito iniciado por { e terminado por }, sem cercas de código, comentários, raciocínio, texto introdutório ou conclusão.",
-        prompt:request.prompt+"\n\nEsta é uma nova tentativa porque a resposta anterior não era JSON válido. Obedeça rigorosamente ao formato JSON.",
-      });
+    }catch(error){firstError=error}
+    if(!plan){
+      await progress({phase:"architecture",title:"Arquiteto saiu do formato esperado",detail:"Executando nova tentativa stateless com contrato JSON estrito."});
       try{
+        result=await generateWithDefaultProvider({...request,temperature:0.35,disableTools:true,maxTokens:12000,systemPrompt:request.systemPrompt+" ATENÇÃO: retorne exclusivamente um objeto JSON estrito iniciado por { e terminado por }, sem ferramentas, cercas, comentários ou texto adicional.",prompt:request.prompt+"\n\nNova tentativa: responda somente com o objeto JSON solicitado."});
         plan=normalizePlan(await parseJsonWithRepair(result.text,"review",progress),site);
       }catch(secondError){
-        throw new Error("O arquiteto não conseguiu produzir a estrutura JSON do site após duas tentativas e reparo automático. "+secondError.message);
+        await progress({phase:"architecture",title:"Arquitetura de contingência ativada",detail:"O provider não entregou arquitetura utilizável. O Builder continuará com um plano determinístico compatível com o contrato "+(site.productContract?.type||"do site")+".",kind:"fallback"});
+        plan=fallbackPlan(site);
       }
     }
   }
