@@ -18,16 +18,23 @@ export function weightedPipelineValue(lead){
   if(stage.closed)return stage.id==="ganho"?Number(lead?.proposalValue||0):0;
   return Math.round(Number(lead?.proposalValue||0)*(stage.probability/100));
 }
+export function daysInCurrentStage(lead,workspace={},now=new Date()){
+  const entered=validDate(workspace?.stageEnteredAt)||validDate(lead?.updatedAt)||validDate(lead?.createdAt);
+  if(!entered)return null;
+  return Math.max(0,Math.floor((now.getTime()-entered.getTime())/DAY_MS));
+}
 export function leadInactivity(lead,workspace={},now=new Date()){
   const stage=pipelineStage(lead?.stage);
   if(stage.closed)return{stale:false,days:0,threshold:null,reason:"closed"};
   const last=validDate(workspace?.lastContactAt)||validDate(lead?.updatedAt)||validDate(lead?.createdAt);
   if(!last)return{stale:false,days:null,threshold:stage.staleDays,reason:"unknown"};
   const days=Math.max(0,Math.floor((now.getTime()-last.getTime())/DAY_MS));
+  const stageDays=daysInCurrentStage(lead,workspace,now);
   const followUp=String(lead?.followUpAt||"");
   const today=now.toISOString().slice(0,10);
   const overdue=Boolean(followUp&&followUp<=today);
-  return{stale:overdue||days>=stage.staleDays,days,threshold:stage.staleDays,overdueFollowUp:overdue,reason:overdue?"follow_up_overdue":days>=stage.staleDays?"inactive":"fresh"};
+  const stuck=stageDays!=null&&stageDays>=stage.staleDays;
+  return{stale:overdue||days>=stage.staleDays||stuck,days,stageDays,threshold:stage.staleDays,overdueFollowUp:overdue,reason:overdue?"follow_up_overdue":stuck?"stage_stuck":days>=stage.staleDays?"inactive":"fresh"};
 }
 export function pipelineForecast(leads=[],workspaceByLead={}){
   const summary={openValue:0,weightedValue:0,wonValue:0,staleCount:0,byStage:{}};
