@@ -618,7 +618,7 @@ export async function generateUniqueSiteCode(options={}){
   await progress({phase:"architecture",title:"Arquitetura definida",detail:plan.components.length+" componentes planejados."});
   applyPlanCopy(site,plan);
   const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
-  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi);await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css"});return source});
+  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi);await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
   if(!skipAi){
     await progress({phase:"review",title:"Revisando código",detail:"O reviewer está procurando inconsistências antes do build."});
     const review=await reviewSources(site,plan,sources);
