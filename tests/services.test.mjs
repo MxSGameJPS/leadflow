@@ -5,7 +5,7 @@ import { recommend, defaultLanding } from "../src/services/leads/recommend.js";
 import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/messages.js";
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
 import { STAGES, NEXT } from "../src/services/leads/stages.js";
-import { leadInactivity, pipelineForecast, pipelineStage, weightedPipelineValue } from "../src/services/leads/pipelineIntelligence.js";
+import { daysInCurrentStage, leadInactivity, pipelineForecast, pipelineStage, weightedPipelineValue } from "../src/services/leads/pipelineIntelligence.js";
 import { parseLeads } from "../src/services/imports/parseLeads.js";
 import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/ibge.js";
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
@@ -138,3 +138,8 @@ const stale=leadInactivity(weightedLead,{lastContactAt:"2026-09-20T10:00:00.000Z
 t("pipeline detecta lead estagnado por SLA da etapa",stale.stale===true&&stale.days===9);
 const forecast=pipelineForecast([weightedLead,{id:"won_1",stage:"ganho",proposalValue:1000,updatedAt:"2026-09-29T10:00:00.000Z"}],{forecast_1:{lastContactAt:"2026-09-20T10:00:00.000Z"}});
 t("forecast separa aberto ponderado e ganho",forecast.openValue===2000&&forecast.weightedValue===1500&&forecast.wonValue===1000);
+
+const stageClockLead={id:"velocity_1",stage:"proposta",createdAt:"2026-09-01T10:00:00.000Z",updatedAt:"2026-09-28T10:00:00.000Z"};
+t("pipeline calcula dias na etapa pelo relogio comercial",daysInCurrentStage(stageClockLead,{stageEnteredAt:"2026-09-20T10:00:00.000Z"},new Date("2026-09-29T12:00:00.000Z"))===9);
+const stageStuck=leadInactivity(stageClockLead,{lastContactAt:"2026-09-28T10:00:00.000Z",stageEnteredAt:"2026-09-20T10:00:00.000Z"},new Date("2026-09-29T12:00:00.000Z"));
+t("contato recente nao mascara lead travado na etapa",stageStuck.stale===true&&stageStuck.reason==="stage_stuck"&&stageStuck.stageDays===9);

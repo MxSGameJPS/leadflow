@@ -23,11 +23,27 @@ export async function deleteLeadsAction(ids) { const r = await repo.deleteLeads(
 export async function moveStageAction(id, stage) {
   const before = await repo.getLead(String(id || ""));
   const saved = await repo.moveStage(id, stage);
-  if (before?.stage !== saved?.stage) await appendLeadActivity(id, {
-    type: "stage",
-    title: "Etapa alterada",
-    detail: (before?.stage || "novo") + " → " + (saved?.stage || stage),
-  });
+  if (before?.stage !== saved?.stage) {
+    const workspace = await getLeadWorkspace(id);
+    const now = new Date();
+    const previousEnteredAt = workspace.stageEnteredAt ? new Date(workspace.stageEnteredAt) : new Date(before?.updatedAt || before?.createdAt || now);
+    const validPrevious = !Number.isNaN(previousEnteredAt.getTime()) ? previousEnteredAt : now;
+    const days = Math.max(0, Math.floor((now.getTime() - validPrevious.getTime()) / 86_400_000));
+    await saveLeadWorkspace(id, {
+      stageEnteredAt: now.toISOString(),
+      stageHistory: [{
+        stage: before?.stage || "novo",
+        enteredAt: validPrevious.toISOString(),
+        leftAt: now.toISOString(),
+        days,
+      }, ...(workspace.stageHistory || [])].slice(0, 80),
+    });
+    await appendLeadActivity(id, {
+      type: "stage",
+      title: "Etapa alterada",
+      detail: (before?.stage || "novo") + " → " + (saved?.stage || stage) + " · " + days + " dia(s) na etapa anterior",
+    });
+  }
   refresh();
   return saved;
 }

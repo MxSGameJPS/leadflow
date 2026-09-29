@@ -22,6 +22,8 @@ const DEFAULT_WORKSPACE = Object.freeze({
   lastContactAt: "",
   lastContactKind: "",
   contactCount: 0,
+  stageEnteredAt: "",
+  stageHistory: [],
   activities: [],
   qualification: {
     budgetStatus: "unknown",
@@ -322,6 +324,13 @@ function normalizeWorkspace(input = {}) {
     lastContactAt: cleanTimestamp(input.lastContactAt),
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
+    stageEnteredAt: cleanTimestamp(input.stageEnteredAt),
+    stageHistory: Array.isArray(input.stageHistory) ? input.stageHistory.slice(0, 80).map(item => ({
+      stage: cleanText(item?.stage, 80).trim(),
+      enteredAt: cleanTimestamp(item?.enteredAt),
+      leftAt: cleanTimestamp(item?.leftAt),
+      days: cleanInteger(item?.days, 0, 0, 10000),
+    })).filter(item => item.stage && item.enteredAt) : [],
     activities: normalizeActivities(input.activities),
     qualification: normalizeQualification(input.qualification),
     salesIntel: normalizeSalesIntel(input.salesIntel),

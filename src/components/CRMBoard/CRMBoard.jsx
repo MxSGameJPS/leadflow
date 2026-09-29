@@ -518,7 +518,7 @@ export default function CRMBoard({ initialLeads = [] }) {
               <span className={lead.site && !lead.weakSite ? s.presenceYes : ""}>Site</span>
               <span className={["done", "sent"].includes(lead.landingStatus) ? s.presenceYes : ""}>Prévia</span>
             </div>
-            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}{lead.pipelineHealth?.stale ? <small>⚠ Estagnado há {lead.pipelineHealth.days ?? "?"} dias</small> : null}</div>
+            <div className={s.rowMuted}>{lastContactLabel(lead)}{lead.contactCount ? <small>{lead.contactCount} contato{lead.contactCount === 1 ? "" : "s"}</small> : null}{lead.pipelineHealth?.stale ? <small>⚠ {lead.pipelineHealth.reason === "stage_stuck" ? `Há ${lead.pipelineHealth.stageDays ?? "?"} dias nesta etapa` : `Estagnado há ${lead.pipelineHealth.days ?? "?"} dias`}</small> : null}</div>
             <div className={s.nextActionCell}>{lead.nextAction || lead.followUpAt || priorityReason(lead)?.label || "Definir próximo passo"}</div>
           </article>;
         })}
@@ -583,7 +583,7 @@ export default function CRMBoard({ initialLeads = [] }) {
                 <div><span className={`${s.scoreBadge} ${s["grade" + lead.grade]}`}>{lead.score}</span><span className={s.tempLabel}>{GRADE_LABEL[lead.grade] || lead.grade}</span></div>
                 <h3>{lead.name}</h3>
                 <p>{lead.segment || "Sem categoria"} · {cityLabel(lead)}</p>
-                <small>{lastContactLabel(lead)}{lead.pipelineHealth?.stale ? " · ⚠ estagnado" : ""}{lead.proposalValue ? " · "+BRL(lead.weightedValue || 0)+" ponderado" : ""}</small>
+                <small>{lastContactLabel(lead)}{lead.pipelineHealth?.stageDays != null ? " · "+lead.pipelineHealth.stageDays+"d na etapa" : ""}{lead.pipelineHealth?.stale ? " · ⚠ estagnado" : ""}{lead.proposalValue ? " · "+BRL(lead.weightedValue || 0)+" ponderado" : ""}</small>
               </article>)}
           </div>
         </div>)}
@@ -623,7 +623,7 @@ export default function CRMBoard({ initialLeads = [] }) {
 
       <div className={s.quickFacts}>
         {activeLead.googleRating && <div><span>Google</span><strong>★ {activeLead.googleRating}</strong><small>{activeLead.googleReviews || 0} avaliações</small></div>}
-        <div><span>Último contato</span><strong>{lastContactLabel(activeLead)}</strong><small>{activeLead.contactCount || 0} contato{Number(activeLead.contactCount || 0) === 1 ? "" : "s"}</small></div>
+        <div><span>Último contato</span><strong>{lastContactLabel(activeLead)}</strong><small>{activeLead.contactCount || 0} contato{Number(activeLead.contactCount || 0) === 1 ? "" : "s"}</small></div>\n        <div><span>Tempo na etapa</span><strong>{activeLead.pipelineHealth?.stageDays ?? 0} dias</strong><small>{activeLead.pipelineHealth?.stale ? "Requer atenção" : "Dentro do ritmo esperado"}</small></div>
         <div><span>Prévia</span><strong>{activeLead.landingStatus === "sent" ? "Enviada" : activeLead.landingStatus === "done" ? "Pronta" : activeLead.landingStatus === "todo" ? "A fazer" : "Não iniciada"}</strong><small>{activeLead.previewUrl ? "Link publicado" : "Sem link público"}</small></div>
         <div><span>Proposta</span><strong>{activeLead.proposalValue ? `R$ ${Number(activeLead.proposalValue).toLocaleString("pt-BR")}` : "Não definida"}</strong><small>{stage.label}</small></div>
       </div>
