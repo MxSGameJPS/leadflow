@@ -792,7 +792,6 @@ async function outputFolder(name, folderPath) {
   if (!absolutePath.startsWith(GENERATED_ROOT + path.sep) || absolutePath === GENERATED_ROOT) throw new Error("A pasta existente do projeto é inválida.");
   await fs.mkdir(path.join(absolutePath, "app"), { recursive: true });
   await fs.mkdir(path.join(absolutePath, "public"), { recursive: true });
-  await progress({phase:"complete",title:"Site pronto",detail:"Código, build e validações concluídos."});
   return { folderName: path.basename(absolutePath), absolutePath };
 }
 
