@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useMemo,useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearSiteReferenceImagesAction,createSiteProjectAction,refineSiteProjectAction } from "../../app/actions/projects.js";
+import { clearSiteReferenceImagesAction,createSiteProjectAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
 import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
 import s from "./SiteCreatorStart.module.css";
 
@@ -100,6 +100,23 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
   }
 
+  async function restorePrevious(){
+    if(!activeProject)return;
+    setBusy("restore");setNotice("");
+    try{
+      const restored=await restorePreviousSiteProjectVersionAction(activeProject.id);
+      setActiveProject(restored);
+      setEffects(restored.effects||[]);
+      setSkillMode(restored.skillMode||"auto");
+      setSelectedSkills(restored.skills||[]);
+      setSelectedComponent("");
+      setInstruction("");
+      setNotice("Versão anterior restaurada.");
+      router.refresh();
+    }catch(error){setNotice("Erro: "+error.message)}
+    finally{setBusy("")}
+  }
+
   async function clearReferences(){
     if(!activeProject)return;setBusy("references");setNotice("");
     try{const updated=await clearSiteReferenceImagesAction(activeProject.id);setActiveProject(updated);setNotice("Referências visuais removidas.");router.refresh()}
@@ -159,7 +176,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const quality=activeProject.siteData?.codegenQuality||null;
   const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
-    <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}><a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
+    <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
     <section className={s.builder}>
       <aside className={s.chatPanel}>
         <div className={s.context}><span>Projeto ativo</span><strong>{activeProject.segment||"Landing page"}</strong><small>{activeProject.city||"Local não informado"}</small></div>
