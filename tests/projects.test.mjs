@@ -16,6 +16,7 @@ const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProject
 const { normalizeCodegenDesignSystem } = await import("../src/services/projects/siteDesignSystem.js");
 const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/projects/sitePatchEngine.js");
 const { analyzeComponentContract, buildComponentEditContext, patchBudgetFor, validatePatchPreservation } = await import("../src/services/projects/siteEditContext.js");
+const { withFileTransaction } = await import("../src/services/projects/siteEditTransaction.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -75,6 +76,28 @@ assert.equal(preservationOk.ok,true);
 const preservationBad=validatePatchPreservation(editSource,{jsx:'import styles from "./Hero.module.css";\nexport default function Hero(){return <section className={styles.missing}>X</section>}\n',css:'.root{display:block}\n'},"mude apenas o texto",{changedLines:4});
 assert.equal(preservationBad.ok,false);
 assert.ok(preservationBad.errors.some(error=>/use client|imports|classes ausentes/i.test(error)));
+
+const txDir=await fs.mkdtemp(path.join(os.tmpdir(),"leadflow-edit-tx-"));
+const txExisting=path.join(txDir,"existing.txt"),txCreated=path.join(txDir,"created.txt");
+await fs.writeFile(txExisting,"estado-aprovado","utf8");
+await assert.rejects(
+  withFileTransaction([txExisting,txCreated],async()=>{
+    await fs.writeFile(txExisting,"tentativa-reprovada","utf8");
+    await fs.writeFile(txCreated,"nao-deve-sobrar","utf8");
+    throw new Error("falha simulada depois da escrita");
+  }),
+  /falha simulada/
+);
+assert.equal(await fs.readFile(txExisting,"utf8"),"estado-aprovado");
+await assert.rejects(fs.access(txCreated));
+const txSuccess=await withFileTransaction([txExisting],async()=>{
+  await fs.writeFile(txExisting,"estado-novo-aprovado","utf8");
+  return "ok";
+});
+assert.equal(txSuccess,"ok");
+assert.equal(await fs.readFile(txExisting,"utf8"),"estado-novo-aprovado");
+await fs.rm(txDir,{recursive:true,force:true});
+
 
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
