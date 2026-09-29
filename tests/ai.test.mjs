@@ -9,6 +9,7 @@ process.env.LEADFLOW_DATA_DIR = testData;
 
 const {
   generateWithDefaultProvider,
+  generateResilientWithDefaultProvider,
   getDefaultProviderInternal,
   getProviderInternal,
   listProviderModels,
@@ -44,6 +45,10 @@ global.fetch = async (url, options = {}) => {
     body: options.body ? JSON.parse(options.body) : null,
   };
   requests.push(request);
+
+  if (request.body?.model === "site-fail") {
+    return new Response(JSON.stringify({ error: { message: "site route unavailable" } }), { status: 503, headers: { "Content-Type": "application/json" } });
+  }
 
   if (request.url.endsWith("/models")) {
     return new Response(JSON.stringify({
@@ -120,6 +125,35 @@ try {
   t("aceita override de temperatura", roleRequest.body.temperature === 0.72);
   t("aceita override de max tokens", roleRequest.body.max_tokens === 12000);
   t("retorna modelo efetivamente usado", roleGeneration.model === "modelo-premium-codegen");
+
+  const secondary = await upsertProvider({
+    name: "Fallback geral",
+    type: "openai-compatible",
+    baseUrl: "http://localhost:29999/v1",
+    endpoint: "/chat/completions",
+    model: "general-fallback",
+    apiKey: "secondary-key",
+    enabled: true,
+    isDefault: false,
+    headersJson: "{}",
+  });
+  const beforeIsolated = requests.length;
+  let isolatedError = null;
+  try {
+    await generateResilientWithDefaultProvider({
+      prompt: "Site isolado",
+      model: "site-fail",
+      isolatedRouting: true,
+      disableTools: true,
+      timeoutMs: 5000,
+    });
+  } catch (error) {
+    isolatedError = error;
+  }
+  const isolatedRequests = requests.slice(beforeIsolated);
+  t("rota isolada falha sem escapar para provedor geral", Boolean(isolatedError) && isolatedRequests.length === 1);
+  t("rota isolada não usa modelo do provedor secundário", !isolatedRequests.some(item => item.body?.model === "general-fallback"));
+  await removeProvider(secondary.id);
 
   const prompt = buildLeadMessagePrompt({
     kind: "initial",
