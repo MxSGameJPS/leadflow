@@ -12,6 +12,7 @@ const { createSiteProject, deleteSiteProject, getSiteProject } = await import(".
 const { generateSiteFolder, parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
 const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV4.js");
 const { calculateVisualQualityScore } = await import("../src/services/projects/siteVisualQa.js");
+const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProjectSourceSnapshot } = await import("../src/services/projects/projectVersionStore.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -104,6 +105,8 @@ assert.match(exportedPage, /data-leadflow-component/);
 assert.match(exportedLayout, /theme\.module\.css/);
 const nextConfig = await fs.readFile(path.join(generatedRoot, "next.config.mjs"), "utf8");
 assert.match(nextConfig, /LEADFLOW_BUILD_DIST_DIR/);
+const inspectorSource = await fs.readFile(path.join(generatedRoot, "public", "leadflow-inspector.js"), "utf8");
+assert.match(inspectorSource, /leadflow:component-selected/);
 assert.ok(!exportedPage.includes("GeneratedSiteRuntime"));
 assert.ok(generated.siteData.codegenPlan?.components?.length >= 3);
 for (const component of generated.siteData.codegenPlan.components) {
