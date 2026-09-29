@@ -15,6 +15,7 @@ const { calculateVisualQualityScore } = await import("../src/services/projects/s
 const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProjectSourceSnapshot } = await import("../src/services/projects/projectVersionStore.js");
 const { normalizeCodegenDesignSystem } = await import("../src/services/projects/siteDesignSystem.js");
 const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/projects/sitePatchEngine.js");
+const { analyzeComponentContract, buildComponentEditContext, patchBudgetFor, validatePatchPreservation } = await import("../src/services/projects/siteEditContext.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -54,6 +55,27 @@ assert.match(patched.files["components/Hero/Hero.jsx"],/>Depois</);
 assert.deepEqual(patched.changedPaths,["components/Hero/Hero.jsx"]);
 assert.ok(patched.changedLines>=2);
 assert.throws(()=>applyUnifiedDiff(patchOriginal,`--- a/app/page.jsx\n+++ b/app/page.jsx\n@@ -1,1 +1,1 @@\n-old\n+new`,Object.keys(patchOriginal)),/fora do escopo/);
+
+const editSource={jsx:'"use client";\nimport helper from "../../lib/helper.js";\nimport styles from "./Hero.module.css";\nexport default function Hero({site}){return <section id="top" className={styles.root}>{site.brandName}</section>}\n',css:'.root{display:block}\n'};
+const editContract=analyzeComponentContract(editSource);
+assert.equal(editContract.clientComponent,true);
+assert.ok(editContract.imports.includes("../../lib/helper.js"));
+assert.ok(editContract.siteFields.includes("brandName"));
+assert.ok(editContract.ids.includes("top"));
+const editPlan={components:[{name:"Header",role:"navigation",purpose:"Navegação"},{name:"Hero",role:"hero",purpose:"Conversão",acceptanceCriteria:"CTA visível",visualHook:"recorte autoral"},{name:"Proof",role:"proof",purpose:"Confiança"}]};
+const editContext=buildComponentEditContext(editPlan,"Hero",editSource);
+assert.equal(editContext.previous.name,"Header");
+assert.equal(editContext.next.name,"Proof");
+assert.equal(editContext.totalComponents,3);
+const surgicalBudget=patchBudgetFor(editSource,"mude apenas o texto do botão");
+const broadBudget=patchBudgetFor(editSource,"redesenhe o layout completo");
+assert.ok(broadBudget.maxChangedLines>surgicalBudget.maxChangedLines);
+const preservationOk=validatePatchPreservation(editSource,{...editSource,css:'.root{display:grid}\n'},"mude o layout",{changedLines:2});
+assert.equal(preservationOk.ok,true);
+const preservationBad=validatePatchPreservation(editSource,{jsx:'import styles from "./Hero.module.css";\nexport default function Hero(){return <section className={styles.missing}>X</section>}\n',css:'.root{display:block}\n'},"mude apenas o texto",{changedLines:4});
+assert.equal(preservationBad.ok,false);
+assert.ok(preservationBad.errors.some(error=>/use client|imports|classes ausentes/i.test(error)));
+
 
 const autoSkills = resolveSiteSkills({ mode: "auto", instruction: "Use este print como referência visual", referenceImages: [] });
 assert.equal(autoSkills.mode, "auto");
