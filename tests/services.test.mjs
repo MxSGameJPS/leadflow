@@ -1,5 +1,6 @@
 import { gradeFromScore, autoScore, waNorm } from "../src/services/leads/scoring.js";
 import { bayesianRating, calculateOpportunityScore } from "../src/services/leads/opportunityScoring.js";
+import { calculateSalesQualification } from "../src/services/leads/salesQualification.js";
 import { recommend, defaultLanding } from "../src/services/leads/recommend.js";
 import { buildMessages, waFor, msgKindForStage } from "../src/services/leads/messages.js";
 import { regionFromPhone, cityFromText } from "../src/services/leads/location.js";
@@ -28,6 +29,21 @@ const opportunityA = calculateOpportunityScore({ phone: "(55) 99944-3944", addre
 const opportunityNoise = calculateOpportunityScore({ phone: "(55) 99944-3944", address: "Centro", rating: 5, reviews: 1, presence: { hasOwnSite: false, weak: true, type: "Sem presença encontrada" }, country: "BR" });
 t("score considera reputação consolidada", opportunityA.score > opportunityNoise.score);
 t("score retorna fatores explicáveis", opportunityA.factors.some(item => item.includes("Reputação consolidada")));
+const qualificationAuto = calculateSalesQualification({ name: "Loja Teste", site: null, weakSite: true, problem: "Sem site próprio", stage: "novo" }, {});
+t("qualificação BANT usa necessidade real sem inventar orçamento", qualificationAuto.breakdown.need.score >= 15 && qualificationAuto.breakdown.budget.score === 0);
+const qualificationStrong = calculateSalesQualification({ name: "Loja Teste", site: null, weakSite: true, stage: "negociacao", proposalValue: 1500 }, {
+  budgetStatus: "high",
+  authorityStatus: "high",
+  decisionMaker: true,
+  needStatus: "high",
+  timelineStatus: "high",
+  metrics: "Mais contatos diretos",
+  decisionCriteria: "Prazo e facilidade de contato",
+  decisionProcess: "Proprietário decide após demonstração",
+  championStatus: "high",
+});
+t("qualificação forte alcança nota A", qualificationStrong.score >= 75 && qualificationStrong.grade === "A");
+t("MEDDIC mede completude do processo", qualificationStrong.meddic.overall >= 80);
 t("regionFromPhone 47 -> Joinville", /Joinville/.test(regionFromPhone("+5547999065600")));
 t("cityFromText joinville", cityFromText("loja em Joinville SC") === "Joinville/SC");
 t("STAGES tem 9 colunas", STAGES.length === 9);

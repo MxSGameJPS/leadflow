@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { generateLeadMessage } from "../../services/ai/leadMessageService.js";
 import { generateLeadOutreachPack } from "../../services/ai/leadOutreachService.js";
 import { analyzeLeadConversation } from "../../services/ai/objectionAdvisorService.js";
+import { generateSalesIntelDocument } from "../../services/ai/salesIntelService.js";
 import { getLead } from "../../repositories/leadRepository.js";
-import { appendLeadActivity, getLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
+import { appendLeadActivity, getLeadWorkspace, saveLeadWorkspace } from "../../services/workspaces/leadWorkspaceStore.js";
 import { getProfessionalProfile } from "../../services/profile/profileStore.js";
 import {
   listProviderModels,
@@ -68,6 +69,44 @@ export async function generateLeadOutreachPackAction(payload = {}) {
     createdAt: result.generatedAt,
   });
   return result;
+}
+
+export async function generateSalesIntelDocumentAction(payload = {}) {
+  const leadId = String(payload.leadId || "").trim();
+  const kind = payload.kind === "proposal" ? "proposal" : "meeting_prep";
+  const lead = await getLead(leadId);
+  if (!lead) throw new Error("Lead não encontrado.");
+
+  const [profile, workspace] = await Promise.all([
+    getProfessionalProfile(),
+    getLeadWorkspace(lead.id),
+  ]);
+
+  const result = await generateSalesIntelDocument({
+    kind,
+    lead,
+    profile,
+    workspace,
+    providerId: payload.providerId,
+  });
+
+  const nextSalesIntel = {
+    ...workspace.salesIntel,
+    ...(kind === "proposal"
+      ? { proposal: result.text, proposalGeneratedAt: result.generatedAt }
+      : { meetingPrep: result.text, meetingGeneratedAt: result.generatedAt }),
+    providerName: result.providerName,
+    model: result.model,
+  };
+  const saved = await saveLeadWorkspace(lead.id, { salesIntel: nextSalesIntel });
+  await appendLeadActivity(lead.id, {
+    type: "document",
+    title: kind === "proposal" ? "Proposta gerada com IA" : "Briefing de reunião gerado",
+    detail: [result.providerName, result.model].filter(Boolean).join(" · "),
+    createdAt: result.generatedAt,
+  });
+  revalidatePath(`/crm/${lead.id}`);
+  return { ...result, salesIntel: saved.salesIntel };
 }
 
 export async function analyzeLeadConversationAction(payload = {}) {

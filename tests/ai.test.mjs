@@ -25,6 +25,7 @@ const {
   analyzeLeadConversation,
 } = await import("../src/services/ai/objectionAdvisorService.js");
 const { buildLeadOutreachPrompt } = await import("../src/services/ai/leadOutreachService.js");
+const { buildSalesIntelPrompt } = await import("../src/services/ai/salesIntelService.js");
 
 let pass = 0, fail = 0;
 const t = (name, condition) => {
@@ -167,6 +168,23 @@ try {
   });
   t("pacote multicanal inclui lead e prévia", outreachPrompt.prompt.includes("Mercado Silva") && outreachPrompt.prompt.includes("preview.example.com"));
   t("pacote multicanal proíbe invenções", outreachPrompt.systemPrompt.includes("Não invente"));
+
+  const meetingPrompt = buildSalesIntelPrompt({
+    kind: "meeting_prep",
+    lead: { name: "Mercado Silva", segment: "Mercado", site: "", weakSite: true, problem: "Não possui site próprio" },
+    profile: { name: "Saulo", profession: "Desenvolvedor" },
+    workspace: { qualification: { authorityContact: "Carlos", authorityRole: "Proprietário", decisionMaker: true } },
+  });
+  t("briefing comercial inclui BANT e MEDDIC", meetingPrompt.prompt.includes("QUALIFICAÇÃO CALCULADA") && meetingPrompt.prompt.includes("MEDDIC"));
+  t("briefing comercial não permite inventar orçamento", meetingPrompt.systemPrompt.includes("Não invente orçamento"));
+
+  const proposalPrompt = buildSalesIntelPrompt({
+    kind: "proposal",
+    lead: { name: "Mercado Silva", proposalValue: 1800 },
+    profile: { name: "Saulo" },
+    workspace: { sale: { paymentTerms: "Entrada + 2 parcelas" }, qualification: {} },
+  });
+  t("proposta usa valor já registrado", proposalPrompt.prompt.includes("1800") && proposalPrompt.prompt.includes("Entrada + 2 parcelas"));
 
   const objectionPrompt = buildObjectionAdvisorPrompt({
     lead: { name: "Mercado Silva", segment: "Mercado", proposalValue: 1500 },

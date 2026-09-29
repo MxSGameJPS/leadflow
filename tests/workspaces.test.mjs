@@ -14,6 +14,8 @@ try {
   assert.equal(empty.lastContactKind, "");
   assert.equal(empty.contactCount, 0);
   assert.equal(empty.outreach.emailBody, "");
+  assert.equal(empty.qualification.budgetStatus, "unknown");
+  assert.equal(empty.salesIntel.proposal, "");
   assert.deepEqual(empty.activities, []);
   assert.deepEqual(empty.strategyMap, { nodes: [], edges: [] });
   assert.equal(empty.objectionAssistant.conversation, "");
@@ -60,6 +62,32 @@ try {
         { id: "invalida", from: "lead", to: "nao_existe" },
       ],
     },
+    qualification: {
+      budgetStatus: "high",
+      budgetEvidence: "Cliente confirmou a faixa.",
+      authorityStatus: "high",
+      authorityContact: "Carlos",
+      authorityRole: "Proprietário",
+      decisionMaker: true,
+      needStatus: "high",
+      needEvidence: "Quer centralizar contatos.",
+      timelineStatus: "medium",
+      targetDate: "2026-10-15",
+      championStatus: "high",
+      championContact: "Carlos",
+      metrics: "Mais contatos diretos",
+      decisionCriteria: "Prazo",
+      decisionProcess: "Proprietário decide",
+      updatedAt: "2026-09-29T10:00:00.000Z",
+    },
+    salesIntel: {
+      meetingPrep: "# Briefing",
+      proposal: "# Proposta",
+      meetingGeneratedAt: "2026-09-29T10:00:00.000Z",
+      proposalGeneratedAt: "2026-09-29T11:00:00.000Z",
+      providerName: "Teste",
+      model: "modelo-teste",
+    },
     outreach: {
       emailSubject: "Uma ideia para o Mercado",
       emailBody: "Mensagem de teste",
@@ -90,6 +118,9 @@ try {
   assert.equal(sanitized.strategyMap.edges.length, 1);
   assert.equal(sanitized.strategyMap.edges[0].from, "lead");
   assert.equal(sanitized.strategyMap.edges[0].to, "contato");
+  assert.equal(sanitized.qualification.budgetStatus, "high");
+  assert.equal(sanitized.qualification.decisionMaker, true);
+  assert.equal(sanitized.salesIntel.proposal, "# Proposta");
   assert.equal(sanitized.outreach.emailSubject, "Uma ideia para o Mercado");
   assert.equal(sanitized.outreach.model, "modelo-teste");
   assert.equal(sanitized.objectionAssistant.objectionType, "Preço");

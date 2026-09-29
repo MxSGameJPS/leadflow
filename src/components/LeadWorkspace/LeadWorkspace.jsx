@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { STAGES } from "../../services/leads/stages.js";
 import { buildProfileMessages } from "../../services/leads/profileMessages.js";
+import { calculateSalesQualification } from "../../services/leads/salesQualification.js";
 import * as LeadActions from "../../app/actions/leads.js";
 import * as AIActions from "../../app/actions/ai.js";
 import { saveLeadWorkspaceAction } from "../../app/actions/workspaces.js";
@@ -13,6 +14,7 @@ import s from "./LeadWorkspace.module.css";
 const TABS = [
   ["info", "Informações"],
   ["strategy", "Estratégia"],
+  ["qualification", "Qualificação"],
   ["scripts", "Roteiros"],
   ["objections", "Objeções"],
   ["site", "Site"],
@@ -107,6 +109,8 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript({ ...initialLead, previewUrl: initialWorkspace.previewUrl }, initialProfile));
   const [whatsappMessage, setWhatsappMessage] = useState(initialWorkspace.whatsappMessage || initialMessages.initial);
   const [outreach, setOutreach] = useState(initialWorkspace.outreach || {});
+  const [qualification, setQualification] = useState(initialWorkspace.qualification || {});
+  const [salesIntel, setSalesIntel] = useState(initialWorkspace.salesIntel || {});
   const [instagram, setInstagram] = useState(initialLead.instagram || "");
   const [previewUrl, setPreviewUrl] = useState(initialWorkspace.previewUrl || "");
   const [proposalValue, setProposalValue] = useState(String(initialLead.proposalValue || ""));
@@ -128,8 +132,11 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
 
   useEffect(() => {
     setWorkspace(initialWorkspace);
+    setQualification(initialWorkspace.qualification || {});
+    setSalesIntel(initialWorkspace.salesIntel || {});
   }, [initialWorkspace]);
 
+  const qualificationResult = useMemo(() => calculateSalesQualification(lead, qualification), [lead, qualification]);
   const currentStage = useMemo(() => STAGES.find(item => item.id === lead.stage), [lead.stage]);
   const status = lead.stage === "ganho" ? "won" : lead.stage === "perdido" ? "lost" : "open";
   const whatsapp = kind === "initial" && !previewUrl ? null : waLink(lead, whatsappMessage);
@@ -155,6 +162,8 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     const next = {
       ...workspace,
       ...patch,
+      qualification: { ...workspace.qualification, ...(patch.qualification || {}) },
+      salesIntel: { ...workspace.salesIntel, ...(patch.salesIntel || {}) },
       appointment: { ...workspace.appointment, ...(patch.appointment || {}) },
       sale: { ...workspace.sale, ...(patch.sale || {}) },
     };
@@ -253,6 +262,49 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     } finally {
       setBusy("");
     }
+  }
+
+  async function saveQualification() {
+    setBusy("qualification");
+    setNotice("");
+    try {
+      const next = { ...qualification, updatedAt: new Date().toISOString() };
+      const saved = await persistWorkspace({ qualification: next }, "Qualificação comercial salva.");
+      if (saved) {
+        setQualification(saved.qualification);
+        await LeadActions.recordContactAction(lead.id, "manual").catch(() => null);
+      }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function generateSalesDocument(kind) {
+    setBusy(kind);
+    setNotice("");
+    try {
+      const result = await AIActions.generateSalesIntelDocumentAction({ leadId: lead.id, kind });
+      if (result.salesIntel) setSalesIntel(result.salesIntel);
+      setWorkspace(current => ({ ...current, salesIntel: result.salesIntel || current.salesIntel }));
+      setNotice(`${kind === "proposal" ? "Proposta" : "Briefing"} gerado por ${result.providerName || "IA"}${result.model ? ` · ${result.model}` : ""}. Revise antes de usar.`);
+      router.refresh();
+    } catch (error) {
+      setNotice(`IA: ${error.message}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function downloadMarkdown(text, name) {
+    const blob = new Blob([String(text || "")], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function copy(text, message = "Copiado.") {
@@ -409,6 +461,68 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     </section>;
   }
 
+  function renderQualification() {
+    const statusOptions = [["unknown", "Não confirmado"], ["low", "Baixo"], ["medium", "Moderado"], ["high", "Forte"]];
+    const dim = qualificationResult.breakdown;
+    const meddic = qualificationResult.meddic;
+    const slugName = String(lead.name || "lead").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "lead";
+    const qField = (field, value) => setQualification(current => ({ ...current, [field]: value }));
+    return <section className={s.section}>
+      <div className={s.qualSummary}>
+        <article><span>BANT</span><strong>{qualificationResult.score}</strong><small>nota {qualificationResult.grade}</small></article>
+        <article><span>MEDDIC</span><strong>{meddic.overall}%</strong><small>completude</small></article>
+        <article><span>Confiança</span><strong>{qualificationResult.confidence.level}</strong><small>{qualificationResult.confidence.score}% dos sinais</small></article>
+        <article className={s.qualNext}><span>Próximo passo</span><p>{qualificationResult.nextStep}</p></article>
+      </div>
+
+      <div className={s.bantGrid}>
+        {[
+          ["budget", "Orçamento", dim.budget, "budgetStatus", "budgetEvidence", "O cliente confirmou faixa de investimento, verba disponível ou restrição real?"],
+          ["authority", "Autoridade", dim.authority, "authorityStatus", "authorityEvidence", "Quem decide? Quem aprova? Quem influencia a compra?"],
+          ["need", "Necessidade", dim.need, "needStatus", "needEvidence", "Qual problema concreto o cliente reconheceu e qual o impacto dele?"],
+          ["timeline", "Prazo", dim.timeline, "timelineStatus", "timelineEvidence", "Existe data, urgência, evento ou janela para decidir?"],
+        ].map(([key, title, item, statusField, evidenceField, placeholder]) => <article className={s.bantCard} key={key}>
+          <div className={s.bantHead}><div><span>{title}</span><strong>{item.score}/25</strong></div><select value={qualification[statusField] || "unknown"} onChange={event => qField(statusField, event.target.value)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+          {key === "authority" && <div className={s.qualInline}><input value={qualification.authorityContact || ""} onChange={event => qField("authorityContact", event.target.value)} placeholder="Nome do contato/decisor" /><input value={qualification.authorityRole || ""} onChange={event => qField("authorityRole", event.target.value)} placeholder="Cargo / papel" /><label className={s.checkLabel}><input type="checkbox" checked={Boolean(qualification.decisionMaker)} onChange={event => qField("decisionMaker", event.target.checked)} />Decisor econômico confirmado</label></div>}
+          {key === "timeline" && <label className={s.qualDate}><span>Data-alvo</span><input type="date" value={qualification.targetDate || ""} onChange={event => qField("targetDate", event.target.value)} /></label>}
+          <textarea value={qualification[evidenceField] || ""} onChange={event => qField(evidenceField, event.target.value)} placeholder={placeholder} />
+          {key === "need" && (lead.problem || !lead.site || lead.weakSite !== false) && <small className={s.autoSignal}>Sinal automático: {lead.problem || (!lead.site ? "não há site próprio encontrado" : "presença digital classificada como fraca/de terceiros")}.</small>}
+        </article>)}
+      </div>
+
+      <div className={s.meddicPanel}>
+        <div className={s.meddicHeader}><div><h3>MEDDIC · mapa da decisão</h3><p>Não é uma segunda nota de lead: mede o quanto você realmente conhece do processo de compra.</p></div><strong>{meddic.overall}%</strong></div>
+        <div className={s.meddicMeters}>
+          {[["Métricas", meddic.metrics], ["Comprador econômico", meddic.economicBuyer], ["Critérios", meddic.decisionCriteria], ["Processo", meddic.decisionProcess], ["Dor", meddic.identifyPain], ["Champion", meddic.champion]].map(([label, value]) => <div key={label}><span>{label}</span><b>{value}%</b><i><em style={{ width: `${value}%` }} /></i></div>)}
+        </div>
+        <div className={s.qualFields}>
+          <label><span>Métricas de sucesso</span><textarea value={qualification.metrics || ""} onChange={event => qField("metrics", event.target.value)} placeholder="Ex.: mais pedidos diretos, mais contatos pelo Google, reduzir dependência de plataforma. Registre apenas o que o cliente confirmou." /></label>
+          <label><span>Critérios de decisão</span><textarea value={qualification.decisionCriteria || ""} onChange={event => qField("decisionCriteria", event.target.value)} placeholder="O que fará o cliente dizer sim ou não?" /></label>
+          <label><span>Processo de decisão</span><textarea value={qualification.decisionProcess || ""} onChange={event => qField("decisionProcess", event.target.value)} placeholder="Quem participa, quais aprovações existem e qual é o próximo passo formal?" /></label>
+          <label><span>Champion / defensor interno</span><div className={s.qualChampion}><select value={qualification.championStatus || "unknown"} onChange={event => qField("championStatus", event.target.value)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><input value={qualification.championContact || ""} onChange={event => qField("championContact", event.target.value)} placeholder="Nome" /></div><textarea value={qualification.championEvidence || ""} onChange={event => qField("championEvidence", event.target.value)} placeholder="Por que essa pessoa defenderia o projeto internamente?" /></label>
+        </div>
+        {qualificationResult.gaps.length > 0 && <div className={s.qualGaps}><strong>Lacunas antes de considerar a oportunidade bem qualificada</strong><div>{qualificationResult.gaps.map(gap => <span key={gap}>{gap}</span>)}</div></div>}
+        <div className={s.buttonRow}><button className={s.primary} disabled={busy === "qualification"} onClick={saveQualification}>{busy === "qualification" ? "Salvando..." : "Salvar qualificação"}</button></div>
+      </div>
+
+      <div className={s.salesIntelPanel}>
+        <div className={s.salesIntelHeader}><div><span className={s.aiBadge}>✦ IA</span><h3>Assistente de reunião e proposta</h3><p>Usa os fatos do lead, BANT, MEDDIC, histórico, objeções e dados comerciais já registrados.</p></div></div>
+        <div className={s.salesIntelGrid}>
+          <article>
+            <div className={s.salesIntelTitle}><strong>Briefing de reunião</strong><button className={s.primary} disabled={busy === "meeting_prep"} onClick={() => generateSalesDocument("meeting_prep")}>{busy === "meeting_prep" ? "Gerando..." : "Gerar briefing"}</button></div>
+            <textarea value={salesIntel.meetingPrep || ""} onChange={event => setSalesIntel(current => ({ ...current, meetingPrep: event.target.value }))} placeholder="O briefing aparecerá aqui..." />
+            <div className={s.buttonRow}><button onClick={() => persistWorkspace({ salesIntel }, "Documentos comerciais salvos.")}>Salvar</button><button onClick={() => copy(salesIntel.meetingPrep || "", "Briefing copiado.")}>Copiar</button><button onClick={() => downloadMarkdown(salesIntel.meetingPrep, `briefing-${slugName}.md`)} disabled={!salesIntel.meetingPrep}>Baixar .md</button></div>
+          </article>
+          <article>
+            <div className={s.salesIntelTitle}><strong>Proposta comercial</strong><button className={s.primary} disabled={busy === "proposal"} onClick={() => generateSalesDocument("proposal")}>{busy === "proposal" ? "Gerando..." : "Gerar proposta"}</button></div>
+            <textarea value={salesIntel.proposal || ""} onChange={event => setSalesIntel(current => ({ ...current, proposal: event.target.value }))} placeholder="A proposta aparecerá aqui..." />
+            <div className={s.buttonRow}><button onClick={() => persistWorkspace({ salesIntel }, "Documentos comerciais salvos.")}>Salvar</button><button onClick={() => copy(salesIntel.proposal || "", "Proposta copiada.")}>Copiar</button><button onClick={() => downloadMarkdown(salesIntel.proposal, `proposta-${slugName}.md`)} disabled={!salesIntel.proposal}>Baixar .md</button></div>
+          </article>
+        </div>
+      </div>
+    </section>;
+  }
+
   function renderScripts() {
     return <section className={s.section}>
       <div className={s.scriptCard}>
@@ -517,7 +631,8 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
 
   const content = tab === "info" ? renderInformation()
     : tab === "strategy" ? renderStrategy()
-      : tab === "scripts" ? renderScripts()
+      : tab === "qualification" ? renderQualification()
+        : tab === "scripts" ? renderScripts()
       : tab === "objections" ? renderObjections()
         : tab === "site" ? renderSite()
           : tab === "sale" ? renderSale()

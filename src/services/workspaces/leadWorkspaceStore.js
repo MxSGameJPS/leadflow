@@ -11,7 +11,8 @@ const CONSULTING_STATUSES = new Set([
 ]);
 const STRATEGY_NODE_TYPES = new Set(["lead", "action", "contact", "decision", "result"]);
 const STRATEGY_NODE_STATUSES = new Set(["planned", "active", "done", "skipped"]);
-const ACTIVITY_TYPES = new Set(["contact", "stage", "follow_up", "proposal", "site", "outreach", "note", "system"]);
+const ACTIVITY_TYPES = new Set(["contact", "stage", "follow_up", "proposal", "site", "outreach", "qualification", "document", "note", "system"]);
+const QUALIFICATION_STATUSES = new Set(["unknown", "low", "medium", "high"]);
 
 const DEFAULT_WORKSPACE = Object.freeze({
   commercialTrack: "auto",
@@ -22,6 +23,35 @@ const DEFAULT_WORKSPACE = Object.freeze({
   lastContactKind: "",
   contactCount: 0,
   activities: [],
+  qualification: {
+    budgetStatus: "unknown",
+    budgetEvidence: "",
+    authorityStatus: "unknown",
+    authorityContact: "",
+    authorityRole: "",
+    authorityEvidence: "",
+    decisionMaker: false,
+    needStatus: "unknown",
+    needEvidence: "",
+    timelineStatus: "unknown",
+    timelineEvidence: "",
+    targetDate: "",
+    championStatus: "unknown",
+    championContact: "",
+    championEvidence: "",
+    metrics: "",
+    decisionCriteria: "",
+    decisionProcess: "",
+    updatedAt: "",
+  },
+  salesIntel: {
+    meetingPrep: "",
+    proposal: "",
+    meetingGeneratedAt: "",
+    proposalGeneratedAt: "",
+    providerName: "",
+    model: "",
+  },
   outreach: {
     emailSubject: "",
     emailBody: "",
@@ -183,6 +213,48 @@ function normalizeActivities(value) {
   }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+function qualificationStatus(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return QUALIFICATION_STATUSES.has(raw) ? raw : "unknown";
+}
+
+function normalizeQualification(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return {
+    budgetStatus: qualificationStatus(input.budgetStatus),
+    budgetEvidence: cleanText(input.budgetEvidence, 2200).trim(),
+    authorityStatus: qualificationStatus(input.authorityStatus),
+    authorityContact: cleanText(input.authorityContact, 180).trim(),
+    authorityRole: cleanText(input.authorityRole, 180).trim(),
+    authorityEvidence: cleanText(input.authorityEvidence, 2200).trim(),
+    decisionMaker: cleanBoolean(input.decisionMaker),
+    needStatus: qualificationStatus(input.needStatus),
+    needEvidence: cleanText(input.needEvidence, 3000).trim(),
+    timelineStatus: qualificationStatus(input.timelineStatus),
+    timelineEvidence: cleanText(input.timelineEvidence, 2200).trim(),
+    targetDate: cleanDate(input.targetDate),
+    championStatus: qualificationStatus(input.championStatus),
+    championContact: cleanText(input.championContact, 180).trim(),
+    championEvidence: cleanText(input.championEvidence, 2200).trim(),
+    metrics: cleanText(input.metrics, 2400).trim(),
+    decisionCriteria: cleanText(input.decisionCriteria, 2400).trim(),
+    decisionProcess: cleanText(input.decisionProcess, 2400).trim(),
+    updatedAt: cleanTimestamp(input.updatedAt),
+  };
+}
+
+function normalizeSalesIntel(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return {
+    meetingPrep: cleanText(input.meetingPrep, 30000).trim(),
+    proposal: cleanText(input.proposal, 30000).trim(),
+    meetingGeneratedAt: cleanTimestamp(input.meetingGeneratedAt),
+    proposalGeneratedAt: cleanTimestamp(input.proposalGeneratedAt),
+    providerName: cleanText(input.providerName, 180).trim(),
+    model: cleanText(input.model, 180).trim(),
+  };
+}
+
 function normalizeOutreach(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
@@ -251,6 +323,8 @@ function normalizeWorkspace(input = {}) {
     lastContactKind: cleanContactKind(input.lastContactKind),
     contactCount: cleanInteger(input.contactCount, DEFAULT_WORKSPACE.contactCount, 0),
     activities: normalizeActivities(input.activities),
+    qualification: normalizeQualification(input.qualification),
+    salesIntel: normalizeSalesIntel(input.salesIntel),
     outreach: normalizeOutreach(input.outreach),
     strategyMap: normalizeStrategyMap(input.strategyMap),
     objectionAssistant: normalizeObjectionAssistant(input.objectionAssistant),
@@ -323,6 +397,8 @@ export async function saveLeadWorkspace(leadId, patch = {}) {
   const merged = normalizeWorkspace({
     ...current,
     ...patch,
+    qualification: { ...current.qualification, ...(patch.qualification || {}) },
+    salesIntel: { ...current.salesIntel, ...(patch.salesIntel || {}) },
     outreach: { ...current.outreach, ...(patch.outreach || {}) },
     appointment: { ...current.appointment, ...(patch.appointment || {}) },
     sale: { ...current.sale, ...(patch.sale || {}) },
