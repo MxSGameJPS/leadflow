@@ -37,7 +37,10 @@ async function loadChromium(){
     const chromium=mod?.chromium||mod?.default?.chromium||mod?.default?.default?.chromium;
     if(chromium?.launch)return chromium;
   }catch(error){second=error}
-  throw new Error([first?.message,second?.message].filter(Boolean).join(" | ")||"Playwright não está instalado.");
+  const missing=[first,second].some(error=>String(error?.code||"")==="ERR_MODULE_NOT_FOUND"||String(error?.code||"")==="MODULE_NOT_FOUND");
+  const error=new Error(missing?"PLAYWRIGHT_PACKAGE_MISSING":"PLAYWRIGHT_LOAD_FAILED");
+  error.cause=first||second;
+  throw error;
 }
 function portAvailable(port){return new Promise(resolve=>{const server=net.createServer();server.unref();server.once("error",()=>resolve(false));server.listen({host:"127.0.0.1",port},()=>server.close(()=>resolve(true)))})}
 async function choosePort(){
@@ -232,13 +235,14 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
   const threshold=Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||78);
   let chromium;
   try{chromium=await loadChromium()}catch(error){
-    return{available:false,pass:true,score:null,threshold,judgeUsed:false,skippedReason:"Auditoria visual indisponível: "+clean(error.message,1000)+" Execute npm run install:browser para habilitar a validação renderizada."};
+    const packageMissing=error?.message==="PLAYWRIGHT_PACKAGE_MISSING";
+    return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:packageMissing?"playwright_package_missing":"playwright_load_failed",skippedReason:packageMissing?"Auditoria visual não executada porque o módulo de renderização não está instalado. Execute npm install e tente novamente.":"Auditoria visual não executada porque o módulo de renderização não pôde ser carregado."};
   }
   let browser=null,child=null,logs="";
   const port=await choosePort(),url="http://127.0.0.1:"+port;
   try{
     try{browser=await chromium.launch({headless:true})}catch(error){
-      return{available:false,pass:true,score:null,threshold,judgeUsed:false,skippedReason:"Chromium indisponível: "+clean(error.message,800)+" Execute npm run install:browser."};
+      return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:"chromium_missing",skippedReason:"Auditoria visual não executada porque o Chromium do Playwright ainda não está disponível. Execute npm run install:browser uma vez nesta máquina."};
     }
     child=spawn(process.execPath,[nextBin,"start","-H","127.0.0.1","-p",String(port)],{
       cwd:root,
@@ -268,7 +272,7 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
     }
     return{available:true,pass:scoring.pass,hardFailure:scoring.hardFailure,score:scoring.score,threshold,judgeUsed:true,summary:judged.summary,dimensions:judged.dimensions,issues,metrics};
   }catch(error){
-    return{available:false,pass:true,score:null,threshold,judgeUsed:false,skippedReason:"Falha na auditoria renderizada: "+clean(error.message,1400)};
+    return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:"visual_qa_failed",skippedReason:"A auditoria visual renderizada encontrou uma falha de ambiente. Consulte os logs técnicos e tente novamente."};
   }finally{
     try{if(child&&!child.killed)child.kill()}catch{}
     try{await browser?.close()}catch{}

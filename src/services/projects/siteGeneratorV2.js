@@ -483,46 +483,52 @@ function normalizeSpec(value, input) {
 }
 
 export function parseAiJson(text) {
-  const raw = clean(text, 30000)
-    .replace(/^\uFEFF/, "")
-    .replace(/^\`\`\`(?:json|javascript|js)?\s*/i, "")
-    .replace(/\s*\`\`\`$/i, "");
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("A IA não retornou JSON reconhecível.");
-
-  const candidate = raw.slice(start, end + 1);
-  const attempts = [
-    candidate,
-    candidate
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
-      .replace(/([{,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'\s*:/g, '$1"$2":')
-      .replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*[,}])/g, (_, value) => ': "' + String(value).replace(/"/g, '\\"') + '"')
-      .replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$-]*)\s*:/g, '$1"$2":')
-      .replace(/,\s*([}\]])/g, "$1"),
-  ];
-
-  let lastError = null;
-  for (const attempt of attempts) {
-    try { return JSON.parse(attempt); } catch (error) { lastError = error; }
+  let raw=clean(text,60000).replace(/^\uFEFF/,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
+  const fenced=[...raw.matchAll(/(?:\`\`\`|~~~)(?:json|javascript|js)?\s*([\s\S]*?)\s*(?:\`\`\`|~~~)/gi)].map(match=>match[1]);
+  const sources=[...fenced,raw];
+  let lastError=null;
+  for(const source of sources){
+    const starts=[...source.matchAll(/\{/g)].map(match=>match.index);
+    for(const begin of starts){
+      let depth=0,inString=false,quote="",escaped=false;
+      for(let i=begin;i<source.length;i++){
+        const ch=source[i];
+        if(inString){
+          if(escaped){escaped=false;continue}
+          if(ch==="\\"){escaped=true;continue}
+          if(ch===quote){inString=false;quote=""}
+          continue;
+        }
+        if(ch==='"'||ch==="'"){inString=true;quote=ch;continue}
+        if(ch==="{")depth++;
+        if(ch==="}")depth--;
+        if(depth!==0)continue;
+        const candidate=source.slice(begin,i+1);
+        const attempts=[
+          candidate,
+          candidate.replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/([{,]\s*)'([^'\\]*(?:\\.[^'\\]*)*)'\s*:/g,'$1"$2":').replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'(?=\s*[,}])/g,(_,value)=>': "'+String(value).replace(/"/g,'\\"')+'"').replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$-]*)\s*:/g,'$1"$2":').replace(/,\s*([}\]])/g,"$1"),
+        ];
+        for(const attempt of attempts){try{return JSON.parse(attempt)}catch(error){lastError=error}}
+        break;
+      }
+    }
   }
-  throw lastError || new Error("JSON inválido.");
+  throw new Error(lastError?"A IA retornou conteúdo parecido com JSON, mas inválido.":"A IA não retornou JSON reconhecível.");
 }
 
 async function parseAiJsonWithRepair(text) {
-  try {
-    return parseAiJson(text);
-  } catch (firstError) {
-    const repair = await generateWithDefaultProvider({
-      systemPrompt: "Você é um reparador de JSON. Retorne somente JSON estrito e válido, sem markdown, sem comentários e sem texto adicional. Preserve os valores e a estrutura do conteúdo recebido.",
-      prompt: "Corrija este conteúdo para JSON estrito válido:\n\n" + clean(text, 28000),
-    });
-    try {
-      return parseAiJson(repair.text);
-    } catch {
-      throw new Error("JSON inválido após tentativa automática de reparo: " + firstError.message);
+  try{return parseAiJson(text)}catch(firstError){
+    let lastError=firstError;
+    for(let attempt=0;attempt<2;attempt++){
+      const repair=await generateWithDefaultProvider({
+        temperature:0,
+        maxTokens:12000,
+        systemPrompt:"Você normaliza respostas para JSON estrito. Extraia apenas o objeto solicitado. Retorne SOMENTE um objeto JSON válido: sem markdown, comentários, explicações, tags <think>, aspas tipográficas ou vírgulas finais. Preserve todo conteúdo útil. Se houver texto misturado ao JSON, descarte apenas o texto externo.",
+        prompt:"Normalize para JSON estrito o conteúdo abaixo. Não resuma e não invente campos.\n\n"+clean(attempt===0?text:lastError?.raw||text,50000),
+      });
+      try{return parseAiJson(repair.text)}catch(error){lastError=error;lastError.raw=repair.text}
     }
+    throw new Error("A direção criativa não pôde ser estruturada como JSON após duas normalizações automáticas.");
   }
 }
 
