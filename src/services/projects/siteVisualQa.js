@@ -163,6 +163,15 @@ function objectiveIssues(metrics,known){
   for(const component of mergeUnique([...(desktop.brokenImageComponents||[]),...mobiles.flatMap(item=>item.brokenImageComponents||[])]))add(component,"high","Corrija a referência/renderização da imagem. A auditoria encontrou imagem quebrada no componente.","Imagem com naturalWidth 0.");
   for(const component of mergeUnique([...(desktop.missingAltComponents||[]),...mobiles.flatMap(item=>item.missingAltComponents||[])]))add(component,"medium","Adicione texto alternativo apropriado à imagem ou alt vazio quando ela for puramente decorativa.","Imagem sem atributo alt.");
   for(const component of mergeUnique([...(desktop.unnamedInteractiveComponents||[]),...mobiles.flatMap(item=>item.unnamedInteractiveComponents||[])]))add(component,"medium","Dê um nome acessível ao link ou botão usando texto visível ou aria-label.","Controle interativo sem nome acessível.");
+  const runtime=[desktop,...mobiles].flatMap(item=>item.runtimeErrors||[]);
+  if(runtime.length){
+    const fallbackComponent=[...known][0];
+    if(fallbackComponent)add(fallbackComponent,"high","Corrija o erro de runtime detectado no navegador antes da entrega. Revise hooks, acesso ao browser, dados opcionais e event handlers.","Erro de runtime: "+runtime.slice(0,2).join(" | "));
+  }
+  if([desktop,...mobiles].some(item=>(item.duplicateIdCount||0)>0)){
+    const fallbackComponent=[...known][0];
+    if(fallbackComponent)add(fallbackComponent,"medium","Remova IDs HTML duplicados e mantenha âncoras/labels únicas na página.","Foram detectados IDs duplicados no DOM.");
+  }
   for(const mobile of mobiles){
     if((mobile.smallTapTargets||0)>4){
       for(const component of (mobile.smallTapTargetComponents||[]).slice(0,3))add(component,"medium","Aumente os alvos de toque essenciais no mobile para pelo menos 40–44px de altura/largura útil sem prejudicar a composição.","Múltiplos alvos de toque pequenos em "+mobile.viewportWidth+"px.");

@@ -374,10 +374,13 @@ async function concurrent(items,limit,fn){
 function actionLib(){
   return 'export function actionHref(actionInput, siteInput = {}) {\n  let action = actionInput;\n  let site = siteInput;\n  if (actionInput && typeof actionInput === "object" && typeof siteInput === "string") { site = actionInput; action = siteInput; }\n  else if (actionInput && typeof actionInput === "object" && actionInput.action) { action = actionInput.action; site = siteInput || {}; }\n  if (action === "whatsapp" && site.whatsapp) return "https://wa.me/" + site.whatsapp;\n  if (action === "phone" && site.phone) return "tel:" + String(site.phone).replace(/[^+\\d]/g, "");\n  if (action === "instagram" && site.instagram) return site.instagram;\n  if (action === "maps" && site.mapsLink) return site.mapsLink;\n  return "#contato";\n}\n';
 }
+function seoLib(){
+  return 'function numeric(value){const raw=String(value??"").replace(/\\./g,"").replace(",",".");const parsed=Number(raw);return Number.isFinite(parsed)?parsed:null}\nexport function localBusinessJsonLd(site={}){\n  const data={"@context":"https://schema.org","@type":"LocalBusiness",name:site.brandName||undefined,address:site.address||undefined,telephone:site.phone||undefined};\n  if(site.instagram)data.sameAs=[site.instagram];\n  const rating=numeric(site.rating),reviews=numeric(site.reviews);\n  if(rating&&reviews)data.aggregateRating={"@type":"AggregateRating",ratingValue:rating,reviewCount:reviews};\n  return Object.fromEntries(Object.entries(data).filter(([,value])=>value!==undefined&&value!==""));\n}\n';
+}
 function pageSource(plan){
   const imports=plan.components.map(function(item){return 'import '+item.name+' from "../components/'+item.name+'/'+item.name+'.jsx";'}).join("\n");
-  const body=plan.components.map(function(item){return '      <div className="leadflow-component-marker" data-leadflow-component="'+item.name+'><'+item.name+' site={siteData} /></div>';}).join("\n");
-  return 'import siteData from "../data/siteData.js";\n'+imports+'\n\nexport default function Home() {\n  return (\n    <>\n'+body+'\n    </>\n  );\n}\n';
+  const body=plan.components.map(function(item){return '      <div className="leadflow-component-marker" data-leadflow-component="'+item.name+'"><'+item.name+' site={siteData} /></div>';}).join("\n");
+  return 'import siteData from "../data/siteData.js";\nimport { localBusinessJsonLd } from "../lib/siteSeo.js";\n'+imports+'\n\nexport default function Home() {\n  const jsonLd=localBusinessJsonLd(siteData);\n  return (\n    <>\n      <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(jsonLd)}} />\n'+body+'\n    </>\n  );\n}\n';
 }
 function fontConfig(pair){
   if(pair==="editorial"||pair==="luxury")return{imports:"Cormorant_Garamond, Manrope",display:'Cormorant_Garamond({ subsets: ["latin"], weight: ["500","600","700"], variable: "--font-display" })',body:'Manrope({ subsets: ["latin"], variable: "--font-body" })'};
@@ -389,7 +392,9 @@ function inspectorScript(){
 }
 function layoutSource(site){
   const fonts=fontConfig(site.design?.fontPair);
-  return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(site.seoTitle||site.brandName||"Site")+', description: '+JSON.stringify(site.seoDescription||site.heroText||"")+' };\n\nexport default function RootLayout({ children }) {\n  const inspector=process.env.NODE_ENV==="development";\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}{inspector ? <script src="/leadflow-inspector.js" defer /> : null}</body></html>;\n}\n';
+  const title=site.seoTitle||site.brandName||"Site",description=site.seoDescription||site.heroText||"";
+  const theme=site.design?.colors?.primary||"#17324D";
+  return 'import { '+fonts.imports+' } from "next/font/google";\nimport "./globals.css";\nimport styles from "./theme.module.css";\n\nconst displayFont = '+fonts.display+';\nconst bodyFont = '+fonts.body+';\n\nexport const metadata = { title: '+JSON.stringify(title)+', description: '+JSON.stringify(description)+', robots:{index:true,follow:true}, openGraph:{title:'+JSON.stringify(title)+',description:'+JSON.stringify(description)+',type:"website",locale:"pt_BR"}, twitter:{card:"summary",title:'+JSON.stringify(title)+',description:'+JSON.stringify(description)+'} };\nexport const viewport = { width:"device-width", initialScale:1, viewportFit:"cover", themeColor:'+JSON.stringify(theme)+' };\n\nexport default function RootLayout({ children }) {\n  const inspector=process.env.NODE_ENV==="development";\n  return <html lang="pt-BR"><body className={displayFont.variable + " " + bodyFont.variable + " " + styles.body}>{children}{inspector ? <script src="/leadflow-inspector.js" defer /> : null}</body></html>;\n}\n';
 }
 function globalsCss(){return '*{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;padding:0;min-height:100%;width:100%;max-width:100%;overflow-x:hidden}body{min-width:0}img,svg{max-width:100%}button,a,input,textarea,select{font:inherit}button,a{touch-action:manipulation}.leadflow-component-marker{display:contents}.leadflow-inspect-hover>*{outline:2px dashed rgba(37,99,235,.72)!important;outline-offset:-2px}.leadflow-inspect-selected>*{outline:3px solid #2563eb!important;outline-offset:-3px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}'}
 function themeCss(site,plan){return codegenThemeCss(site,plan)}
@@ -406,6 +411,7 @@ async function writeProject(root,folderName,site,plan,sources){
     fs.writeFile(path.join(root,"app","theme.module.css"),themeCss(site,plan),"utf8"),
     fs.writeFile(path.join(root,"data","siteData.js"),'const siteData = '+JSON.stringify(site,null,2)+';\n\nexport default siteData;\n',"utf8"),
     fs.writeFile(path.join(root,"lib","siteActions.js"),actionLib(),"utf8"),
+    fs.writeFile(path.join(root,"lib","siteSeo.js"),seoLib(),"utf8"),
     fs.writeFile(path.join(root,"package.json"),packageSource(folderName),"utf8"),
     fs.writeFile(path.join(root,"next.config.mjs"),'const nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next"};\nexport default nextConfig;\n',"utf8"),
     fs.writeFile(path.join(root,"public","leadflow-inspector.js"),inspectorScript(),"utf8"),
@@ -603,6 +609,11 @@ export async function generateUniqueSiteCode(options={}){
       quality={...second,attempts:2,initialScore:quality.score,initialSummary:quality.summary||""};
     }else quality={...quality,attempts:quality.available?1:0};
   }
+  if(quality.available&&quality.hardFailure){
+    await cleanupBuildArtifacts(root);
+    const evidence=(quality.issues||[]).filter(issue=>issue.severity==="high").slice(0,4).map(issue=>issue.component+": "+issue.instruction).join(" | ");
+    throw new Error("O site ainda apresenta falha objetiva no render após a autocorreção e não será entregue como pronto. "+clean(evidence||quality.summary,2600));
+  }
   await cleanupBuildArtifacts(root);
   return{plan,format:"unique-codegen-v4",buildOk:build.ok,quality};
 }
@@ -653,6 +664,11 @@ export async function refineUniqueSiteComponent(options={}){
     const second=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
     quality={...second,attempts:2,initialScore:quality.score,initialSummary:quality.summary||""};
   }else quality={...quality,attempts:quality.available?1:0};
+  if(quality.available&&quality.hardFailure){
+    await cleanupBuildArtifacts(root);
+    const evidence=(quality.issues||[]).filter(issue=>issue.severity==="high").slice(0,4).map(issue=>issue.component+": "+issue.instruction).join(" | ");
+    throw new Error("O refinamento ainda apresenta falha objetiva no render e foi bloqueado. "+clean(evidence||quality.summary,2600));
+  }
   await cleanupBuildArtifacts(root);
   site.codegenPlan=plan;
   site.codegenQuality=quality;
