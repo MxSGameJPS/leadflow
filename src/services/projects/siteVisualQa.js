@@ -140,7 +140,7 @@ function hasHardFailure(metrics={}){
 export function calculateVisualQualityScore(dimensions={},metrics={},threshold=78){
   const weights={visualCraft:.15,brandSpecificity:.15,brandFidelity:.15,productIntent:.15,conversion:.1,mobile:.15,coherence:.075,commercialReadiness:.075};
   let score=0;
-  for(const[key,weight]of Object.entries(weights))score+=clamp(dimensions[key])*10*weight;
+  for(const[key,weight]of Object.entries(weights)){const fallback=key==="brandFidelity"?dimensions.brandSpecificity:key==="productIntent"?dimensions.commercialReadiness:0;score+=clamp(dimensions[key]??fallback)*10*weight;}
   score=Math.round(score);
   const desktop=metrics.desktop||{},mobiles=mobileMetrics(metrics);
   if(mobiles.some(item=>item.horizontalOverflow))score=Math.min(score,58);
