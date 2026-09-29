@@ -35,6 +35,9 @@ try {
   await generateUniqueSiteCode({folderPath:path.join(temp,'generated'),folderName:'test',siteData:{brandName:'Teste',segment:'Delivery'},validateBuild:false,visualQa:false,onProgress:e=>events.push(e)});
   assert.ok(events.some(e=>e.title==='Revisão por IA indisponível'));
   await fs.access(path.join(temp,'generated','app','page.jsx'));
+  const generatedNextConfig=await fs.readFile(path.join(temp,'generated','next.config.mjs'),'utf8');
+  assert.match(generatedNextConfig,/outputFileTracingRoot:projectRoot/);
+  assert.match(generatedNextConfig,/fileURLToPath\(import\.meta\.url\)/);
   response=({body})=>JSON.stringify(body.messages).includes('revisor final')
     ? {choices:[{message:{content:'{"pass":true,"issues":[]}'}}]}
     : {choices:[{message:{content:null,tool_calls:[{function:{name:'MemorySearch'}}]}}]};
