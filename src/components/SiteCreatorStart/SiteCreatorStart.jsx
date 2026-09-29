@@ -1,5 +1,5 @@
 "use client";
-import { useEffect,useMemo,useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearSiteReferenceImagesAction,createSiteProjectAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
 import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
@@ -36,6 +36,8 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[pendingReferences,setPendingReferences]=useState([]);
   const[selectedComponent,setSelectedComponent]=useState("");
   const[generationId,setGenerationId]=useState("");
+  const[pendingCreate,setPendingCreate]=useState(null);
+  const createStartedRef=useRef("");
 
   useEffect(()=>{
     setActiveProject(project);
@@ -76,20 +78,30 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     }catch(error){setNotice("Erro: "+error.message)}
   }
 
-  async function createProject(event){
-    event.preventDefault();if(!leadId)return;setBusy("create");setNotice("");
-    const liveId="site_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,9);setGenerationId(liveId);
-    try{
-      const created=await createSiteProjectAction({
-        generationId:liveId,
-        mode:"lead",leadId,template,instruction,effects,skillMode,
-        skills:skillMode==="auto"?autoSkillIds:selectedSkills,
-        referenceImages:pendingReferences,
-      });
-      setActiveProject(created);setEffects(created.effects||[]);setSkillMode(created.skillMode||"auto");setSelectedSkills(created.skills||[]);setPendingReferences([]);setInstruction("");
-      router.push("/criar-site?lead="+encodeURIComponent(leadId)+"&project="+encodeURIComponent(created.id));router.refresh();
-    }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
+  function createProject(event){
+    event.preventDefault();if(!leadId||busy==="create")return;
+    const liveId="site_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,9);
+    setNotice("");setGenerationId(liveId);setBusy("create");
+    setPendingCreate({generationId:liveId,mode:"lead",leadId,template,instruction,effects,skillMode,skills:skillMode==="auto"?autoSkillIds:selectedSkills,referenceImages:pendingReferences});
   }
+
+  useEffect(()=>{
+    if(!pendingCreate||createStartedRef.current===pendingCreate.generationId)return;
+    createStartedRef.current=pendingCreate.generationId;
+    let alive=true;
+    const run=async()=>{
+      // O efeito roda somente depois que o React já pintou o builder ao vivo.
+      await new Promise(resolve=>setTimeout(resolve,30));
+      try{
+        const created=await createSiteProjectAction(pendingCreate);
+        if(!alive)return;
+        setActiveProject(created);setEffects(created.effects||[]);setSkillMode(created.skillMode||"auto");setSelectedSkills(created.skills||[]);setPendingReferences([]);setInstruction("");
+        router.push("/criar-site?lead="+encodeURIComponent(pendingCreate.leadId)+"&project="+encodeURIComponent(created.id));router.refresh();
+      }catch(error){if(alive)setNotice("Erro: "+error.message)}
+      finally{if(alive){setBusy("");setPendingCreate(null)}}
+    };
+    run();return()=>{alive=false};
+  },[pendingCreate,router]);
 
   async function refine(event){
     event.preventDefault();if(!activeProject||!canRefine)return;setBusy("refine");setNotice("");
