@@ -494,7 +494,7 @@ async function writeProject(root,folderName,site,plan,sources){
     fs.writeFile(path.join(root,"lib","siteActions.js"),actionLib(),"utf8"),
     fs.writeFile(path.join(root,"lib","siteSeo.js"),seoLib(),"utf8"),
     fs.writeFile(path.join(root,"package.json"),packageSource(folderName),"utf8"),
-    fs.writeFile(path.join(root,"next.config.mjs"),'const nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next"};\nexport default nextConfig;\n',"utf8"),
+    fs.writeFile(path.join(root,"next.config.mjs"),'import path from "node:path";\nimport { fileURLToPath } from "node:url";\n\nconst projectRoot=path.dirname(fileURLToPath(import.meta.url));\nconst nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next",outputFileTracingRoot:projectRoot};\nexport default nextConfig;\n',"utf8"),
     fs.writeFile(path.join(root,"public","leadflow-inspector.js"),inspectorScript(),"utf8"),
     fs.writeFile(path.join(root,"README.md"),readme(site,plan),"utf8"),
     fs.writeFile(path.join(root,"generation-format.json"),JSON.stringify({format:"unique-codegen-v4",generatedAt:new Date().toISOString(),plan},null,2),"utf8"),
