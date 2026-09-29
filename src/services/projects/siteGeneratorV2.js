@@ -529,6 +529,7 @@ async function parseAiJsonWithRepair(text) {
     let lastError=firstError;
     for(let attempt=0;attempt<2;attempt++){
       const repair=await generateWithDefaultProvider({
+        siteRole:"creative",
         temperature:0,
         maxTokens:12000,
         systemPrompt:"Você normaliza respostas para JSON estrito. Extraia apenas o objeto solicitado. Retorne SOMENTE um objeto JSON válido: sem markdown, comentários, explicações, tags <think>, aspas tipográficas ou vírgulas finais. Preserve todo conteúdo útil. Se houver texto misturado ao JSON, descarte apenas o texto externo.",
@@ -980,7 +981,7 @@ export async function generateSiteFolder(input = {}) {
       try {
         result = await generateWithDefaultProvider({
           ...request,
-          model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
+          siteRole: "creative",
           temperature: 0.72,
           maxTokens: 12000,
           timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 120000),
@@ -992,7 +993,7 @@ export async function generateSiteFolder(input = {}) {
         result = await generateWithDefaultProvider({
           ...request,
           images: [],
-          model: String(process.env.LEADFLOW_SITE_MODEL_CREATIVE || "").trim(),
+          siteRole: "creative",
           temperature: 0.72,
           maxTokens: 12000,
           timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 120000),
