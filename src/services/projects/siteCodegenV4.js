@@ -422,17 +422,24 @@ function fallbackComponent(component){
     : '.root{padding:64px 20px;background:var(--color-background);color:var(--color-text)}.root h1,.root h2{font-family:var(--font-display);line-height:.95}.root p{max-width:680px;color:var(--color-muted)}.content{max-width:720px}.cta{display:inline-flex;margin-top:20px;padding:14px 20px;border-radius:var(--radius);background:var(--color-primary);color:#fff;text-decoration:none}.image{width:100%;max-height:620px;object-fit:cover;margin-top:28px;border-radius:var(--radius)}@media(min-width:768px){.root{padding:96px clamp(32px,6vw,96px)}}';
   return{jsx,css};
 }
-async function generateComponent(site,plan,component,skipAi,initialNotes=[],onAttempt=null){
+async function generateComponent(site,plan,component,skipAi,initialNotes=[],onAttempt=null,onDegraded=null){
   if(skipAi)return fallbackComponent(component);
   let errors=[...initialNotes];
   for(let attempt=0;attempt<2;attempt++){
-    const result=await generateWithDefaultProvider({...componentRequest(site,plan,component,errors),onAttempt});
+    let result;
+    try{result=await generateWithDefaultProvider({...componentRequest(site,plan,component,errors),onAttempt})}
+    catch(error){
+      const message=String(error?.message||error);
+      if(/tempo limite|timeout|HTTP (429|502|503|504)/i.test(message)){await onDegraded?.({component:component.name,reason:message});return fallbackComponent(component)}
+      throw error;
+    }
     let source;
     try{source=normalizeComponentSource(parseComponent(result.text))}catch(error){errors=[error.message];continue}
     errors=validateComponent(component.name,source);
     if(!errors.length)return source;
   }
-  throw new Error("Componente "+component.name+" reprovado: "+errors.join("; "));
+  await onDegraded?.({component:component.name,reason:"Resposta inválida do worker."});
+  return fallbackComponent(component);
 }
 async function concurrent(items,limit,fn){
   const output=new Array(items.length);let cursor=0;
