@@ -611,6 +611,7 @@ export async function generateUniqueSiteCode(options={}){
       result=await generateWithDefaultProvider({
         ...request,
         temperature:0.35,
+    disableTools:true,
         maxTokens:12000,
         systemPrompt:request.systemPrompt+" ATENÇÃO: sua tentativa anterior não pôde ser interpretada. Retorne exclusivamente um objeto JSON estrito iniciado por { e terminado por }, sem cercas de código, comentários, raciocínio, texto introdutório ou conclusão.",
         prompt:request.prompt+"\n\nEsta é uma nova tentativa porque a resposta anterior não era JSON válido. Obedeça rigorosamente ao formato JSON.",
