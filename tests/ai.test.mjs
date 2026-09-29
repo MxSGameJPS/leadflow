@@ -1,4 +1,3 @@
-const { buildQualificationCopilotPrompt } = await import("../src/services/ai/qualificationCopilotService.js");
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +26,7 @@ const {
 } = await import("../src/services/ai/objectionAdvisorService.js");
 const { buildLeadOutreachPrompt } = await import("../src/services/ai/leadOutreachService.js");
 const { buildSalesIntelPrompt } = await import("../src/services/ai/salesIntelService.js");
+const { buildQualificationCopilotPrompt } = await import("../src/services/ai/qualificationCopilotService.js");
 
 let pass = 0, fail = 0;
 const t = (name, condition) => {
