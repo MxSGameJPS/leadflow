@@ -70,7 +70,7 @@ async function capture(browser,url,config){
         const style=getComputedStyle(element),rect=element.getBoundingClientRect();
         return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
       };
-      const overflowComponents=[],smallTapTargetComponents=[],tinyTextComponents=[],brokenImageComponents=[];
+      const overflowComponents=[],smallTapTargetComponents=[],tinyTextComponents=[],brokenImageComponents=[],missingAltComponents=[],unnamedInteractiveComponents=[];
       for(const element of document.body.querySelectorAll("*")){
         if(!visible(element))continue;
         const rect=element.getBoundingClientRect();
@@ -90,7 +90,16 @@ async function capture(browser,url,config){
       }
       for(const image of document.images){
         if(image.complete&&image.naturalWidth===0){const marker=markerFor(image);if(marker)brokenImageComponents.push(marker)}
+        if(!image.hasAttribute("alt")){const marker=markerFor(image);if(marker)missingAltComponents.push(marker)}
       }
+      for(const element of document.querySelectorAll("a,button")){
+        if(!visible(element))continue;
+        const label=String(element.getAttribute("aria-label")||element.getAttribute("title")||element.textContent||"").trim();
+        const imageAlt=[...element.querySelectorAll("img[alt]")].map(image=>image.getAttribute("alt")||"").join(" ").trim();
+        if(!label&&!imageAlt){const marker=markerFor(element);if(marker)unnamedInteractiveComponents.push(marker)}
+      }
+      const ids=[...document.querySelectorAll("[id]")].map(element=>element.id).filter(Boolean);
+      const duplicateIds=[...new Set(ids.filter((id,index)=>ids.indexOf(id)!==index))];
       return {
         viewportWidth:viewport,
         documentWidth:Math.max(document.documentElement.scrollWidth,document.body.scrollWidth),
@@ -99,6 +108,10 @@ async function capture(browser,url,config){
         h1Count:document.querySelectorAll("h1").length,
         imageCount:document.images.length,
         brokenImages:[...document.images].filter(image=>image.complete&&image.naturalWidth===0).length,
+        missingAltCount:[...document.images].filter(image=>!image.hasAttribute("alt")).length,
+        unnamedInteractiveCount:unnamedInteractiveComponents.length,
+        duplicateIdCount:duplicateIds.length,
+        duplicateIds:duplicateIds.slice(0,12),
         interactiveCount:document.querySelectorAll("a,button,input,select,textarea").length,
         smallTapTargets:smallTapTargetComponents.length,
         tinyTextCount:tinyTextComponents.length,
@@ -106,41 +119,58 @@ async function capture(browser,url,config){
         smallTapTargetComponents:[...new Set(smallTapTargetComponents)].slice(0,12),
         tinyTextComponents:[...new Set(tinyTextComponents)].slice(0,12),
         brokenImageComponents:[...new Set(brokenImageComponents)].slice(0,12),
+        missingAltComponents:[...new Set(missingAltComponents)].slice(0,12),
+        unnamedInteractiveComponents:[...new Set(unnamedInteractiveComponents)].slice(0,12),
       };
     });
     const buffer=await page.screenshot({type:"jpeg",quality:68,fullPage:true});
     return{metrics:{...metrics,runtimeErrors:mergeUnique(runtimeErrors).slice(0,10)},image:dataUrl(buffer)};
   }finally{await context.close()}
 }
+function mobileMetrics(metrics={}){
+  return [metrics.mobile320,metrics.mobile,metrics.mobile390].filter(Boolean);
+}
+function hasHardFailure(metrics={}){
+  const all=[metrics.desktop,...mobileMetrics(metrics)].filter(Boolean);
+  return all.some(item=>item.horizontalOverflow||(item.brokenImages||0)>0||(item.runtimeErrors?.length||0)>0);
+}
 export function calculateVisualQualityScore(dimensions={},metrics={},threshold=78){
   const weights={visualCraft:.2,brandSpecificity:.2,conversion:.15,mobile:.2,coherence:.15,commercialReadiness:.1};
   let score=0;
   for(const[key,weight]of Object.entries(weights))score+=clamp(dimensions[key])*10*weight;
   score=Math.round(score);
-  const desktop=metrics.desktop||{},mobile=metrics.mobile||{};
-  if(mobile.horizontalOverflow)score=Math.min(score,58);
+  const desktop=metrics.desktop||{},mobiles=mobileMetrics(metrics);
+  if(mobiles.some(item=>item.horizontalOverflow))score=Math.min(score,58);
   if(desktop.horizontalOverflow)score=Math.min(score,68);
-  if((desktop.brokenImages||0)+(mobile.brokenImages||0)>0)score=Math.min(score,52);
-  if((desktop.runtimeErrors?.length||0)+(mobile.runtimeErrors?.length||0)>0)score=Math.min(score,60);
-  if((desktop.h1Count||0)!==1||(mobile.h1Count||0)!==1)score=Math.min(score,84);
-  return{score,pass:score>=Number(threshold||78)&&!mobile.horizontalOverflow&&!desktop.horizontalOverflow&&!desktop.brokenImages&&!mobile.brokenImages};
+  if([desktop,...mobiles].some(item=>(item.brokenImages||0)>0))score=Math.min(score,52);
+  if([desktop,...mobiles].some(item=>(item.runtimeErrors?.length||0)>0))score=Math.min(score,60);
+  if([desktop,...mobiles].some(item=>(item.missingAltCount||0)>0||(item.unnamedInteractiveCount||0)>0))score=Math.min(score,76);
+  if([desktop,...mobiles].some(item=>(item.h1Count||0)!==1))score=Math.min(score,84);
+  const hardFailure=hasHardFailure(metrics);
+  return{score,hardFailure,pass:score>=Number(threshold||78)&&!hardFailure};
 }
 function objectiveIssues(metrics,known){
-  const out=[],mobile=metrics.mobile||{},desktop=metrics.desktop||{};
+  const out=[],desktop=metrics.desktop||{},mobiles=mobileMetrics(metrics);
   const add=(component,severity,instruction,evidence)=>{
     if(!known.has(component)||out.some(item=>item.component===component&&item.instruction===instruction))return;
     out.push({component,severity,instruction,evidence});
   };
-  if(mobile.horizontalOverflow){
-    for(const component of mobile.overflowComponents||[])add(component,"high","Corrija a composição mobile para eliminar qualquer overflow horizontal em 320–390px. Remova larguras mínimas/fixas, offsets ou elementos absolutos que escapem do viewport.","Overflow horizontal detectado no navegador.");
+  for(const mobile of mobiles){
+    if(mobile.horizontalOverflow){
+      for(const component of mobile.overflowComponents||[])add(component,"high","Corrija a composição mobile para eliminar qualquer overflow horizontal em 320–390px. Remova larguras mínimas/fixas, offsets ou elementos absolutos que escapem do viewport.","Overflow horizontal detectado em "+mobile.viewportWidth+"px.");
+    }
   }
-  for(const component of mergeUnique([...(mobile.brokenImageComponents||[]),...(desktop.brokenImageComponents||[])]))add(component,"high","Corrija a referência/renderização da imagem. A auditoria encontrou imagem quebrada no componente.","Imagem com naturalWidth 0.");
-  if((mobile.smallTapTargets||0)>4){
-    for(const component of (mobile.smallTapTargetComponents||[]).slice(0,3))add(component,"medium","Aumente os alvos de toque essenciais no mobile para pelo menos 40–44px de altura/largura útil sem prejudicar a composição.","Múltiplos alvos de toque pequenos.");
+  for(const component of mergeUnique([...(desktop.brokenImageComponents||[]),...mobiles.flatMap(item=>item.brokenImageComponents||[])]))add(component,"high","Corrija a referência/renderização da imagem. A auditoria encontrou imagem quebrada no componente.","Imagem com naturalWidth 0.");
+  for(const component of mergeUnique([...(desktop.missingAltComponents||[]),...mobiles.flatMap(item=>item.missingAltComponents||[])]))add(component,"medium","Adicione texto alternativo apropriado à imagem ou alt vazio quando ela for puramente decorativa.","Imagem sem atributo alt.");
+  for(const component of mergeUnique([...(desktop.unnamedInteractiveComponents||[]),...mobiles.flatMap(item=>item.unnamedInteractiveComponents||[])]))add(component,"medium","Dê um nome acessível ao link ou botão usando texto visível ou aria-label.","Controle interativo sem nome acessível.");
+  for(const mobile of mobiles){
+    if((mobile.smallTapTargets||0)>4){
+      for(const component of (mobile.smallTapTargetComponents||[]).slice(0,3))add(component,"medium","Aumente os alvos de toque essenciais no mobile para pelo menos 40–44px de altura/largura útil sem prejudicar a composição.","Múltiplos alvos de toque pequenos em "+mobile.viewportWidth+"px.");
+    }
   }
   return out;
 }
-async function judgeScreenshots({site,plan,metrics,desktopImage,mobileImage}){
+async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,mobile390Image}){
   const known=plan.components.map(item=>item.name);
   const baseRequest={
     temperature:.12,
@@ -149,11 +179,12 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobileImage}){
     retries:1,
     images:[
       {dataUrl:desktopImage,label:"Render real desktop 1440px"},
-      {dataUrl:mobileImage,label:"Render real mobile 390px"},
+      {dataUrl:mobile320Image,label:"Render real mobile 320px"},
+      {dataUrl:mobile390Image,label:"Render real mobile 390px"},
     ],
     systemPrompt:[
       "Você é diretor de arte e QA visual de uma agência premium. Julgue APENAS o site realmente renderizado nas imagens, não a intenção do código.",
-      "Se parecer template genérico, penalize brandSpecificity e visualCraft. Se o mobile estiver apertado, cortado, desbalanceado ou com hierarquia ruim, penalize mobile.",
+      "Se parecer template genérico, penalize brandSpecificity e visualCraft. Compare 320px e 390px: se qualquer mobile estiver apertado, cortado, desbalanceado, ilegível ou com hierarquia ruim, penalize mobile.",
       "Um site que apenas compila não é comercialmente pronto. A nota 8+ exige acabamento de agência, identidade própria, hierarquia clara e conversão convincente.",
       "Use somente os fatos fornecidos. Não peça conteúdo inexistente nem invente serviços/depoimentos.",
       "Cada issue deve apontar um component EXATAMENTE da lista fornecida.",
@@ -161,7 +192,7 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobileImage}){
     ].join(" "),
     prompt:[
       "NEGÓCIO: "+JSON.stringify({brandName:site.brandName,segment:site.segment,city:site.city,audience:site.audience,pageJob:site.pageJob}),
-      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,responsiveStrategy:plan.responsiveStrategy,conversionStrategy:plan.conversionStrategy}),
+      "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,responsiveStrategy:plan.responsiveStrategy,conversionStrategy:plan.conversionStrategy,designSystem:plan.designSystem}),
       "COMPONENTES VÁLIDOS: "+JSON.stringify(known),
       "MÉTRICAS DO NAVEGADOR: "+JSON.stringify(metrics),
       "Avalie de 0 a 10: visualCraft, brandSpecificity, conversion, mobile, coherence, commercialReadiness.",
@@ -209,15 +240,16 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
     child.stdout?.on("data",append);child.stderr?.on("data",append);
     await waitForServer(url,child,()=>logs);
     const desktop=await capture(browser,url,{viewport:{width:1440,height:1000},mobile:false});
-    const mobile=await capture(browser,url,{viewport:{width:390,height:844},mobile:true});
-    const metrics={desktop:desktop.metrics,mobile:mobile.metrics};
+    const mobile320=await capture(browser,url,{viewport:{width:320,height:740},mobile:true});
+    const mobile390=await capture(browser,url,{viewport:{width:390,height:844},mobile:true});
+    const metrics={desktop:desktop.metrics,mobile320:mobile320.metrics,mobile:mobile390.metrics,mobile390:mobile390.metrics};
     const known=new Set(plan.components.map(item=>item.name));
     const hardIssues=objectiveIssues(metrics,known);
     let judged=null,judgeError="";
-    try{judged=normalizeJudge(await judgeScreenshots({site,plan,metrics,desktopImage:desktop.image,mobileImage:mobile.image}),known)}
+    try{judged=normalizeJudge(await judgeScreenshots({site,plan,metrics,desktopImage:desktop.image,mobile320Image:mobile320.image,mobile390Image:mobile390.image}),known)}
     catch(error){judgeError=clean(error.message,1200)}
     if(!judged){
-      return{available:true,pass:hardIssues.length===0,score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
+      return{available:true,pass:hardIssues.filter(issue=>issue.severity==="high").length===0,hardFailure:hasHardFailure(metrics),score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
     }
     const scoring=calculateVisualQualityScore(judged.dimensions,metrics,threshold);
     const issues=[...hardIssues,...judged.issues.filter(issue=>!hardIssues.some(hard=>hard.component===issue.component&&hard.instruction===issue.instruction))].slice(0,10);
@@ -225,7 +257,7 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
       const hero=plan.components.find(item=>item.role==="hero")||plan.components[0];
       if(hero)issues.push({component:hero.name,severity:"high",instruction:"Reexecute a tese visual com mais identidade, hierarquia e acabamento. O render final ficou abaixo do padrão comercial premium.",evidence:"Score visual final abaixo do mínimo configurado."});
     }
-    return{available:true,pass:scoring.pass,score:scoring.score,threshold,judgeUsed:true,summary:judged.summary,dimensions:judged.dimensions,issues,metrics};
+    return{available:true,pass:scoring.pass,hardFailure:scoring.hardFailure,score:scoring.score,threshold,judgeUsed:true,summary:judged.summary,dimensions:judged.dimensions,issues,metrics};
   }catch(error){
     return{available:false,pass:true,score:null,threshold,judgeUsed:false,skippedReason:"Falha na auditoria renderizada: "+clean(error.message,1400)};
   }finally{
