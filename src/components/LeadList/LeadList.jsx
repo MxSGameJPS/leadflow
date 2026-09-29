@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { decodeSmart } from "../../services/imports/parseLeads.js";
 import { buildPlacesCsv, placesCsvFilename } from "../../services/exports/placeResultsCsv.js";
+import { buildLeadsJson, buildLeadsVCard, leadExportFilename } from "../../services/exports/leadExports.js";
 import { importTextAction } from "../../app/actions/leads.js";
 import { addPlacesToCrmAction, listCitiesAction, searchPlacesAction } from "../../app/actions/places.js";
 import s from "./LeadList.module.css";
@@ -203,18 +204,36 @@ export default function LeadList({ initialLeads = [] }) {
     setSelected(current => current.size === places.length ? new Set() : new Set(places.map(item => item.placeId)));
   }
 
+  function downloadText(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportBase(format) {
+    try {
+      if (!visible.length) throw new Error("Nenhum lead está visível para exportar.");
+      if (format === "vcf") {
+        downloadText(buildLeadsVCard(visible), leadExportFilename("vcf", "base-filtrada"), "text/vcard;charset=utf-8");
+      } else {
+        downloadText(buildLeadsJson(visible), leadExportFilename("json", "base-filtrada"), "application/json;charset=utf-8");
+      }
+      setNotice(`${visible.length} leads exportados em ${format === "vcf" ? "vCard" : "JSON"} usando os filtros atuais.`);
+    } catch (error) {
+      setNotice("Erro ao exportar: " + error.message);
+    }
+  }
+
   function exportPlaces(items, scope) {
     try {
       const csv = buildPlacesCsv(items, filters);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = placesCsvFilename(filters, scope);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadText(csv, placesCsvFilename(filters, scope), "text/csv;charset=utf-8");
       setPlacesNotice(`${items.length} leads exportados em CSV${scope === "selecionados" ? " a partir da seleção" : " a partir da busca"}.`);
     } catch (error) {
       setPlacesNotice("Erro ao exportar: " + error.message);
@@ -310,7 +329,13 @@ export default function LeadList({ initialLeads = [] }) {
     {notice && <div className={notice.startsWith("Erro") ? s.error : s.notice}>{notice}</div>}
     {counts.total > 0 && counts.whatsapp === 0 && <div className={s.warning}><strong>A base ainda não possui WhatsApp confirmado.</strong><span>A busca automática traz telefone do Google. Celulares são marcados como possível WhatsApp, mas só entram como confirmados depois da sua validação.</span></div>}
 
-    <section className={s.baseHeader}><div><h2>Base local</h2><p>Leads já salvos no SQLite, incluindo importações e resultados enviados da busca.</p></div></section>
+    <section className={s.baseHeader}>
+      <div><h2>Base local</h2><p>Leads já salvos no SQLite, incluindo importações e resultados enviados da busca.</p></div>
+      <div className={s.baseExportActions}>
+        <button type="button" disabled={!visible.length} onClick={() => exportBase("json")}>Exportar JSON</button>
+        <button type="button" disabled={!visible.length} onClick={() => exportBase("vcf")}>Exportar contatos</button>
+      </div>
+    </section>
     <section className={s.stats}>
       <div><span>Total</span><strong>{counts.total}</strong></div>
       <div><span>WhatsApp confirmado</span><strong>{counts.whatsapp}</strong></div>

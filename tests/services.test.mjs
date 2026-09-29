@@ -9,6 +9,7 @@ import { getIbgeStateId, normalizeIbgeCities } from "../src/services/locations/i
 import { classifyWebsite, isPossibleWhatsApp, normalizeGooglePlace } from "../src/services/places/googlePlaces.js";
 import { depthForCount, distanceMeters, normalizeScraperPlace, parseCompleteAddress, parseScraperCsv, rowMatchesRequestedCity, rowWithinRadius } from "../src/services/places/googleMapsScraper.js";
 import { buildPlacesCsv, placesCsvFilename } from "../src/services/exports/placeResultsCsv.js";
+import { buildLeadsJson, buildLeadsVCard, leadExportFilename } from "../src/services/exports/leadExports.js";
 
 let pass = 0, fail = 0;
 function t(name, cond) { if (cond) pass++; else { fail++; console.error("FAIL:", name); } }
@@ -103,6 +104,12 @@ t("export CSV identifica WhatsApp como não confirmado", exportedCsv.includes("S
 t("export CSV inclui email", exportedCsv.includes("contato@teste.com"));
 t("export CSV neutraliza fórmula de planilha", exportedCsv.includes("'=EMPRESA TESTE"));
 t("nome do arquivo inclui categoria e cidade", placesCsvFilename({ category: "Restaurante", city: "Santa Maria" }, "selecionados", new Date("2026-07-29T12:00:00Z")) === "leadflow_restaurante_santa-maria_selecionados_2026-07-29.csv");
+
+const jsonExport = JSON.parse(buildLeadsJson([{ id: "1", name: "Empresa Teste", phone: "(55) 99944-3944", email: "oi@teste.com", stage: "novo" }]));
+t("export JSON preserva leads", jsonExport.count === 1 && jsonExport.leads[0].name === "Empresa Teste");
+const vcardExport = buildLeadsVCard([{ id: "1", name: "Empresa Teste", phone: "(55) 99944-3944", email: "oi@teste.com", city: "Ivoti", location: "RS" }]);
+t("export vCard cria contato compatível", vcardExport.includes("BEGIN:VCARD") && vcardExport.includes("FN:Empresa Teste") && vcardExport.includes("TEL;TYPE=CELL:+5555999443944"));
+t("nome de exportação usa formato correto", leadExportFilename("vcf", "Base Filtrada", new Date("2026-09-29T12:00:00Z")) === "leadflow_base-filtrada_2026-09-29.vcf");
 
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
