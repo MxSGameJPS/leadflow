@@ -6,6 +6,7 @@ import { generateWithDefaultProvider } from "../ai/providerService.js";
 import { runVisualQualityAudit } from "./siteVisualQa.js";
 import { codegenThemeCss, fallbackCodegenDesignSystem, normalizeCodegenDesignSystem } from "./siteDesignSystem.js";
 import { applyUnifiedDiff } from "./sitePatchEngine.js";
+import { buildComponentEditContext, patchBudgetFor, validatePatchPreservation } from "./siteEditContext.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMPONENTS = 16;
@@ -335,6 +336,8 @@ function componentRequest(site,plan,component,errors){
 }
 function componentPatchRequest(site,plan,component,currentSource,instruction,errors=[]){
   const index=plan.components.findIndex(item=>item.name===component.name);
+  const editContext=buildComponentEditContext(plan,component.name,currentSource);
+  const patchBudget=patchBudgetFor(currentSource,instruction);
   const previous=index>0?plan.components[index-1]:null;
   const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   const jsxPath="components/"+component.name+"/"+component.name+".jsx";
@@ -356,6 +359,9 @@ function componentPatchRequest(site,plan,component,currentSource,instruction,err
       "COMPONENTE: "+JSON.stringify(component),
       "DIREÇÃO GLOBAL: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,visualSystem:plan.visualSystem,designSystem:plan.designSystem,imageStrategy:plan.imageStrategy,responsiveStrategy:plan.responsiveStrategy,conversionStrategy:plan.conversionStrategy}),
       "VIZINHOS: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
+      "MANIFESTO ESTRUTURAL SOMENTE PARA CONTEXTO: "+JSON.stringify(editContext),
+      "ORÇAMENTO DO PATCH: altere no máximo "+patchBudget.maxChangedLines+" linhas somando adições e remoções. Se não couber, preserve mais código e faça um diff menor.",
+      "CONTRATO DE PRESERVAÇÃO: mantenha imports, export default, diretiva use client, IDs/âncoras e classes existentes que não precisem mudar. Arquivos e componentes fora do escopo são somente leitura.",
       "DADOS VERIFICADOS: "+JSON.stringify(facts(site)),
       "ARQUIVO ATUAL "+jsxPath+":\n"+clean(currentSource.jsx,18000),
       "ARQUIVO ATUAL "+cssPath+":\n"+clean(currentSource.css,24000),
@@ -373,9 +379,11 @@ async function generateComponentPatch(site,plan,component,currentSource,instruct
     try{
       const applied=applyUnifiedDiff({[jsxPath]:currentSource.jsx,[cssPath]:currentSource.css},result.text,[jsxPath,cssPath]);
       const candidate=normalizeComponentSource({jsx:applied.files[jsxPath],css:applied.files[cssPath]});
+      const preservation=validatePatchPreservation(currentSource,candidate,instruction,{changedLines:applied.changedLines});
+      if(!preservation.ok){errors=preservation.errors.map(error=>"Preservação: "+error);continue}
       const validation=validateComponent(component.name,candidate);
       if(validation.length){errors=validation.map(error=>"Validação: "+error);continue}
-      return{source:candidate,patch:{attempts:attempt+1,changedPaths:applied.changedPaths,changedLines:applied.changedLines}};
+      return{source:candidate,patch:{attempts:attempt+1,changedPaths:applied.changedPaths,changedLines:applied.changedLines,patchBudget:preservation.budget.maxChangedLines,preservationChecked:true}};
     }catch(error){errors=[clean(error.message,1800)]}
   }
   throw new Error("A IA não conseguiu produzir um diff aplicável para "+component.name+" após 3 tentativas: "+errors.join(" | "));
