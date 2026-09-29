@@ -153,6 +153,19 @@ try {
   const isolatedRequests = requests.slice(beforeIsolated);
   t("rota isolada falha sem escapar para provedor geral", Boolean(isolatedError) && isolatedRequests.length === 1);
   t("rota isolada não usa modelo do provedor secundário", !isolatedRequests.some(item => item.body?.model === "general-fallback"));
+
+  const beforeNamedProvider = requests.length;
+  const namedGeneration = await generateResilientWithDefaultProvider({
+    prompt: "Site no provedor dedicado",
+    providerName: "Fallback geral",
+    model: "site-combo",
+    isolatedRouting: true,
+    disableTools: true,
+    timeoutMs: 5000,
+  });
+  const namedRequest = requests.slice(beforeNamedProvider).at(-1);
+  t("rota isolada pode selecionar provedor dedicado por nome", namedRequest.url === "http://localhost:29999/v1/chat/completions");
+  t("provedor dedicado recebe o combo solicitado", namedRequest.body.model === "site-combo" && namedGeneration.model === "site-combo");
   await removeProvider(secondary.id);
 
   const prompt = buildLeadMessagePrompt({

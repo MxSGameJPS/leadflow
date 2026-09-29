@@ -218,7 +218,9 @@ function fallbackModels(request={}){
 function transientGenerationError(error){return ["AI_TOOL_CALLS","AI_EMPTY_RESPONSE"].includes(error?.code)||retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)|ferramentas em uma geração stateless|não retornou conteúdo textual para a geração stateless/i.test(String(error?.message||""))}
 export async function generateResilientWithDefaultProvider(request={}){
   const providers=(await loadProviders()).filter(item=>item.enabled);
-  const primary=providers.find(item=>item.isDefault)||providers[0];
+  const requestedProviderId=String(request.providerId||"").trim();
+  const requestedProviderName=String(request.providerName||"").trim().toLowerCase();
+  const primary=(requestedProviderId?providers.find(item=>item.id===requestedProviderId):null)||(requestedProviderName?providers.find(item=>String(item.name||"").trim().toLowerCase()===requestedProviderName):null)||providers.find(item=>item.isDefault)||providers[0];
   if(!primary)throw new Error("Nenhum provedor de IA ativo foi configurado. Acesse Configurações → Inteligência Artificial.");
   const explicitModels=fallbackModels(request);
   const routes=[];

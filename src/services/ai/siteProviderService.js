@@ -23,6 +23,8 @@ export function generateSiteWithDefaultProvider(request = {}) {
   return generateResilientWithDefaultProvider({
     ...request,
     model,
+    providerId: clean(process.env.LEADFLOW_SITE_PROVIDER_ID),
+    providerName: clean(process.env.LEADFLOW_SITE_PROVIDER_NAME) || "LeadFlow",
     disableTools: true,
     isolatedRouting: true,
     retries: 0,
