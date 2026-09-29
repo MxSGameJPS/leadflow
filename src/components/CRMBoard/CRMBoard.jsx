@@ -27,6 +27,8 @@ const STAGE_COLOR = {
 const GRADE_LABEL = { A: "Quente", B: "Morno", C: "Em análise", D: "Frio" };
 const CLOSED_STAGES = new Set(["ganho", "perdido"]);
 
+function BRL(value) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Number(value) || 0); }
+
 function csvValue(value) {
   const text = String(value ?? "");
   return /[;\n\r\"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
