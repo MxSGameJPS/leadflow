@@ -19,6 +19,7 @@ const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/pro
 const { analyzeComponentContract, buildComponentEditContext, patchBudgetFor, validatePatchPreservation } = await import("../src/services/projects/siteEditContext.js");
 const { withFileTransaction } = await import("../src/services/projects/siteEditTransaction.js");
 const { resolveSiteSkills } = await import("../src/services/projects/siteSkills.js");
+const { buildProductContract } = await import("../src/services/projects/siteProductContract.js");
 const { startGenerationProgress,reportGenerationProgress,finishGenerationProgress,getGenerationProgress } = await import("../src/services/projects/generationProgressStore.js");
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
@@ -253,3 +254,11 @@ assert.ok(commercial.siteData.codegenPlan.components.some(component => component
 await fs.rm(path.join(root, commercial.folderPath), { recursive: true, force: true });
 
 console.log("Testes de projetos passaram.");
+
+const deliveryContract=buildProductContract({template:"delivery",hasWhatsapp:true,hasMenu:false});
+assert.equal(deliveryContract.type,"delivery");
+assert.equal(deliveryContract.hardRequirement,true);
+assert.match(deliveryContract.dataPolicy,/NÃO invente/i);
+assert.match(deliveryContract.checkout,/WhatsApp/i);
+const landingContract=buildProductContract({template:"landing"});
+assert.equal(landingContract.hardRequirement,false);

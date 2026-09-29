@@ -187,3 +187,38 @@ export async function listProviderModels(id) {
 }
 export async function generateWithProvider(id, request) { return generateInternal(await getProviderInternal(id), request); }
 export async function generateWithDefaultProvider(request) { return generateInternal(await getDefaultProviderInternal(), request); }
+
+function fallbackModels(request={}){
+  const explicit=Array.isArray(request.fallbackModels)?request.fallbackModels:[];
+  const env=String(process.env.LEADFLOW_AI_FALLBACK_MODELS||"").split(",").map(item=>item.trim()).filter(Boolean);
+  const primary=String(request.model||"").trim();
+  return [...new Set([primary,...explicit,...env].filter(Boolean))];
+}
+function transientGenerationError(error){return retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)/i.test(String(error?.message||""))}
+export async function generateResilientWithDefaultProvider(request={}){
+  const providers=(await loadProviders()).filter(item=>item.enabled);
+  const primary=providers.find(item=>item.isDefault)||providers[0];
+  if(!primary)throw new Error("Nenhum provedor de IA ativo foi configurado. Acesse Configurações → Inteligência Artificial.");
+  const explicitModels=fallbackModels(request);
+  const routes=[];
+  for(const model of (explicitModels.length?explicitModels:[request.model||primary.model]).filter(Boolean))routes.push({provider:primary,model});
+  for(const provider of providers){if(provider.id!==primary.id&&provider.model)routes.push({provider,model:provider.model})}
+  const unique=routes.filter((route,index,list)=>list.findIndex(item=>item.provider.id===route.provider.id&&item.model===route.model)===index);
+  const attempts=[];let lastError=null;
+  for(let index=0;index<unique.length;index++){
+    const {provider,model}=unique[index],started=Date.now();
+    try{
+      request.onAttempt?.({status:"start",model,providerName:provider.name,index:index+1,total:unique.length});
+      const result=await generateInternal(provider,{...request,model,retries:index===0?(request.retries??0):0});
+      const item={model,status:"success",elapsedMs:Date.now()-started,providerName:result.providerName};
+      attempts.push(item);request.onAttempt?.(item);
+      return{...result,routingAttempts:attempts,fallbackUsed:index>0};
+    }catch(error){
+      lastError=error;const item={model,status:"error",elapsedMs:Date.now()-started,providerName:provider.name,error:String(error?.message||error).slice(0,600)};
+      attempts.push(item);request.onAttempt?.(item);
+      if(!transientGenerationError(error)||index===unique.length-1)break;
+    }
+  }
+  if(lastError){lastError.routingAttempts=attempts;throw lastError}
+  throw new Error("Nenhuma rota de IA disponível para geração.");
+}
