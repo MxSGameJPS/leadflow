@@ -153,8 +153,10 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
 
   const previewSrc="/preview-internal/"+activeProject.id+"?v="+activeProject.version;
   const history=activeProject.instructions||[];
+  const quality=activeProject.siteData?.codegenQuality||null;
+  const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
-    <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills</p></div><div className={s.headerActions}><a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
+    <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}><a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
     <section className={s.builder}>
       <aside className={s.chatPanel}>
         <div className={s.context}><span>Projeto ativo</span><strong>{activeProject.segment||"Landing page"}</strong><small>{activeProject.city||"Local não informado"}</small></div>
@@ -170,6 +172,16 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
         {notice&&<div className={notice.startsWith("Erro")?s.error:s.success}>{notice}</div>}
       </aside>
       <section className={s.previewPanel}>
+        {quality&&<div className={quality.available?s.qualityPanel:s.qualitySkipped}>
+          {quality.available?<>
+            <div className={s.qualityTop}>
+              <div><span>Auditoria do site renderizado</span><strong className={quality.pass?s.qualityGood:s.qualityWarn}>{quality.score===null?"Métricas":quality.score+"/100"}</strong><small>Mínimo {quality.threshold||78}{quality.attempts>1?" · "+quality.attempts+" ciclos":""}</small></div>
+              <p>{quality.summary||"Desktop e mobile foram executados em navegador real antes da entrega."}</p>
+            </div>
+            {quality.dimensions&&Object.keys(quality.dimensions).length>0&&<div className={s.qualityDimensions}>{Object.entries(quality.dimensions).map(([key,value])=><span key={key}><b>{qualityLabels[key]||key}</b><em>{value}/10</em></span>)}</div>}
+            {quality.issues?.length>0&&<details className={s.qualityIssues}><summary>{quality.issues.length} ponto(s) encontrados</summary><div>{quality.issues.slice(0,6).map((issue,index)=><article key={issue.component+index}><b>{issue.component}</b><span>{issue.severity}</span><p>{issue.instruction}</p>{issue.evidence&&<small>{issue.evidence}</small>}</article>)}</div></details>}
+          </>:<div><strong>QA visual não executado</strong><p>{quality.skippedReason||"A auditoria renderizada não ficou disponível neste ambiente."}</p></div>}
+        </div>}
         <div className={s.previewToolbar}><div><button className={device==="desktop"?s.active:""} onClick={()=>setDevice("desktop")}>Desktop</button><button className={device==="tablet"?s.active:""} onClick={()=>setDevice("tablet")}>Tablet</button><button className={device==="mobile"?s.active:""} onClick={()=>setDevice("mobile")}>Mobile</button></div><a href={previewSrc} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a></div>
         <div className={s.canvas}><div className={s["device-"+device]}><iframe key={previewSrc} title={"Prévia de "+activeProject.name} src={previewSrc}/></div></div>
       </section>
