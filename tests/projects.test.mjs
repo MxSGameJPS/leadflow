@@ -13,6 +13,7 @@ const { createSiteProject, deleteSiteProject, getSiteProject } = await import(".
 const { generateSiteFolder, parseAiJson } = await import("../src/services/projects/siteGeneratorV2.js");
 const { parseCodegenJson } = await import("../src/services/projects/siteCodegenV4.js");
 const { calculateVisualQualityScore } = await import("../src/services/projects/siteVisualQa.js");
+const { siteModelForRole } = await import("../src/services/ai/siteProviderService.js");
 const { countProjectSnapshots, createProjectSourceSnapshot, restoreLatestProjectSourceSnapshot } = await import("../src/services/projects/projectVersionStore.js");
 const { normalizeCodegenDesignSystem } = await import("../src/services/projects/siteDesignSystem.js");
 const { applyUnifiedDiff, parseUnifiedDiff } = await import("../src/services/projects/sitePatchEngine.js");
@@ -24,6 +25,15 @@ const { startGenerationProgress,reportGenerationProgress,finishGenerationProgres
 
 assert.equal(parseAiJson("~~~".replace(/~/g, "`") + "json\n{ brandName: 'Oficina', colors: { primary: '#111111', }, }\n" + "~~~".replace(/~/g, "`")).brandName, "Oficina");
 assert.equal(parseAiJson('{"brandName":"Oficina"}').brandName, "Oficina");
+const previousSiteModel=process.env.LEADFLOW_SITE_MODEL;
+const previousArchitectModel=process.env.LEADFLOW_SITE_MODEL_ARCHITECT;
+process.env.LEADFLOW_SITE_MODEL="combo/leadflow-sites";
+delete process.env.LEADFLOW_SITE_MODEL_ARCHITECT;
+assert.equal(siteModelForRole("architect"),"combo/leadflow-sites");
+process.env.LEADFLOW_SITE_MODEL_ARCHITECT="combo/leadflow-architect";
+assert.equal(siteModelForRole("architect"),"combo/leadflow-architect");
+if(previousSiteModel===undefined)delete process.env.LEADFLOW_SITE_MODEL;else process.env.LEADFLOW_SITE_MODEL=previousSiteModel;
+if(previousArchitectModel===undefined)delete process.env.LEADFLOW_SITE_MODEL_ARCHITECT;else process.env.LEADFLOW_SITE_MODEL_ARCHITECT=previousArchitectModel;
 const progressId="test_progress_"+stamp;
 await startGenerationProgress(progressId,{name:"Teste"});
 await reportGenerationProgress(progressId,{phase:"code",title:"Criando Hero",file:"components/Hero/Hero.jsx",code:"export default function Hero(){}"});

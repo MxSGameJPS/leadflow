@@ -14,8 +14,9 @@ function visualReviewModels(){
     process.env.LEADFLOW_SITE_MODEL_ARCHITECT,
     process.env.LEADFLOW_SITE_MODEL_CREATIVE,
     process.env.LEADFLOW_SITE_MODEL_REVIEW,
+    process.env.LEADFLOW_SITE_MODEL,
     "",
-  ].map(value=>clean(value,300)).filter((value,index)=>value||index===4))];
+  ].map(value=>clean(value,300)).filter((value,index,list)=>value||index===list.length-1))];
 }
 function parseJudgeJson(text){
   let raw=clean(text,60000).replace(/^\uFEFF/,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
@@ -216,7 +217,7 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
   let lastError=null;
   for(const model of visualReviewModels()){
     try{
-      const result=await generateWithDefaultProvider({...baseRequest,model});
+      const result=await generateWithDefaultProvider({...baseRequest,model,siteRole:"visualReview"});
       return parseJudgeJson(result.text);
     }catch(error){lastError=error}
   }

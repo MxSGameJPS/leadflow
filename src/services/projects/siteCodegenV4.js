@@ -17,7 +17,7 @@ const ALLOWED_ROLES = new Set(["navigation","hero","proof","services","story","s
 function clean(value,max=10000){return String(value??"").replace(/\u0000/g,"").trim().slice(0,max)}
 function roleModel(role){
   const env={architect:"LEADFLOW_SITE_MODEL_ARCHITECT",code:"LEADFLOW_SITE_MODEL_CODE",review:"LEADFLOW_SITE_MODEL_REVIEW"};
-  return clean(process.env[env[role]]||"",300);
+  return clean(process.env[env[role]]||process.env.LEADFLOW_SITE_MODEL||"",300);
 }
 function stripReasoningAndFences(value){
   let raw=clean(value,400000).replace(/^\uFEFF/,"").trim();
@@ -215,7 +215,7 @@ function applyPlanCopy(site,plan){
 }
 function architectureRequest(site,instruction,currentPlan,visualImages=[]){
   return {
-    model:roleModel("architect"),temperature:.72,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||120000),retries:0,
+    model:roleModel("architect"),siteRole:"architect",temperature:.2,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||120000),retries:0,
     images:Array.isArray(visualImages)?visualImages.slice(0,6):[],
     systemPrompt:[
       "Você é diretor de criação, arquiteto de experiência e estrategista de conversão.",
@@ -226,6 +226,12 @@ function architectureRequest(site,instruction,currentPlan,visualImages=[]){
       "Você está entregando especificações para desenvolvedores executores mais simples. Portanto tome AGORA todas as decisões difíceis de direção visual, copy, composição, fotografia, responsividade, interação e conversão.",
       "Cada item da arquitetura virará um componente React real com JSX e CSS próprios.",
       "Use apenas fatos fornecidos. Não invente serviços, preços, depoimentos, profissionais, certificações, equipamentos, resultados ou números.",
+      "CONTRATO DE EVIDÊNCIA: trate somente campos não vazios em DADOS VERIFICADOS como fatos. Ausência de dado significa DESCONHECIDO, nunca autorização para completar o negócio com padrões do nicho.",
+      "A palavra premium, quando vier do pedido de design, descreve a EXPERIÊNCIA VISUAL DO SITE. Não a converta em qualidade premium do produto, ingredientes, preparo, atendimento ou entrega.",
+      "WhatsApp verificado significa apenas que é UM canal real de contato/pedido. Não afirme que é o único canal, que contém cardápio completo, que informa preços/opções ou que há atendimento humano/personalizado, salvo se isso estiver nos fatos.",
+      "Fotografias reais comprovam somente que os assets foram fornecidos. Não deduza delas nomes de produtos, ingredientes, categorias, variedade, disponibilidade, qualidade, composição do cardápio, mais vendidos ou quantidade mínima de fotos.",
+      "Delivery não autoriza promessas como rápido, seguro, quentinho, feito na hora, entrega em domicílio, prazo, taxa, cobertura ou fluxo operacional específico sem evidência.",
+      "Não crie seções que dependam de dados ausentes, como testimonials, social proof, FAQ operacional, mapa, horários, cardápio, área de entrega, consulta de CEP ou brand story factual. Prefira arquitetura que funcione integralmente com os fatos disponíveis.",
       "FAQ, pricing e testimonials somente podem existir se os fatos fornecidos realmente sustentarem esse conteúdo.",
       "Mobile-first é obrigatório em 320px, 360px e 390px.",
       "Evite a sequência automática Hero/About/Services/Cards. Pense na jornada ideal deste lead.",
@@ -305,7 +311,7 @@ function componentRequest(site,plan,component,errors){
   const previous=index>0?plan.components[index-1]:null;
   const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   return {
-    model:roleModel("code"),temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
+    model:roleModel("code"),siteRole:"code",temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
@@ -349,7 +355,7 @@ function componentPatchRequest(site,plan,component,currentSource,instruction,err
   const jsxPath="components/"+component.name+"/"+component.name+".jsx";
   const cssPath="components/"+component.name+"/"+component.name+".module.css";
   return{
-    model:roleModel("code"),temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
+    model:roleModel("code"),siteRole:"code",temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
     systemPrompt:[
       "Você é um engenheiro sênior editando código existente com precisão cirúrgica.",
       "Retorne SOMENTE unified git diff. Não retorne arquivos completos, markdown explicativo, JSON ou comentários fora do diff.",
@@ -507,7 +513,7 @@ async function reviewSources(site,plan,sources,progress){
     return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,3200),css:clean(sources[index]?.css,4200)};
   });
   const result=await generateWithDefaultProvider({
-    model:roleModel("review"),
+    model:roleModel("review"),siteRole:"review",
     temperature:.22,
     maxTokens:5000,
     timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||90000),
