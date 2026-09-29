@@ -66,6 +66,14 @@ export async function setProposalValueAction(id, value) {
 }
 export async function setNotesAction(id, notes) { await repo.setNotes(id, notes); refresh(); }
 
+export async function recordLeadActivityAction(id, activity = {}) {
+  const lead = await repo.getLead(String(id || ""));
+  if (!lead) throw new Error("Lead não encontrado.");
+  const saved = await appendLeadActivity(lead.id, activity || {});
+  refresh();
+  return saved.activities?.[0] || null;
+}
+
 export async function recordContactAction(id, kind = "manual") {
   const lead = await repo.getLead(String(id || ""));
   if (!lead) throw new Error("Lead não encontrado.");

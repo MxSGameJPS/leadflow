@@ -15,6 +15,7 @@ function safeLead(lead = {}) {
     email: clean(lead.email, 320),
     instagram: clean(lead.instagram, 700),
     site: clean(lead.site, 700),
+    weakSite: lead.weakSite !== false,
     googleRating: clean(lead.googleRating, 30),
     googleReviews: clean(lead.googleReviews, 40),
     problem: clean(lead.problem, 1200),

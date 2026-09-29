@@ -272,7 +272,12 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
       const saved = await persistWorkspace({ qualification: next }, "Qualificação comercial salva.");
       if (saved) {
         setQualification(saved.qualification);
-        await LeadActions.recordContactAction(lead.id, "manual").catch(() => null);
+        await LeadActions.recordLeadActivityAction(lead.id, {
+          type: "qualification",
+          title: "Qualificação comercial atualizada",
+          detail: `BANT ${qualificationResult.score}/100 · MEDDIC ${qualificationResult.meddic.overall}%`,
+        }).catch(() => null);
+        router.refresh();
       }
     } finally {
       setBusy("");
