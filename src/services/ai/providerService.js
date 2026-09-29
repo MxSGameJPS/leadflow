@@ -68,7 +68,7 @@ function normalizeGenerationRequest(input) {
   const maxTokens = request.maxTokens == null ? null : Math.round(clampNumber(request.maxTokens, 1024, 1, 200000));
   const timeoutMs = request.timeoutMs == null ? null : Math.round(clampNumber(request.timeoutMs, 180000, 1000, 900000));
   const retries = request.retries == null ? null : Math.round(clampNumber(request.retries, 0, 0, 3));
-  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens, timeoutMs, retries, disableTools: request.disableTools === true };
+  return { prompt, systemPrompt: String(request.systemPrompt || "").trim(), images: normalizeImages(request.images), model, temperature, maxTokens, timeoutMs, retries, disableTools: request.disableTools === true, isolatedRouting: request.isolatedRouting === true };
 }
 function ensureReadyForGeneration(provider) { if (!provider.enabled) throw new Error("O provedor está desativado."); if (!provider.model && provider.type !== "custom-rest") throw new Error("Escolha um modelo antes de usar este provedor."); }
 function authRequest(provider, url, headers) {
@@ -211,7 +211,7 @@ export async function generateWithDefaultProvider(request) { return generateInte
 
 function fallbackModels(request={}){
   const explicit=Array.isArray(request.fallbackModels)?request.fallbackModels:[];
-  const env=String(process.env.LEADFLOW_AI_FALLBACK_MODELS||"").split(",").map(item=>item.trim()).filter(Boolean);
+  const env=request.isolatedRouting?[]:String(process.env.LEADFLOW_AI_FALLBACK_MODELS||"").split(",").map(item=>item.trim()).filter(Boolean);
   const primary=String(request.model||"").trim();
   return [...new Set([primary,...explicit,...env].filter(Boolean))];
 }
@@ -223,7 +223,7 @@ export async function generateResilientWithDefaultProvider(request={}){
   const explicitModels=fallbackModels(request);
   const routes=[];
   for(const model of (explicitModels.length?explicitModels:[request.model||primary.model]).filter(Boolean))routes.push({provider:primary,model});
-  for(const provider of providers){if(provider.id!==primary.id&&provider.model)routes.push({provider,model:provider.model})}
+  if(!request.isolatedRouting){for(const provider of providers){if(provider.id!==primary.id&&provider.model)routes.push({provider,model:provider.model})}}
   const unique=routes.filter((route,index,list)=>list.findIndex(item=>item.provider.id===route.provider.id&&item.model===route.model)===index);
   const attempts=[];let lastError=null;
   const deadline=request.disableTools ? Date.now()+Math.round(clampNumber(request.timeoutMs ?? primary.timeout,120000,1000,900000)) : Infinity;
