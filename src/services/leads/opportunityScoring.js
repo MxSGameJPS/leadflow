@@ -30,7 +30,9 @@ export function calculateOpportunityScore(input = {}) {
   const country = String(input.country || "BR").toUpperCase();
   const phone = String(input.phone || "");
   const digits = phone.replace(/\D/g, "");
-  const local = digits.startsWith("55") ? digits.slice(2) : digits;
+  const local = digits.length === 12 || digits.length === 13
+    ? (digits.startsWith("55") ? digits.slice(2) : "")
+    : digits;
   const possibleWhatsapp = country === "BR" && /^\d{2}9\d{8}$/.test(local);
   const rating = numericValue(input.rating);
   const reviews = numericValue(input.reviews);
