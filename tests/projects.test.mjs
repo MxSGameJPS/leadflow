@@ -32,8 +32,6 @@ delete process.env.LEADFLOW_SITE_MODEL_ARCHITECT;
 assert.equal(siteModelForRole("architect"),"combo/leadflow-sites");
 process.env.LEADFLOW_SITE_MODEL_ARCHITECT="combo/leadflow-architect";
 assert.equal(siteModelForRole("architect"),"combo/leadflow-architect");
-const generatedNextConfig='import path from "node:path";\nimport { fileURLToPath } from "node:url";\n\nconst projectRoot=path.dirname(fileURLToPath(import.meta.url));\nconst nextConfig={distDir:process.env.LEADFLOW_BUILD_DIST_DIR||".next",outputFileTracingRoot:projectRoot};\nexport default nextConfig;\n';
-assert.match(generatedNextConfig,/outputFileTracingRoot:projectRoot/);
 if(previousSiteModel===undefined)delete process.env.LEADFLOW_SITE_MODEL;else process.env.LEADFLOW_SITE_MODEL=previousSiteModel;
 if(previousArchitectModel===undefined)delete process.env.LEADFLOW_SITE_MODEL_ARCHITECT;else process.env.LEADFLOW_SITE_MODEL_ARCHITECT=previousArchitectModel;
 const progressId="test_progress_"+stamp;
