@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getLead,setLanding } from "../../repositories/leadRepository.js";
 import { createSiteProject,deleteSiteProject,getSiteProject,updateSiteProject } from "../../services/projects/projectStore.js";
 import { generateSiteFolder } from "../../services/projects/siteGeneratorV2.js";
+import { refineUniqueSiteComponent } from "../../services/projects/siteCodegenV4.js";
 import { normalizeSiteSkillIds,normalizeSiteSkillMode } from "../../services/projects/siteSkills.js";
 import { collectLeadAssetUrls } from "../../services/projects/assetCollector.js";
 import { clearReferenceImages,listReferenceImages,saveReferenceImages } from "../../services/projects/referenceImageStore.js";
@@ -48,6 +49,25 @@ export async function refineSiteProjectAction(input={}){
   if(!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged)throw new Error("Descreva uma alteração, envie uma referência, mude os efeitos ou ajuste as skills.");
   let generatorInput={...(project.generatorInput||{}),effects,skillMode,skills};
   if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template},mode:"lead",assetUrls:await collectLeadAssetUrls(lead),effects,skillMode,skills})}
+
+  const targetComponent=String(input.targetComponent||"").trim();
+  const canTarget=Boolean(targetComponent&&instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged&&project.folderPath&&project.siteData?.codegenPlan);
+  if(canTarget){
+    const refined=await refineUniqueSiteComponent({
+      folderPath:project.folderPath,
+      siteData:{...(project.siteData||{})},
+      currentPlan:project.siteData.codegenPlan,
+      componentName:targetComponent,
+      instruction,
+    });
+    const siteData={...(project.siteData||{}),codegenPlan:refined.plan,codegenQuality:refined.quality};
+    const warning=refined.quality?.available&&refined.quality.score!==null&&!refined.quality.pass
+      ? `Auditoria visual: ${refined.quality.score}/100. O componente foi corrigido, mas o site ainda merece revisão visual.`
+      : project.warning;
+    const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:true,warning,siteData,generatorInput,instructions:[...(project.instructions||[]),`[${targetComponent}] ${instruction}`],version:Number(project.version||1)+1,effects,skillMode,skills,referenceScope,referenceImages:references});
+    refreshProject(updated);return updated;
+  }
+
   const generated=await generateSiteFolder({...generatorInput,folderPath:project.folderPath,existingSiteData:project.siteData,instruction,referenceImages:references,skipAi:!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged});
   const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:generated.aiUsed||project.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[...(project.instructions||[]),instruction]:(project.instructions||[]),version:Number(project.version||1)+1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
   refreshProject(updated);return updated;
