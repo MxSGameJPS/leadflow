@@ -138,7 +138,7 @@ function hasHardFailure(metrics={}){
   return all.some(item=>item.horizontalOverflow||(item.brokenImages||0)>0||(item.runtimeErrors?.length||0)>0);
 }
 export function calculateVisualQualityScore(dimensions={},metrics={},threshold=78){
-  const weights={visualCraft:.2,brandSpecificity:.2,conversion:.15,mobile:.2,coherence:.15,commercialReadiness:.1};
+  const weights={visualCraft:.15,brandSpecificity:.15,brandFidelity:.15,productIntent:.15,conversion:.1,mobile:.15,coherence:.075,commercialReadiness:.075};
   let score=0;
   for(const[key,weight]of Object.entries(weights))score+=clamp(dimensions[key])*10*weight;
   score=Math.round(score);
@@ -199,16 +199,18 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
       "Se parecer template genérico, penalize brandSpecificity e visualCraft. Compare 320px e 390px: se qualquer mobile estiver apertado, cortado, desbalanceado, ilegível ou com hierarquia ruim, penalize mobile.",
       "Um site que apenas compila não é comercialmente pronto. A nota 8+ exige acabamento de agência, identidade própria, hierarquia clara e conversão convincente.",
       "Use somente os fatos fornecidos. Não peça conteúdo inexistente nem invente serviços/depoimentos.",
+      "Avalie brandFidelity comparando o render com brandEvidence e imagens reais disponíveis. Penalize reinvenção arbitrária de uma identidade visual claramente observável.",
+      "Avalie productIntent contra productContract. Se o contrato for delivery e o render parecer apenas uma landing institucional sem jornada perceptível de pedido, productIntent deve ser no máximo 3.",
       "Cada issue deve apontar um component EXATAMENTE da lista fornecida.",
       "Retorne somente JSON válido."
     ].join(" "),
     prompt:[
-      "NEGÓCIO: "+JSON.stringify({brandName:site.brandName,segment:site.segment,city:site.city,audience:site.audience,pageJob:site.pageJob}),
+      "NEGÓCIO: "+JSON.stringify({brandName:site.brandName,segment:site.segment,city:site.city,audience:site.audience,pageJob:site.pageJob,template:site.template,productContract:site.productContract,brandEvidence:site.brandEvidence}),
       "DIREÇÃO MESTRE: "+JSON.stringify({concept:plan.concept,creativeThesis:plan.creativeThesis,visualSystem:plan.visualSystem,imageStrategy:plan.imageStrategy,responsiveStrategy:plan.responsiveStrategy,conversionStrategy:plan.conversionStrategy,designSystem:plan.designSystem}),
       "COMPONENTES VÁLIDOS: "+JSON.stringify(known),
       "MÉTRICAS DO NAVEGADOR: "+JSON.stringify(metrics),
-      "Avalie de 0 a 10: visualCraft, brandSpecificity, conversion, mobile, coherence, commercialReadiness.",
-      "FORMATO: "+JSON.stringify({dimensions:{visualCraft:0,brandSpecificity:0,conversion:0,mobile:0,coherence:0,commercialReadiness:0},summary:"",issues:[{component:known[0]||"LeadHero",severity:"high",instruction:"correção objetiva baseada no render",evidence:"o que foi visto"}]})
+      "Avalie de 0 a 10: visualCraft, brandSpecificity, brandFidelity, productIntent, conversion, mobile, coherence, commercialReadiness.",
+      "FORMATO: "+JSON.stringify({dimensions:{visualCraft:0,brandSpecificity:0,brandFidelity:0,productIntent:0,conversion:0,mobile:0,coherence:0,commercialReadiness:0},summary:"",issues:[{component:known[0]||"LeadHero",severity:"high",instruction:"correção objetiva baseada no render",evidence:"o que foi visto"}]})
     ].join("\n\n")
   };
   let lastError=null;
@@ -222,7 +224,7 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
 }
 function normalizeJudge(raw,known){
   const dimensions={};
-  for(const key of ["visualCraft","brandSpecificity","conversion","mobile","coherence","commercialReadiness"])dimensions[key]=Number(clamp(raw?.dimensions?.[key]).toFixed(1));
+  for(const key of ["visualCraft","brandSpecificity","brandFidelity","productIntent","conversion","mobile","coherence","commercialReadiness"])dimensions[key]=Number(clamp(raw?.dimensions?.[key]).toFixed(1));
   const issues=(Array.isArray(raw?.issues)?raw.issues:[]).map(item=>({
     component:clean(item?.component,80),
     severity:["high","medium","low"].includes(String(item?.severity||"").toLowerCase())?String(item.severity).toLowerCase():"medium",
@@ -262,7 +264,7 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
     try{judged=normalizeJudge(await judgeScreenshots({site,plan,metrics,desktopImage:desktop.image,mobile320Image:mobile320.image,mobile390Image:mobile390.image}),known)}
     catch(error){judgeError=clean(error.message,1200)}
     if(!judged){
-      return{available:true,pass:hardIssues.filter(issue=>issue.severity==="high").length===0,hardFailure:hasHardFailure(metrics),score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
+      return{available:true,pass:false,hardFailure:true,score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
     }
     const scoring=calculateVisualQualityScore(judged.dimensions,metrics,threshold);
     const issues=[...hardIssues,...judged.issues.filter(issue=>!hardIssues.some(hard=>hard.component===issue.component&&hard.instruction===issue.instruction))].slice(0,10);
