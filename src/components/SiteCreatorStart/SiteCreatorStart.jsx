@@ -33,6 +33,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[skillMode,setSkillMode]=useState(project?.skillMode==="manual"?"manual":"auto");
   const[selectedSkills,setSelectedSkills]=useState(Array.isArray(project?.skills)?project.skills:[]);
   const[pendingReferences,setPendingReferences]=useState([]);
+  const[selectedComponent,setSelectedComponent]=useState("");
 
   useEffect(()=>{
     setActiveProject(project);
@@ -41,6 +42,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     setSkillMode(project?.skillMode==="manual"?"manual":"auto");
     setSelectedSkills(Array.isArray(project?.skills)?project.skills:[]);
     setPendingReferences([]);
+    setSelectedComponent("");
   },[project]);
 
   const selectedLead=useMemo(()=>leads.find(lead=>lead.id===leadId)||null,[leadId,leads]);
@@ -90,10 +92,11 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     try{
       const updated=await refineSiteProjectAction({
         projectId:activeProject.id,instruction,effects,skillMode,
+        targetComponent:selectedComponent,
         skills:skillMode==="auto"?autoSkillIds:selectedSkills,
         referenceImages:pendingReferences,
       });
-      setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
+      setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
     }catch(error){setNotice("Erro: "+error.message)}finally{setBusy("")}
   }
 
@@ -165,7 +168,8 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
           {skillPicker}
           {referencePicker}
           {effectsPicker}
-          <label><span>O que você quer mudar?</span><textarea value={instruction} onChange={e=>setInstruction(e.target.value)} placeholder="Ex.: Corrija o CTA do header, deixe o hero mais técnico e aproxime a composição da imagem de referência."/></label>
+          <label className={s.targetPicker}><span>Escopo da alteração</span><select value={selectedComponent} onChange={e=>setSelectedComponent(e.target.value)}><option value="">Site completo / arquitetura</option>{(activeProject.siteData?.codegenPlan?.components||[]).map(item=><option key={item.name} value={item.name}>{item.name} · {item.role}</option>)}</select><small>{selectedComponent?"Somente esta seção será regenerada; o restante do site será preservado.":"Sem seção selecionada, a IA pode revisar a arquitetura completa."}</small></label>
+          <label><span>O que você quer mudar?</span><textarea value={instruction} onChange={e=>setInstruction(e.target.value)} placeholder={selectedComponent?"Descreva a alteração desta seção.":"Ex.: Corrija o CTA do header, deixe o hero mais técnico e aproxime a composição da imagem de referência."}/></label>
           <button className={s.primary} disabled={busy==="refine"||!canRefine}>{busy==="refine"?"Aplicando alteração...":"Aplicar alterações"}</button>
         </form>
         {activeProject.warning&&<div className={s.warning}>{activeProject.warning}</div>}
