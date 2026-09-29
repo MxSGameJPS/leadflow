@@ -29,3 +29,5 @@
 
 .targetPicker{padding:11px;border:1px solid #dbe3ee;border-radius:11px;background:#f8fafc}.targetPicker select{width:100%;border:1px solid #cbd5e1;border-radius:9px;background:#fff;padding:10px 11px;color:#1e293b;font:inherit;font-size:11px}.targetPicker small{color:#64748b;font-size:9.5px;line-height:1.4}
 .inspectActive{background:#2563eb!important;color:#fff!important;border-color:#2563eb!important}
+
+.undo{padding:10px 13px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#475569;font:inherit;font-size:12px;font-weight:800;cursor:pointer}.undo:hover{border-color:#94a3b8;background:#f8fafc}.undo:disabled{opacity:.5;cursor:not-allowed}
