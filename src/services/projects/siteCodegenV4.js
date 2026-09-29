@@ -63,20 +63,8 @@ export function parseCodegenJson(text){
 function parseJson(text){return parseCodegenJson(text)}
 async function parseJsonWithRepair(text,role="review",onProgress=null){
   try{return parseCodegenJson(text)}catch(firstError){
-    try{await onProgress?.({phase:"architecture",title:"Normalizando resposta do arquiteto",detail:"A resposta veio fora do contrato JSON. Tentando extrair/reparar a estrutura sem perder o plano."})}catch{}
-    const repair=await generateWithDefaultProvider({
-      model:roleModel(role)||roleModel("architect"),
-      temperature:0,
-      maxTokens:7000,
-      timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||180000),
-      retries:0,
-      onAttempt:event=>onProgress?.({phase:"ai",title:event.status==="success"?"Reparo JSON concluído":event.status==="error"?"Reparo JSON falhou — fallback":"Reparando JSON",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"}),
-      systemPrompt:"Você é um serializador de dados. NÃO pesquise, NÃO use ferramentas, NÃO explique, NÃO converse. Sua única saída permitida é um objeto JSON RFC 8259. Retorne SOMENTE JSON estrito RFC 8259, sem markdown, sem comentários, sem explicações e sem texto antes ou depois. Preserve fielmente todos os valores e a estrutura do conteúdo recebido.",
-      prompt:"Converta o conteúdo abaixo para JSON estrito válido. Não resuma e não invente campos.\n\n"+clean(text,50000),
-    });
-    try{return parseCodegenJson(repair.text)}catch(secondError){
-      throw new Error("A arquitetura retornou JSON inválido mesmo após reparo automático. Primeira falha: "+firstError.message+" Reparo: "+secondError.message);
-    }
+    await onProgress?.({phase:"architecture",title:"Resposta estrutural inválida",detail:"O arquiteto não entregou um objeto JSON utilizável. O sistema não tentará transformar intenção narrativa em arquitetura."});
+    throw firstError;
   }
 }
 function pascal(value){
