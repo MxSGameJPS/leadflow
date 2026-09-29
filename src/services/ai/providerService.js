@@ -187,3 +187,33 @@ export async function listProviderModels(id) {
 }
 export async function generateWithProvider(id, request) { return generateInternal(await getProviderInternal(id), request); }
 export async function generateWithDefaultProvider(request) { return generateInternal(await getDefaultProviderInternal(), request); }
+
+function fallbackModels(request={}){
+  const explicit=Array.isArray(request.fallbackModels)?request.fallbackModels:[];
+  const env=String(process.env.LEADFLOW_AI_FALLBACK_MODELS||"").split(",").map(item=>item.trim()).filter(Boolean);
+  const primary=String(request.model||"").trim();
+  return [...new Set([primary,...explicit,...env].filter(Boolean))];
+}
+function transientGenerationError(error){return retryableProviderError(error)||/tempo limite|timeout|HTTP (429|502|503|504)/i.test(String(error?.message||""))}
+export async function generateResilientWithDefaultProvider(request={}){
+  const provider=await getDefaultProviderInternal();
+  const models=fallbackModels(request);
+  if(!models.length)return generateInternal(provider,request);
+  const attempts=[];let lastError=null;
+  for(let index=0;index<models.length;index++){
+    const model=models[index],started=Date.now();
+    try{
+      request.onAttempt?.({status:"start",model,index:index+1,total:models.length});
+      const result=await generateInternal(provider,{...request,model,retries:index===0?(request.retries??0):0});
+      const item={model,status:"success",elapsedMs:Date.now()-started,providerName:result.providerName};
+      attempts.push(item);request.onAttempt?.(item);
+      return{...result,routingAttempts:attempts,fallbackUsed:index>0};
+    }catch(error){
+      lastError=error;const item={model,status:"error",elapsedMs:Date.now()-started,error:String(error?.message||error).slice(0,600)};
+      attempts.push(item);request.onAttempt?.(item);
+      if(!transientGenerationError(error)||index===models.length-1)break;
+    }
+  }
+  if(lastError){lastError.routingAttempts=attempts;throw lastError}
+  throw new Error("Nenhum modelo disponível para geração.");
+}
