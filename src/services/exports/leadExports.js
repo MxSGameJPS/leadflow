@@ -64,7 +64,8 @@ function normalizedPhone(value) {
   const raw = clean(value, 100);
   if (!raw) return "";
   let digits = raw.replace(/\D/g, "");
-  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith("55")) digits = "55" + digits;
+  if (digits.length === 10 || digits.length === 11) digits = "55" + digits;
+  else if ((digits.length !== 12 && digits.length !== 13) || !digits.startsWith("55")) return "";
   return digits ? "+" + digits : "";
 }
 
