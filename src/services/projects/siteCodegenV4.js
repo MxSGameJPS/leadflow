@@ -587,12 +587,14 @@ async function runBuild(root){
 }
 
 export async function generateUniqueSiteCode(options={}){
+  const progress=async event=>{try{await options.onProgress?.(event)}catch{}};
   const folderPath=options.folderPath,folderName=options.folderName,site=options.siteData||{},skipAi=Boolean(options.skipAi);
   const root=path.resolve(process.cwd(),folderPath);
   const visualImages=Array.isArray(options.visualImages)?options.visualImages.filter(item=>item?.dataUrl).slice(0,6):[];
   let plan;
   if(skipAi)plan=fallbackPlan(site);
   else{
+    await progress({phase:"architecture",title:"Projetando arquitetura",detail:"A IA está decidindo a composição e os componentes únicos deste site."});
     const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages);
     let result=await generateWithDefaultProvider(request);
     try{
@@ -613,10 +615,12 @@ export async function generateUniqueSiteCode(options={}){
     }
   }
   plan=normalizePlan(plan,site);
+  await progress({phase:"architecture",title:"Arquitetura definida",detail:plan.components.length+" componentes planejados."});
   applyPlanCopy(site,plan);
   const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
-  const sources=await concurrent(plan.components,componentConcurrency,function(component){return generateComponent(site,plan,component,skipAi)});
+  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi);await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css"});return source});
   if(!skipAi){
+    await progress({phase:"review",title:"Revisando código",detail:"O reviewer está procurando inconsistências antes do build."});
     const review=await reviewSources(site,plan,sources);
     if(review.length){
       await concurrent(review,2,async function(issue){
@@ -626,11 +630,13 @@ export async function generateUniqueSiteCode(options={}){
       });
     }
   }
+  await progress({phase:"files",title:"Montando estrutura de arquivos",detail:"Escrevendo app, componentes, estilos, dados e configuração.",file:"app/page.jsx"});
   await writeProject(root,folderName,site,plan,sources);
   let errors=await validateProject(root,plan);
   if(errors.length)throw new Error("Projeto reprovado pelas regras de engenharia: "+errors.join(" | "));
   let build={ok:true,log:"Build ignorado."};
   if(options.validateBuild!==false&&!skipAi){
+    await progress({phase:"build",title:"Executando Next.js build",detail:"Validando imports, sintaxe, renderização e bundle."});
     build=await runBuild(root);
     if(!build.ok){
       const affected=componentNamesFromBuildLog(build.log,plan);
@@ -652,11 +658,13 @@ export async function generateUniqueSiteCode(options={}){
 
   let quality={available:false,pass:true,score:null,threshold:Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||78),judgeUsed:false,skippedReason:skipAi?"Auditoria visual ignorada no modo de teste/fallback.":"Build visual não executado."};
   if(build.ok&&!skipAi&&options.visualQa!==false){
+    await progress({phase:"qa",title:"Abrindo site no Chromium",detail:"Auditando desktop e mobile no navegador real."});
     quality=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
     const repair=quality.available
       ? quality.issues.filter(issue=>["high","medium"].includes(issue.severity)).slice(0,4)
       : [];
     if(repair.length){
+      await progress({phase:"repair",title:"Autocorreção visual",detail:repair.length+" ajuste(s) encontrados pelo reviewer visual."});
       await concurrent(repair,2,async function(issue){
         const index=plan.components.findIndex(item=>item.name===issue.component);
         if(index<0)return;
@@ -684,6 +692,7 @@ export async function generateUniqueSiteCode(options={}){
     const evidence=(quality.issues||[]).filter(issue=>issue.severity==="high").slice(0,4).map(issue=>issue.component+": "+issue.instruction).join(" | ");
     throw new Error("O site ainda apresenta falha objetiva no render após a autocorreção e não será entregue como pronto. "+clean(evidence||quality.summary,2600));
   }
+  await progress({phase:"qa",title:"Validação concluída",detail:quality.available&&quality.score!==null?"QA visual: "+quality.score+"/100":"Validações de engenharia concluídas."});
   await cleanupBuildArtifacts(root);
   return{plan,format:"unique-codegen-v4",buildOk:build.ok,quality};
 }
