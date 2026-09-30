@@ -826,7 +826,7 @@ export async function isUniqueCodegenProject(folderPath){
   try{
     const file=path.join(path.resolve(process.cwd(),folderPath),"generation-format.json");
     const data=JSON.parse(await fs.readFile(file,"utf8"));
-    return ["unique-codegen-v4","autonomous-builder-v5"].includes(data?.format);
+    return ["unique-codegen-v4","autonomous-builder-v5","autonomous-builder-v5-task-loop"].includes(data?.format);
   }catch{return false}
 }
 export async function enforceLatestPackage(folderPath){
