@@ -951,6 +951,7 @@ export async function generateSiteFolder(input = {}) {
     referenceImages: Array.isArray(input.referenceImages) ? input.referenceImages.slice(0, 6) : [],
     skillMode: input.skillMode || "auto",
     skills: Array.isArray(input.skills) ? input.skills : [],
+    siteVariant: clean(input.siteVariant, 40).toLowerCase() || "leadflow",
   };
 
   placeData.productContract = buildProductContract({template:placeData.template,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
@@ -996,6 +997,7 @@ export async function generateSiteFolder(input = {}) {
           ...request,
           images: [],
           siteRole: "creative",
+          siteVariant: placeData.siteVariant,
           temperature: 0.72,
           maxTokens: 12000,
           timeoutMs: Number(process.env.LEADFLOW_SITE_TIMEOUT_CREATIVE_MS || 120000),
