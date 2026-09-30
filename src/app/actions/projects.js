@@ -45,12 +45,8 @@ export async function createSiteVariantsAction(input={}){
   const generationId=String(input.generationId||"").trim();
   const runId=(generationId||crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
   const base={...input,generationId:""};
-  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("
-
-")};
-  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("
-
-")};
+  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\\n\\n")};
+  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\\n\\n")};
   if(generationId)await startGenerationProgress(generationId,{name:"Comparação A/B",leadId:input.leadId||null,mode:"variants"});
   try{
     if(generationId)await Promise.all([
