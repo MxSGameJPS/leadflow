@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { generateSiteWithDefaultProvider as generateWithDefaultProvider } from "../ai/siteProviderService.js";
 import { buildSiteSkillsSystemPrompt,resolveSiteSkills } from "./siteSkills.js";
-import { enforceLatestPackage,generateUniqueSiteCode,hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
+import { enforceLatestPackage,hardenUniqueCodegenProject,isUniqueCodegenProject } from "./siteCodegenV4.js";
+import { generateAutonomousSite } from "./siteAutonomousBuilderV5.js";
 import { buildProductContract,productContractPrompt } from "./siteProductContract.js";
 
 const GENERATED_ROOT = path.join(process.cwd(), "generated-sites");
@@ -1041,8 +1042,8 @@ export async function generateSiteFolder(input = {}) {
     siteVariant: placeData.siteVariant || clean(input.siteVariant, 40).toLowerCase() || "leadflow",
   };
 
-  await progress({phase:"architecture",title:"Arquiteto montando o site",detail:"Definindo seções, componentes, hierarquia e contratos de implementação."});
-  const codegen = await generateUniqueSiteCode({
+  await progress({phase:"architecture",title:"Agente autônomo iniciando",detail:"O modelo recebe o contexto, assets, stack e skills. Arquitetura, páginas, conteúdo e experiência ficam sob decisão dele."});
+  const codegen = await generateAutonomousSite({
     folderPath: path.relative(process.cwd(), folder.absolutePath).replace(/\\/g, "/"),
     folderName: folder.folderName,
     siteData,
@@ -1062,14 +1063,14 @@ export async function generateSiteFolder(input = {}) {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    generatorVersion: 4,
+    generatorVersion: 5,
     aiUsed,
     aiWarning,
     source: place ? "Google Places + CRM" : "CRM ou descrição",
     design: siteData.design,
     composition: siteData.design?.composition,
     blueprint: siteData.blueprint,
-    runtimeIntegrity: "unique-codegen-v4",
+    runtimeIntegrity: "autonomous-builder-v5",
     codegenPlan: codegen.plan,
     codegenBuildOk: codegen.buildOk,
     codegenQuality: codegen.quality || null,
