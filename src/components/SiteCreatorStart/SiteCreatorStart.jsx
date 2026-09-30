@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearSiteReferenceImagesAction,createSiteVariantsAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
+import { chooseSiteVariantAction,clearSiteReferenceImagesAction,createSiteVariantsAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
 import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
 import s from "./SiteCreatorStart.module.css";
 import GenerationLivePanel from "../GenerationLivePanel/GenerationLivePanel.jsx";
@@ -21,7 +21,7 @@ const EFFECT_OPTIONS=[
 function readFile(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({dataUrl:String(reader.result||""),label:file.name,size:file.size});reader.onerror=()=>reject(reader.error||new Error("Falha ao ler imagem."));reader.readAsDataURL(file)})}
 function signature(value=[]){return JSON.stringify([...value].sort())}
 
-export default function SiteCreatorStart({leads=[],initialLeadId="",project=null}){
+export default function SiteCreatorStart({leads=[],initialLeadId="",project=null,initialVariants=[]}){
   const router=useRouter();
   const[leadId,setLeadId]=useState(initialLeadId||leads[0]?.id||"");
   const[template,setTemplate]=useState(project?.template||"landing");
@@ -29,7 +29,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[busy,setBusy]=useState("");
   const[notice,setNotice]=useState("");
   const[activeProject,setActiveProject]=useState(project);
-  const[variants,setVariants]=useState(project?[project]:[]);
+  const[variants,setVariants]=useState(initialVariants.length?initialVariants:(project?[project]:[]));
   const[device,setDevice]=useState("desktop");
   const[effects,setEffects]=useState(project&&Array.isArray(project.effects)?project.effects:DEFAULT_EFFECTS);
   const[skillMode,setSkillMode]=useState(project?.skillMode==="manual"?"manual":"auto");
@@ -207,11 +207,13 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const activeVariant=activeProject?.generatorInput?.siteVariant||activeProject?.siteData?.siteVariant||"leadflow";
   const history=activeProject.instructions||[];
   const quality=activeProject.siteData?.codegenQuality||null;
+  async function chooseWinner(item){try{setBusy("winner");await chooseSiteVariantAction({projectId:item.id});setVariants(current=>current.map(project=>({...project,comparisonWinner:project.id===item.id})));setActiveProject(current=>({...current,comparisonWinner:current.id===item.id}));router.refresh()}finally{setBusy("")}}
+  function downloadBoth(){for(const item of variants){const a=document.createElement("a");a.href="/api/projects/"+item.id+"/zip";a.download="";document.body.appendChild(a);a.click();a.remove()}}
   const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
     {generationId&&<GenerationLivePanel generationId={generationId} variants={variants} onClose={()=>setGenerationId("")}/>}
     <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
-    {variants.length>1&&<nav className={s.variantBar}><div><strong>Compare as propostas</strong><span>Mesmo briefing · decisões criativas independentes</span></div>{variants.map((item,index)=>{const variant=item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <button type="button" key={item.id} className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button>})}</nav>}
+    {variants.length>1&&<nav className={s.variantBar}><div><strong>Battle A/B</strong><span>Escolha a melhor proposta ou baixe qualquer uma</span></div>{variants.map((item,index)=>{const variant=item?.comparisonVariant||item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <div key={item.id} className={s.variantChoice}><button type="button" className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}{item.comparisonWinner?" · ESCOLHIDA":""}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button><div><button type="button" disabled={busy==="winner"} onClick={()=>chooseWinner(item)}>{item.comparisonWinner?"✓ Escolhida":"Escolher esta"}</button><a href={"/api/projects/"+item.id+"/zip"}>Baixar ZIP</a></div></div>})}<button type="button" className={s.downloadBoth} onClick={downloadBoth}>Baixar os 2 ZIPs</button></nav>}
     <section className={s.builder}>
       <aside className={s.chatPanel}>
         <div className={s.context}><span>Projeto ativo · {activeVariant==="testelead"?"TesteLead":"LeadFlow"}</span><strong>{activeProject.segment||"Landing page"}</strong><small>{activeProject.city||"Local não informado"}</small></div>
