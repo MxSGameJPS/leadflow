@@ -67,7 +67,7 @@ export async function refineSiteProjectAction(input={}){
   const skillsChanged=skillMode!==project.skillMode||(skillMode==="manual"&&!sameList(skills,project.skills||[]));
   if(!instruction&&!newReferences.length&&!effectsChanged&&!skillsChanged)throw new Error("Descreva uma alteração, envie uma referência, mude os efeitos ou ajuste as skills.");
   let generatorInput={...(project.generatorInput||{}),effects,skillMode,skills};
-  if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template},mode:"lead",assetUrls:await collectLeadAssetUrls(lead),effects,skillMode,skills})}
+  if(project.leadId){const lead=await getLead(project.leadId);if(!lead)throw new Error("O lead vinculado a este projeto não foi encontrado.");generatorInput=generatorInputFor({lead,input:{template:project.template,siteVariant:project.generatorInput?.siteVariant||project.siteData?.siteVariant||"leadflow"},mode:"lead",assetUrls:await collectLeadAssetUrls(lead),effects,skillMode,skills})}
 
   await createProjectSourceSnapshot(project);
   try {
