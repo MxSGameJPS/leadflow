@@ -43,13 +43,20 @@ export async function createSiteProjectAction(input={}){
 
 export async function createSiteVariantsAction(input={}){
   const generationId=String(input.generationId||"").trim();
+  const runId=(generationId||crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
   const base={...input,generationId:""};
+  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\n\n")};
+  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\n\n")};
   if(generationId)await startGenerationProgress(generationId,{name:"Comparação A/B",leadId:input.leadId||null,mode:"variants"});
   try{
-    if(generationId)await reportGenerationProgress(generationId,{phase:"variant-a",title:"Proposta A · LeadFlow",detail:"O primeiro builder está criando uma solução autoral completa.",kind:"model"});
-    const leadflow=await createSiteProjectAction({...base,siteVariant:"leadflow",instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\n\n")});
-    if(generationId)await reportGenerationProgress(generationId,{phase:"variant-b",title:"Proposta B · TesteLead",detail:"O provider TesteLead está criando uma segunda solução independente com o modelo escolhido pelo OmniRoute.",kind:"model"});
-    const testelead=await createSiteProjectAction({...base,siteVariant:"testelead",instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\n\n")});
+    if(generationId)await Promise.all([
+      reportGenerationProgress(generationId,{phase:"variant-a",title:"Proposta A · LeadFlow",detail:"LeadFlow iniciou seu builder autônomo.",kind:"model"}),
+      reportGenerationProgress(generationId,{phase:"variant-b",title:"Proposta B · TesteLead",detail:"TesteLead iniciou em paralelo com o modelo escolhido pelo OmniRoute.",kind:"model"})
+    ]);
+    const [leadflow,testelead]=await Promise.all([
+      createSiteProjectAction(leadflowInput),
+      createSiteProjectAction(testeleadInput)
+    ]);
     if(generationId)await finishGenerationProgress(generationId,{projectId:leadflow.id,variantProjectIds:[leadflow.id,testelead.id]});
     return{leadflow,testelead,variants:[leadflow,testelead]};
   }catch(error){if(generationId)await failGenerationProgress(generationId,error);throw error}
