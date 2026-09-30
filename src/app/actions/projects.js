@@ -17,7 +17,7 @@ function sameList(a=[],b=[]){return JSON.stringify([...a].sort())===JSON.stringi
 function refreshProject(project){revalidatePath("/projetos");revalidatePath("/criar-site");revalidatePath("/preview-internal/"+project.id);if(project.leadId)revalidatePath("/crm/"+project.leadId)}
 function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("\n")}
 function referenceScopeFor(projectOrLead){if(projectOrLead?.referenceScope)return projectOrLead.referenceScope;if(projectOrLead?.leadId)return"lead:"+projectOrLead.leadId;if(projectOrLead?.id)return"lead:"+projectOrLead.id;return""}
-function generatorInputFor({lead,input,mode,assetUrls=[],effects=[],skillMode="auto",skills=[]}){return{name:lead?.name||String(input.name||"").trim(),segment:lead?.segment||input.segment,city:lead?.city||lead?.location||input.city,address:lead?.address||"",phone:lead?.phone||lead?.whatsapp||"",placeId:lead?.externalId||"",mapsLink:lead?.mapsLink||(mode==="google"?input.source:""),existingWebsite:lead?.site||"",instagram:lead?.instagram||"",rating:lead?.googleRating||"",reviews:lead?.googleReviews||"",description:mode==="lead"?leadDescription(lead):input.source,template:input.template||"landing",assetUrls,effects,skillMode,skills}}
+function generatorInputFor({lead,input,mode,assetUrls=[],effects=[],skillMode="auto",skills=[]}){return{siteVariant:String(input.siteVariant||"leadflow").toLowerCase(),name:lead?.name||String(input.name||"").trim(),segment:lead?.segment||input.segment,city:lead?.city||lead?.location||input.city,address:lead?.address||"",phone:lead?.phone||lead?.whatsapp||"",placeId:lead?.externalId||"",mapsLink:lead?.mapsLink||(mode==="google"?input.source:""),existingWebsite:lead?.site||"",instagram:lead?.instagram||"",rating:lead?.googleRating||"",reviews:lead?.googleReviews||"",description:mode==="lead"?leadDescription(lead):input.source,template:input.template||"landing",assetUrls,effects,skillMode,skills}}
 
 export async function createSiteProjectAction(input={}){
   const mode=["lead","describe","google"].includes(input.mode)?input.mode:"lead";let lead=null;
@@ -39,6 +39,14 @@ export async function createSiteProjectAction(input={}){
   catch(error){if(generationId)await failGenerationProgress(generationId,error);throw error}
   const project=await createSiteProject({leadId:lead?.id||null,name,segment:generatorInput.segment,city:generatorInput.city,mode,source:mode==="lead"?(lead?.instagram||lead?.site||lead?.mapsLink||lead?.problem||"Dados do CRM"):input.source,template:generatorInput.template,status:"ready",folderPath:generated.folderPath,aiUsed:generated.aiUsed,warning:generated.warning,imageCount:generated.imageCount,siteData:generated.siteData,generatorInput:{...generatorInput,skillMode:generated.skillMode,skills:generated.skills},instructions:instruction?[instruction]:["Gerar landing page premium usando os dados verificados deste lead."],version:1,effects,skillMode:generated.skillMode,skills:generated.skills,referenceScope,referenceImages:references});
   if(lead)await setLanding(lead.id,"done");if(generationId)await finishGenerationProgress(generationId,{projectId:project.id,version:project.version});refreshProject(project);return project;
+}
+
+export async function createSiteVariantsAction(input={}){
+  const base={...input,generationId:""};
+  const leadflow=await createSiteProjectAction({...base,siteVariant:"leadflow",instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\n\n")});
+  const testelead=await createSiteProjectAction({...base,siteVariant:"testelead",instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\n\n")});
+  if(input.generationId)await finishGenerationProgress(String(input.generationId),{projectId:leadflow.id,variantProjectIds:[leadflow.id,testelead.id]});
+  return{leadflow,testelead,variants:[leadflow,testelead]};
 }
 
 export async function refineSiteProjectAction(input={}){
