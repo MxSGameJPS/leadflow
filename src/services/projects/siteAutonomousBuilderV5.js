@@ -67,7 +67,7 @@ async function snapshot(root,maxFiles=45){
 function autonomousPrompt(site,instruction,visualImages){
   const facts={name:site.brandName,segment:site.segment,city:site.city,address:site.address,phone:site.phone,whatsapp:site.whatsapp,instagram:site.instagram,mapsLink:site.mapsLink,rating:site.rating,reviews:site.reviews,hours:site.hours,images:site.images,description:site.sourceDescription||site.description,audience:site.audience,pageJob:site.pageJob,skills:site.skills||[],skillMode:site.skillMode||"auto"};
   return{
-    model:modelFor(site),siteRole:"builder",siteVariant:site.siteVariant||"leadflow",temperature:.78,maxTokens:Number(process.env.LEADFLOW_SITE_BUILDER_MAX_TOKENS||30000),timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_BUILDER_MS||240000),retries:0,images:visualImages,
+    model:modelFor(site),siteRole:"builder",siteVariant:site.siteVariant||"leadflow",temperature:.78,maxTokens:Number(process.env.LEADFLOW_SITE_BUILDER_MAX_TOKENS||30000),timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_BUILDER_MS||240000),retries:2,images:visualImages,
     systemPrompt:[
       "Você é um agente autônomo de produto, design e engenharia web. Você controla o projeto inteiro.",
       "Sua missão é criar a melhor prévia comercial possível para o negócio. NÃO existe blueprint, lista de seções, número de páginas, arquitetura, design system ou conjunto de componentes pré-definido.",
@@ -93,7 +93,7 @@ function autonomousPrompt(site,instruction,visualImages){
 }
 function repairPrompt(site,files,problem,kind){
   return{
-    model:modelFor(site),siteRole:"builder",siteVariant:site.siteVariant||"leadflow",temperature:.35,maxTokens:18000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_BUILDER_MS||240000),retries:0,
+    model:modelFor(site),siteRole:"builder",siteVariant:site.siteVariant||"leadflow",temperature:.35,maxTokens:18000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_BUILDER_MS||240000),retries:2,
     systemPrompt:"Você é o mesmo agente autônomo responsável pelo projeto. Corrija o problema observado sem reduzir a ambição do produto. Você pode alterar QUALQUER arquivo do projeto e criar novos arquivos. Mantenha Next.js App Router, JavaScript/JSX e CSS Modules; sem TypeScript, Tailwind ou CSS inline. Retorne SOMENTE os arquivos que precisam ser criados/substituídos usando <FILE path=\"caminho\">conteúdo completo</FILE>.",
     prompt:"OBSERVAÇÃO REAL ("+kind+"):\n"+clean(problem,9000)+"\n\nPROJETO ATUAL:\n"+files.map(f=>"--- "+f.path+" ---\n"+f.content).join("\n\n")
   };
