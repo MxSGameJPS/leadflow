@@ -30,6 +30,6 @@ export function generateSiteWithDefaultProvider(request = {}) {
     providerName: clean(process.env[cfg.nameEnv]) || cfg.label,
     disableTools: true,
     isolatedRouting: true,
-    retries: 0,
+    retries: request.retries ?? 0,
   });
 }
