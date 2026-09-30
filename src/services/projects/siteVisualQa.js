@@ -215,9 +215,9 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
     ].join("\n\n")
   };
   let lastError=null;
-  for(const model of visualReviewModels()){
+  for(const model of (site?.siteVariant==="testelead"?[""]:visualReviewModels())){
     try{
-      const result=await generateWithDefaultProvider({...baseRequest,model,siteRole:"visualReview"});
+      const result=await generateWithDefaultProvider({...baseRequest,model,siteRole:"visualReview",siteVariant:site?.siteVariant||"leadflow"});
       return parseJudgeJson(result.text);
     }catch(error){lastError=error}
   }
