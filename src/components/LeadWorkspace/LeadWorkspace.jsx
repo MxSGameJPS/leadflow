@@ -660,6 +660,11 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   }
 
   function renderArena() {
+    const business = lead.name || "a marca";
+    const segment = lead.segment || "seu segmento";
+    const location = [lead.city, lead.location].filter(Boolean).join(", ");
+    const audience = qualification.targetAudience || qualification.audience || (location ? `clientes de ${segment} em ${location}` : `clientes de ${segment}`);
+    const goal = qualification.primaryGoal || qualification.goal || "gerar novos contatos e oportunidades comerciais";
     const prompt = arenaPrompt();
     return <section className={s.section}>
       <div className={s.arenaPanel}>
