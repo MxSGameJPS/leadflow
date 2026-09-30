@@ -311,7 +311,7 @@ function componentRequest(site,plan,component,errors){
   const previous=index>0?plan.components[index-1]:null;
   const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   return {
-    model:roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
+    model:site.siteVariant==="testelead"?"":roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
@@ -355,7 +355,7 @@ function componentPatchRequest(site,plan,component,currentSource,instruction,err
   const jsxPath="components/"+component.name+"/"+component.name+".jsx";
   const cssPath="components/"+component.name+"/"+component.name+".module.css";
   return{
-    model:roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
+    model:site.siteVariant==="testelead"?"":roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
     systemPrompt:[
       "Você é um engenheiro sênior editando código existente com precisão cirúrgica.",
       "Retorne SOMENTE unified git diff. Não retorne arquivos completos, markdown explicativo, JSON ou comentários fora do diff.",
@@ -513,7 +513,7 @@ async function reviewSources(site,plan,sources,progress){
     return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,3200),css:clean(sources[index]?.css,4200)};
   });
   const result=await generateWithDefaultProvider({
-    model:roleModel("review"),siteRole:"review",siteVariant:site.siteVariant||"leadflow",
+    model:site.siteVariant==="testelead"?"":roleModel("review"),siteRole:"review",siteVariant:site.siteVariant||"leadflow",
     temperature:.22,
     maxTokens:5000,
     timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||90000),
