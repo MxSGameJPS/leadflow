@@ -65,7 +65,7 @@ async function snapshot(root,maxFiles=45){
   const out=[];async function walk(dir,rel=""){for(const ent of await fs.readdir(dir,{withFileTypes:true})){if(["node_modules",".next",".leadflow-build","public"].includes(ent.name))continue;const r=rel?rel+"/"+ent.name:ent.name,p=path.join(dir,ent.name);if(ent.isDirectory())await walk(p,r);else if(/\.(jsx|js|css|json|mjs)$/.test(ent.name)&&out.length<maxFiles)out.push({path:r,content:clean(await fs.readFile(p,"utf8"),14000)})}}await walk(root);return out;
 }
 function autonomousPrompt(site,instruction,visualImages){
-  const facts={name:site.brandName,segment:site.segment,city:site.city,address:site.address,phone:site.phone,whatsapp:site.whatsapp,instagram:site.instagram,mapsLink:site.mapsLink,rating:site.rating,reviews:site.reviews,hours:site.hours,images:site.images,description:site.description,audience:site.audience,pageJob:site.pageJob};
+  const facts={name:site.brandName,segment:site.segment,city:site.city,address:site.address,phone:site.phone,whatsapp:site.whatsapp,instagram:site.instagram,mapsLink:site.mapsLink,rating:site.rating,reviews:site.reviews,hours:site.hours,images:site.images,description:site.sourceDescription||site.description,audience:site.audience,pageJob:site.pageJob,skills:site.skills||[],skillMode:site.skillMode||"auto"};
   return{
     model:modelFor(site),siteRole:"builder",siteVariant:site.siteVariant||"leadflow",temperature:.78,maxTokens:Number(process.env.LEADFLOW_SITE_BUILDER_MAX_TOKENS||30000),timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_BUILDER_MS||240000),retries:0,images:visualImages,
     systemPrompt:[
@@ -85,6 +85,7 @@ function autonomousPrompt(site,instruction,visualImages){
       "Crie o projeto agora. Tome todas as decisões de produto e design por conta própria.",
       instruction?"PEDIDO DO USUÁRIO: "+clean(instruction,7000):"",
       "CONTEXTO DO NEGÓCIO: "+JSON.stringify(facts),
+      "SKILLS SELECIONADAS: "+JSON.stringify(site.skills||[]),
       "ASSETS LOCAIS DISPONÍVEIS: "+JSON.stringify(site.images||[]),
       "Se criar dados demo, faça-os convincentes e coerentes com o negócio. O objetivo é uma prévia que venda a visão do site ao lead."
     ].filter(Boolean).join("\n\n")
