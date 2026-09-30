@@ -15,7 +15,8 @@ const VALID_EFFECTS=new Set(["entrance-motion","section-reveal","parallax-hero",
 function normalizeEffects(value,fallback=DEFAULT_EFFECTS){if(!Array.isArray(value))return[...fallback];return[...new Set(value.map(item=>String(item||"").trim()).filter(item=>VALID_EFFECTS.has(item)))]}
 function sameList(a=[],b=[]){return JSON.stringify([...a].sort())===JSON.stringify([...b].sort())}
 function refreshProject(project){revalidatePath("/projetos");revalidatePath("/criar-site");revalidatePath("/preview-internal/"+project.id);if(project.leadId)revalidatePath("/crm/"+project.leadId)}
-function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("\n")}
+function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("
+")}
 function referenceScopeFor(projectOrLead){if(projectOrLead?.referenceScope)return projectOrLead.referenceScope;if(projectOrLead?.leadId)return"lead:"+projectOrLead.leadId;if(projectOrLead?.id)return"lead:"+projectOrLead.id;return""}
 function generatorInputFor({lead,input,mode,assetUrls=[],effects=[],skillMode="auto",skills=[]}){return{siteVariant:String(input.siteVariant||"leadflow").toLowerCase(),name:lead?.name||String(input.name||"").trim(),segment:lead?.segment||input.segment,city:lead?.city||lead?.location||input.city,address:lead?.address||"",phone:lead?.phone||lead?.whatsapp||"",placeId:lead?.externalId||"",mapsLink:lead?.mapsLink||(mode==="google"?input.source:""),existingWebsite:lead?.site||"",instagram:lead?.instagram||"",rating:lead?.googleRating||"",reviews:lead?.googleReviews||"",description:mode==="lead"?leadDescription(lead):input.source,template:input.template||"landing",assetUrls,effects,skillMode,skills}}
 
@@ -45,20 +46,29 @@ export async function createSiteVariantsAction(input={}){
   const generationId=String(input.generationId||"").trim();
   const runId=(generationId||crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
   const base={...input,generationId:""};
-  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\n\n")};
-  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\n\n")};
+  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("
+
+")};
+  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("
+
+")};
   if(generationId)await startGenerationProgress(generationId,{name:"Comparação A/B",leadId:input.leadId||null,mode:"variants"});
   try{
     if(generationId)await Promise.all([
       reportGenerationProgress(generationId,{phase:"variant-a",title:"Proposta A · LeadFlow",detail:"LeadFlow iniciou seu builder autônomo.",kind:"model"}),
       reportGenerationProgress(generationId,{phase:"variant-b",title:"Proposta B · TesteLead",detail:"TesteLead iniciou em paralelo com o modelo escolhido pelo OmniRoute.",kind:"model"})
     ]);
-    const [leadflow,testelead]=await Promise.all([
+    const [leadflowRaw,testeleadRaw]=await Promise.all([
       createSiteProjectAction(leadflowInput),
       createSiteProjectAction(testeleadInput)
     ]);
-    if(generationId)await finishGenerationProgress(generationId,{projectId:leadflow.id,variantProjectIds:[leadflow.id,testelead.id]});
-    return{leadflow,testelead,variants:[leadflow,testelead]};
+    const comparisonId="cmp_"+runId;
+    const [leadflow,testelead]=await Promise.all([
+      updateSiteProject(leadflowRaw.id,{comparisonId,comparisonVariant:"leadflow",comparisonWinner:false}),
+      updateSiteProject(testeleadRaw.id,{comparisonId,comparisonVariant:"testelead",comparisonWinner:false})
+    ]);
+    if(generationId)await finishGenerationProgress(generationId,{projectId:leadflow.id,variantProjectIds:[leadflow.id,testelead.id],comparisonId});
+    return{leadflow,testelead,variants:[leadflow,testelead],comparisonId};
   }catch(error){if(generationId)await failGenerationProgress(generationId,error);throw error}
 }
 
@@ -143,3 +153,5 @@ export async function restorePreviousSiteProjectVersionAction(projectId){
   refreshProject(updated);
   return updated;
 }
+
+export async function chooseSiteVariantAction(input={}){const project=await getSiteProject(String(input.projectId||""));if(!project.comparisonId)throw new Error("Este projeto não pertence a uma comparação A/B.");const {findSiteProjectsByComparison}=await import("../../services/projects/projectStore.js");const variants=await findSiteProjectsByComparison(project.comparisonId);await Promise.all(variants.map(item=>updateSiteProject(item.id,{comparisonWinner:item.id===project.id})));for(const item of variants)refreshProject(item);return{comparisonId:project.comparisonId,winnerId:project.id}}
