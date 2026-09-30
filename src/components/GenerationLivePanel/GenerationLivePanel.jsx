@@ -12,9 +12,9 @@ export default function GenerationLivePanel({generationId,onClose,variants=[]}){
     poll();return()=>{alive=false;clearTimeout(timer)};
   },[generationId]);
   useEffect(()=>{if(!generationId)return;let alive=true,timer;const poll=async()=>{try{const ids={leadflow:generationId+"-a",testelead:generationId+"-b"};const [a,b]=await Promise.all(Object.values(ids).map(id=>fetch("/api/generation-progress/"+encodeURIComponent(id),{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null)));if(alive)setVariantStates(current=>({leadflow:a||current.leadflow,testelead:b||current.testelead}));if(alive&&![a?.status,b?.status].every(x=>["done","error"].includes(x)))timer=setTimeout(poll,650)}catch{if(alive)timer=setTimeout(poll,1200)}};poll();return()=>{alive=false;clearTimeout(timer)}},[generationId]);
+  const [selectedVariant,setSelectedVariant]=useState("leadflow");
   const selectedState=variantStates[selectedVariant]||state;
   const current=selectedState.current||selectedState.events?.[selectedState.events.length-1]||state.current||state.events?.[state.events.length-1];
-  const [selectedVariant,setSelectedVariant]=useState("leadflow");
   const codeEvent=useMemo(()=>[...(state.events||[])].reverse().find(item=>item.code),[state.events]);
   const compareReady=Array.isArray(variants)&&variants.length>1;
   const isRunning=!["done","error"].includes(state.status);
