@@ -187,7 +187,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   </section>;
 
   if(!activeProject)return <main className={s.startPage}>
-    {generationId&&<GenerationLivePanel generationId={generationId} onClose={()=>setGenerationId("")}/>}
+    {generationId&&<GenerationLivePanel generationId={generationId} variants={variants} onClose={()=>setGenerationId("")}/>}
     <section className={s.startHero}><span>✦</span><h1>Criar duas propostas para um lead</h1><p>LeadFlow e TesteLead recebem o mesmo contexto, stack e skills, mas trabalham com liberdade criativa independente. Compare as duas experiências e escolha a melhor.</p></section>
     <form className={s.startCard} onSubmit={createProject}>
       <label><span>Lead</span><select required value={leadId} onChange={e=>setLeadId(e.target.value)}><option value="">Selecione...</option>{leads.map(lead=><option key={lead.id} value={lead.id}>{lead.name} · {lead.city||lead.location||"Local não informado"}</option>)}</select></label>
@@ -209,7 +209,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const quality=activeProject.siteData?.codegenQuality||null;
   const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
-    {generationId&&<GenerationLivePanel generationId={generationId} onClose={()=>setGenerationId("")}/>}
+    {generationId&&<GenerationLivePanel generationId={generationId} variants={variants} onClose={()=>setGenerationId("")}/>}
     <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
     {variants.length>1&&<nav className={s.variantBar}><div><strong>Compare as propostas</strong><span>Mesmo briefing · decisões criativas independentes</span></div>{variants.map((item,index)=>{const variant=item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <button type="button" key={item.id} className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button>})}</nav>}
     <section className={s.builder}>
