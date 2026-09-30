@@ -1038,6 +1038,7 @@ export async function generateSiteFolder(input = {}) {
     effects: normalizeEffects(input.effects),
     skillMode: skillRouting.mode,
     skills: skillRouting.skills,
+    siteVariant: placeData.siteVariant || clean(input.siteVariant, 40).toLowerCase() || "leadflow",
   };
 
   await progress({phase:"architecture",title:"Arquiteto montando o site",detail:"Definindo seções, componentes, hierarquia e contratos de implementação."});
