@@ -978,8 +978,8 @@ export async function generateSiteFolder(input = {}) {
   let aiWarning = "";
   let spec = input.existingSiteData ? normalizeSpec(input.existingSiteData, placeData) : fallbackSpec(placeData);
   try {
-    if (!input.skipAi) {
-      await progress({phase:"creative",title:"Diretor criativo trabalhando",detail:"Definindo conceito, linguagem visual, copy e estratégia comercial."});
+    if (!input.skipAi && process.env.LEADFLOW_ENABLE_LEGACY_CREATIVE==="1") {
+      await progress({phase:"creative",title:"Diretor criativo legado trabalhando",detail:"Definindo conceito, linguagem visual, copy e estratégia comercial."});
       const request = buildAiPrompt(placeData, input.existingSiteData, input.instruction);
       let result;
       try {
@@ -1039,6 +1039,7 @@ export async function generateSiteFolder(input = {}) {
     effects: normalizeEffects(input.effects),
     skillMode: skillRouting.mode,
     skills: skillRouting.skills,
+    sourceDescription: placeData.description,
     siteVariant: placeData.siteVariant || clean(input.siteVariant, 40).toLowerCase() || "leadflow",
   };
 
