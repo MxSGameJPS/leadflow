@@ -924,7 +924,7 @@ export async function generateSiteFolder(input = {}) {
   const name = clean(input.name, 220);
   if (!name) throw new Error("Informe o nome do negócio.");
   await progress({phase:"prepare",title:"Preparando workspace",detail:"Criando a estrutura inicial do projeto."});
-  const folder = await outputFolder(name, input.folderPath);
+  const workspaceName = input.workspaceSuffix ? name + "-" + clean(input.workspaceSuffix, 100) : name;\n  const folder = await outputFolder(workspaceName, input.folderPath);
   const publicDir = path.join(folder.absolutePath, "public");
   await fs.mkdir(path.join(folder.absolutePath, "app"), { recursive: true });
   await fs.mkdir(publicDir, { recursive: true });
