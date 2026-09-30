@@ -215,7 +215,7 @@ function applyPlanCopy(site,plan){
 }
 function architectureRequest(site,instruction,currentPlan,visualImages=[]){
   return {
-    model:roleModel("architect"),siteRole:"architect",temperature:.2,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||120000),retries:0,
+    model:site.siteVariant==="testelead"?"":roleModel("architect"),siteRole:"architect",siteVariant:site.siteVariant||"leadflow",temperature:.2,maxTokens:12000,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_ARCHITECT_MS||120000),retries:0,
     images:Array.isArray(visualImages)?visualImages.slice(0,6):[],
     systemPrompt:[
       "Você é diretor de criação, arquiteto de experiência e estrategista de conversão.",
