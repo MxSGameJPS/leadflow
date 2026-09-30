@@ -44,10 +44,12 @@ export async function createSiteProjectAction(input={}){
 export async function createSiteVariantsAction(input={}){
   const generationId=String(input.generationId||"").trim();
   const runId=(generationId||crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,80);
-  const base={...input,generationId:""};
-  const leadflowInput={...base,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\\n\\n")};
-  const testeleadInput={...base,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\\n\\n")};
-  if(generationId)await startGenerationProgress(generationId,{name:"Comparação A/B",leadId:input.leadId||null,mode:"variants"});
+  const leadflowGenerationId=generationId?generationId+"-a":"";
+  const testeleadGenerationId=generationId?generationId+"-b":"";
+  const base={...input};
+  const leadflowInput={...base,generationId:leadflowGenerationId,siteVariant:"leadflow",folderPath:"",workspaceSuffix:"leadflow-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante LeadFlow."].filter(Boolean).join("\\n\\n")};
+  const testeleadInput={...base,generationId:testeleadGenerationId,siteVariant:"testelead",folderPath:"",workspaceSuffix:"testelead-"+runId,instruction:[String(input.instruction||"").trim(),"Crie uma proposta autoral completa com liberdade criativa total. Esta é a variante TesteLead. Não imite outra variante; tome suas próprias decisões de produto, conteúdo e design."].filter(Boolean).join("\\n\\n")};
+  if(generationId)await startGenerationProgress(generationId,{name:"Comparação A/B",leadId:input.leadId||null,mode:"variants",variantGenerationIds:{leadflow:leadflowGenerationId,testelead:testeleadGenerationId}});
   try{
     if(generationId)await Promise.all([
       reportGenerationProgress(generationId,{phase:"variant-a",title:"Proposta A · LeadFlow",detail:"LeadFlow iniciou seu builder autônomo.",kind:"model"}),
