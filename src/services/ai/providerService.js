@@ -83,7 +83,7 @@ function authRequest(provider, url, headers) {
 function retryableProviderError(error) {
   const message = String(error?.message || "");
   if (error?.name === "AbortError") return true;
-  if (/HTTP (429|502|503|504):/i.test(message)) return true;
+  if (/HTTP (429|499|502|503|504):/i.test(message)) return true;
   if (["ECONNRESET","ETIMEDOUT","EAI_AGAIN"].includes(error?.cause?.code)) return true;
   return false;
 }
@@ -228,14 +228,18 @@ export async function generateResilientWithDefaultProvider(request={}){
   if(!request.isolatedRouting){for(const provider of providers){if(provider.id!==primary.id&&provider.model)routes.push({provider,model:provider.model})}}
   const unique=routes.filter((route,index,list)=>list.findIndex(item=>item.provider.id===route.provider.id&&item.model===route.model)===index);
   const attempts=[];let lastError=null;
-  const deadline=request.disableTools ? Date.now()+Math.round(clampNumber(request.timeoutMs ?? primary.timeout,120000,1000,900000)) : Infinity;
+  const perAttemptTimeout=Math.round(clampNumber(request.timeoutMs ?? primary.timeout,120000,1000,900000));
+  const requestedRetries=Math.round(clampNumber(request.retries ?? 0,0,0,3));
+  const deadline=request.disableTools ? Date.now()+(perAttemptTimeout*(requestedRetries+1))+(requestedRetries*5000) : Infinity;
   for(let index=0;index<unique.length;index++){
     const remaining=deadline-Date.now();
     if(remaining<1000)break;
     const {provider,model}=unique[index],started=Date.now();
     try{
       request.onAttempt?.({status:"start",model,providerName:provider.name,index:index+1,total:unique.length});
-      const result=await generateInternal(provider,{...request,model,...(request.disableTools?{timeoutMs:remaining,retries:0}:{retries:index===0?(request.retries??0):0})});
+      const routeRetries=index===0?requestedRetries:0;
+      const routeTimeout=request.disableTools?Math.min(perAttemptTimeout,remaining):request.timeoutMs;
+      const result=await generateInternal(provider,{...request,model,timeoutMs:routeTimeout,retries:routeRetries});
       const item={model,status:"success",elapsedMs:Date.now()-started,providerName:result.providerName};
       attempts.push(item);request.onAttempt?.(item);
       return{...result,routingAttempts:attempts,fallbackUsed:index>0};
