@@ -20,6 +20,7 @@ const TABS = [
   ["site", "Site"],
   ["sale", "Venda"],
   ["schedule", "Agendar"],
+  ["arena", "Prompt Arena"],
 ];
 
 const UNIVERSAL_OBJECTIONS = [
@@ -130,6 +131,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [objectionAnalysis, setObjectionAnalysis] = useState(initialWorkspace.objectionAssistant || {});
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [arenaType, setArenaType] = useState("landing");
 
   useEffect(() => {
     setWorkspace(initialWorkspace);
@@ -643,6 +645,41 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
     </section>;
   }
 
+  function arenaPrompt() {
+    const business = lead.name || "a marca";
+    const segment = lead.segment || "seu segmento";
+    const location = [lead.city, lead.location].filter(Boolean).join(", ");
+    const audience = qualification.targetAudience || qualification.audience || (location ? `clientes de ${segment} em ${location}` : `clientes de ${segment}`);
+    const goal = qualification.primaryGoal || qualification.goal || "gerar novos contatos e oportunidades comerciais";
+
+    if (arenaType === "store") {
+      return `Build a beautiful e-commerce storefront for ${business} selling products from the ${segment} business to ${audience}. Include a striking home page with featured collections, a product grid with filters and sorting, rich product detail pages with image galleries and reviews, a slide-out cart, and a streamlined checkout flow. Use elegant typography, premium product imagery, tasteful animations, and persistent cart state, and seed it with realistic demo products, prices, and reviews so the shop feels open for business — all fully responsive and production-ready.`;
+    }
+
+    return `Create a premium, modern, conversion-focused landing page for ${business} targeting ${audience}, with the goal of ${goal}. Design it with the polish of leading tech brands—clean typography, generous whitespace, refined gradients, subtle glassmorphism, premium visuals, and smooth, elegant animations including scroll reveals, staggered entrances, hover effects, ambient motion, and interactive microinteractions. Include a complete landing page structure (sticky navbar, hero, social proof, features, product showcase, benefits, testimonials, pricing, FAQ, CTA, and footer), ensuring it is fully responsive, accessible, mobile-first, visually stunning, and production-ready with compelling copy tailored to the brand.`;
+  }
+
+  function renderArena() {
+    const prompt = arenaPrompt();
+    return <section className={s.section}>
+      <div className={s.arenaPanel}>
+        <div className={s.arenaHead}><div><span className={s.aiBadge}>ARENA</span><h3>Gerador de prompt</h3><p>Gera o prompt no padrão Arena usando os dados já cadastrados neste lead. Revise antes de enviar, principalmente quando o modelo pedir produtos, preços, avaliações ou outras informações demonstrativas.</p></div></div>
+        <div className={s.arenaType}>
+          <button className={arenaType === "landing" ? s.activePill : ""} onClick={() => setArenaType("landing")}>Landing Page</button>
+          <button className={arenaType === "store" ? s.activePill : ""} onClick={() => setArenaType("store")}>Loja online</button>
+        </div>
+        <div className={s.arenaFacts}>
+          <div><span>Marca</span><strong>{business}</strong></div>
+          <div><span>Segmento</span><strong>{segment}</strong></div>
+          <div><span>Público usado</span><strong>{audience}</strong></div>
+          {arenaType === "landing" && <div><span>Objetivo usado</span><strong>{goal}</strong></div>}
+        </div>
+        <label className={s.arenaOutput}><span>Prompt pronto para o Arena</span><textarea readOnly value={prompt} /></label>
+        <div className={s.buttonRow}><button className={s.primary} onClick={() => copy(prompt, "Prompt do Arena copiado.")}>Copiar prompt</button></div>
+      </div>
+    </section>;
+  }
+
   function renderSchedule() {
     return <section className={s.section}><h3>Novo agendamento</h3><form className={s.scheduleForm} onSubmit={saveAppointment}>
       <label><span>Tipo</span><select value={appointment.type} onChange={event => setAppointment(current => ({ ...current, type: event.target.value }))}><option>Ligação</option><option>Reunião</option><option>Apresentação</option><option>Follow-up</option><option>Envio de proposta</option></select></label>
@@ -660,7 +697,8 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
       : tab === "objections" ? renderObjections()
         : tab === "site" ? renderSite()
           : tab === "sale" ? renderSale()
-            : renderSchedule();
+            : tab === "schedule" ? renderSchedule()
+              : renderArena();
 
   return <main className={s.page}>
     <div className={s.breadcrumb}><a href="/crm">← CRM</a><span>/</span><strong>{lead.name}</strong></div>
