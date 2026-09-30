@@ -633,10 +633,10 @@ export async function generateUniqueSiteCode(options={}){
     }
   }
   plan=normalizePlan(plan,site);
-  await progress({phase:"architecture",title:"Arquitetura definida",detail:plan.components.length+" componentes planejados."});
+  await progress({phase:"architecture",title:"Arquitetura definida",detail:plan.components.length+" componentes planejados: "+plan.components.map(item=>item.name).join(", ")+".",kind:"agent"});
   applyPlanCopy(site,plan);
   const componentConcurrency=Math.max(1,Math.min(3,Number(process.env.LEADFLOW_SITE_COMPONENT_CONCURRENCY||2)));
-  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Criando "+component.name,detail:component.role||"Gerando JSX e CSS Module.",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi,[],event=>progress({phase:"ai",title:event.status==="success"?component.name+" · modelo concluiu":event.status==="error"?component.name+" · modelo falhou":component.name+" · chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model",file:"components/"+component.name+"/"+component.name+".jsx"}),event=>progress({phase:"code",title:component.name+" · fallback seguro",detail:"O worker não respondeu ou retornou código inválido. O pipeline preservou a geração usando o plano arquitetural.",kind:"fallback",file:"components/"+component.name+"/"+component.name+".jsx"}));await progress({phase:"code",title:component.name+" concluído",detail:"JSX e CSS Module gerados.",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
+  const sources=await concurrent(plan.components,componentConcurrency,async function(component){await progress({phase:"code",title:"Agente iniciou "+component.name,detail:(component.role||"Componente")+" · preparando JSX e CSS Module.",kind:"agent",file:"components/"+component.name+"/"+component.name+".jsx"});const source=await generateComponent(site,plan,component,skipAi,[],event=>progress({phase:"ai",title:event.status==="success"?component.name+" · modelo concluiu":event.status==="error"?component.name+" · modelo falhou":component.name+" · chamando modelo",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model",file:"components/"+component.name+"/"+component.name+".jsx"}),event=>progress({phase:"code",title:component.name+" · fallback seguro",detail:"O worker não respondeu ou retornou código inválido. O pipeline preservou a geração usando o plano arquitetural.",kind:"fallback",file:"components/"+component.name+"/"+component.name+".jsx"}));await progress({phase:"code",title:"Created "+component.name+".jsx + "+component.name+".module.css",detail:"Arquivos gravados pelo agente de componente.",kind:"file",file:"components/"+component.name+"/"+component.name+".module.css",code:String(source.jsx||"").slice(0,2200)});return source});
   if(!skipAi){
     await progress({phase:"review",title:"Revisando código",detail:"O reviewer está procurando inconsistências antes do build."});
     let review=[];
@@ -651,14 +651,15 @@ export async function generateUniqueSiteCode(options={}){
       });
     }
   }
-  await progress({phase:"files",title:"Montando estrutura de arquivos",detail:"Escrevendo app, componentes, estilos, dados e configuração.",file:"app/page.jsx"});
+  await progress({phase:"files",title:"Escrevendo projeto no workspace",detail:"Criando app/page.jsx, layout, tema, dados, helpers e componentes.",kind:"command",file:"app/page.jsx"});
   await writeProject(root,folderName,site,plan,sources);
   let errors=await validateProject(root,plan);
   if(errors.length)throw new Error("Projeto reprovado pelas regras de engenharia: "+errors.join(" | "));
   let build={ok:true,log:"Build ignorado."};
   if(options.validateBuild!==false&&!skipAi){
-    await progress({phase:"build",title:"Executando Next.js build",detail:"Validando imports, sintaxe, renderização e bundle."});
+    await progress({phase:"build",title:"> npm run build",detail:"Validando imports, sintaxe, renderização e bundle.",kind:"command"});
     build=await runBuild(root);
+    await progress({phase:"build",title:build.ok?"✓ Build concluído":"Build encontrou erros",detail:clean(build.log,1400),kind:"command"});
     if(!build.ok){
       const affected=componentNamesFromBuildLog(build.log,plan);
       if(affected.length){
@@ -679,7 +680,7 @@ export async function generateUniqueSiteCode(options={}){
 
   let quality={available:false,pass:true,score:null,threshold:Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||78),judgeUsed:false,skippedReason:skipAi?"Auditoria visual ignorada no modo de teste/fallback.":"Build visual não executado."};
   if(build.ok&&!skipAi&&options.visualQa!==false){
-    await progress({phase:"qa",title:"Abrindo site no Chromium",detail:"Auditando desktop e mobile no navegador real."});
+    await progress({phase:"qa",title:"Abrindo preview no Chromium",detail:"Capturando e auditando o site real em desktop e mobile.",kind:"browser"});
     quality=await runVisualQualityAudit({root,nextBin:build.nextBin||await resolveBuildNext(root),site,plan});
     const repair=quality.available
       ? quality.issues.filter(issue=>["high","medium"].includes(issue.severity)).slice(0,4)
