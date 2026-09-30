@@ -28,7 +28,8 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[instruction,setInstruction]=useState("");
   const[busy,setBusy]=useState("");
   const[notice,setNotice]=useState("");
-  const[activeProject,setActiveProject]=useState(project);\n  const[variants,setVariants]=useState(project?[project]:[]);
+  const[activeProject,setActiveProject]=useState(project);
+  const[variants,setVariants]=useState(project?[project]:[]);
   const[device,setDevice]=useState("desktop");
   const[effects,setEffects]=useState(project&&Array.isArray(project.effects)?project.effects:DEFAULT_EFFECTS);
   const[skillMode,setSkillMode]=useState(project?.skillMode==="manual"?"manual":"auto");
@@ -95,7 +96,9 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
       // O efeito roda somente depois que o React já pintou o builder ao vivo.
       await new Promise(resolve=>setTimeout(resolve,30));
       try{
-        const result=await createSiteVariantsAction(pendingCreate);\n        const created=result.leadflow;\n        setVariants(result.variants||[created]);
+        const result=await createSiteVariantsAction(pendingCreate);
+        const created=result.leadflow;
+        setVariants(result.variants||[created]);
         if(!alive)return;
         setActiveProject(created);setEffects(created.effects||[]);setSkillMode(created.skillMode||"auto");setSelectedSkills(created.skills||[]);setPendingReferences([]);setInstruction("");
         router.push("/criar-site?lead="+encodeURIComponent(pendingCreate.leadId)+"&project="+encodeURIComponent(created.id));router.refresh();
@@ -200,14 +203,16 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     </form>
   </main>;
 
-  const previewSrc="/preview-internal/"+activeProject.id+"?v="+activeProject.version;\n  const activeVariant=activeProject?.generatorInput?.siteVariant||activeProject?.siteData?.siteVariant||"leadflow";
+  const previewSrc="/preview-internal/"+activeProject.id+"?v="+activeProject.version;
+  const activeVariant=activeProject?.generatorInput?.siteVariant||activeProject?.siteData?.siteVariant||"leadflow";
   const history=activeProject.instructions||[];
   const quality=activeProject.siteData?.codegenQuality||null;
   const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
     {generationId&&<GenerationLivePanel generationId={generationId} onClose={()=>setGenerationId("")}/>}
     <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
-    {variants.length>1&&<nav className={s.variantBar}><div><strong>Compare as propostas</strong><span>Mesmo briefing · decisões criativas independentes</span></div>{variants.map((item,index)=>{const variant=item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <button type="button" key={item.id} className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button>})}</nav>}\n    <section className={s.builder}>
+    {variants.length>1&&<nav className={s.variantBar}><div><strong>Compare as propostas</strong><span>Mesmo briefing · decisões criativas independentes</span></div>{variants.map((item,index)=>{const variant=item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <button type="button" key={item.id} className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button>})}</nav>}
+    <section className={s.builder}>
       <aside className={s.chatPanel}>
         <div className={s.context}><span>Projeto ativo · {activeVariant==="testelead"?"TesteLead":"LeadFlow"}</span><strong>{activeProject.segment||"Landing page"}</strong><small>{activeProject.city||"Local não informado"}</small></div>
         <div className={s.history}>{history.map((item,index)=><div className={s.message} key={index}><small>{index===0?"Briefing inicial":"Alteração "+index}</small><p>{item}</p></div>)}</div>
