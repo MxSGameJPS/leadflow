@@ -15,8 +15,7 @@ const VALID_EFFECTS=new Set(["entrance-motion","section-reveal","parallax-hero",
 function normalizeEffects(value,fallback=DEFAULT_EFFECTS){if(!Array.isArray(value))return[...fallback];return[...new Set(value.map(item=>String(item||"").trim()).filter(item=>VALID_EFFECTS.has(item)))]}
 function sameList(a=[],b=[]){return JSON.stringify([...a].sort())===JSON.stringify([...b].sort())}
 function refreshProject(project){revalidatePath("/projetos");revalidatePath("/criar-site");revalidatePath("/preview-internal/"+project.id);if(project.leadId)revalidatePath("/crm/"+project.leadId)}
-function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("
-")}
+function leadDescription(lead){return[lead?.problem,lead?.offer,lead?.bio,lead?.instagram?"Instagram do negócio: "+lead.instagram:""].filter(Boolean).join("\\n")}
 function referenceScopeFor(projectOrLead){if(projectOrLead?.referenceScope)return projectOrLead.referenceScope;if(projectOrLead?.leadId)return"lead:"+projectOrLead.leadId;if(projectOrLead?.id)return"lead:"+projectOrLead.id;return""}
 function generatorInputFor({lead,input,mode,assetUrls=[],effects=[],skillMode="auto",skills=[]}){return{siteVariant:String(input.siteVariant||"leadflow").toLowerCase(),name:lead?.name||String(input.name||"").trim(),segment:lead?.segment||input.segment,city:lead?.city||lead?.location||input.city,address:lead?.address||"",phone:lead?.phone||lead?.whatsapp||"",placeId:lead?.externalId||"",mapsLink:lead?.mapsLink||(mode==="google"?input.source:""),existingWebsite:lead?.site||"",instagram:lead?.instagram||"",rating:lead?.googleRating||"",reviews:lead?.googleReviews||"",description:mode==="lead"?leadDescription(lead):input.source,template:input.template||"landing",assetUrls,effects,skillMode,skills}}
 
