@@ -311,7 +311,7 @@ function componentRequest(site,plan,component,errors){
   const previous=index>0?plan.components[index-1]:null;
   const next=index>=0&&index<plan.components.length-1?plan.components[index+1]:null;
   return {
-    model:roleModel("code"),siteRole:"code",temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
+    model:roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.64,maxTokens:6500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||90000),retries:0,
     systemPrompt:[
       "Você é engenheiro front-end sênior e designer de interface.",
       "Escreva um componente específico para este lead, não um bloco de template.",
@@ -322,9 +322,9 @@ function componentRequest(site,plan,component,errors){
       "Pode importar hooks de react e utilidades locais relativas. Use img em vez de next/image.",
       "Se usar hooks React, window, document, requestAnimationFrame, listeners ou qualquer API de browser, a PRIMEIRA linha do JSX deve ser exatamente \"use client\";.",
       "Se não precisar de interatividade no cliente, mantenha o componente como Server Component.",
-      "O componente recebe a prop site. Use somente fatos existentes em site.",
+      "O componente recebe a prop site. Os dados reais são contexto; em modo prévia você pode criar conteúdo e dados demonstrativos coerentes para tornar a experiência completa.",
       "Use as variáveis semânticas globais do design system antes de inventar valores locais. Valores únicos são permitidos quando fazem parte do visualHook específico da seção.",
-      "Não use imagens placeholder, Lorem Ipsum, domínios de imagem aleatórios ou fotos externas hardcoded. Use exclusivamente site.images e fatos presentes em site.",
+      "Não use Lorem Ipsum nem placeholders visuais pobres. Prefira site.images; conteúdo textual, produtos, preços, avaliações e ofertas demonstrativas podem ser criados livremente para a prévia.",
       "Todo visual fica no CSS Module. CSS deve ser mobile-first; amplie com @media (min-width:...).",
       "Em 320px, 360px e 390px: zero overflow horizontal; evite larguras fixas; prefira min(), max(), clamp(), minmax() e fluxo normal para conteúdo essencial. Composição desktop complexa deve ter uma transformação mobile explicitamente coerente.",
       "Acessibilidade, foco visível e touch targets são obrigatórios.",
@@ -338,7 +338,7 @@ function componentRequest(site,plan,component,errors){
       "CONTEXTO ADJACENTE: "+JSON.stringify({previous:previous?{name:previous.name,role:previous.role,visualHook:previous.visualHook}:null,next:next?{name:next.name,role:next.role,visualHook:next.visualHook}:null}),
       "GOAL: implemente fielmente este componente do dossiê, com identidade própria e transição coerente com os componentes vizinhos.",
       "MUST HOLD: "+JSON.stringify({component,designSystem:plan.designSystem,responsiveStrategy:plan.responsiveStrategy}),
-      "OUT OF SCOPE: não redefina a arquitetura, não invente conteúdo, não troque o stack, não simplifique a composição para cards genéricos e não altere outros componentes.",
+      "OUT OF SCOPE: não troque o stack, não simplifique a composição para cards genéricos e não altere outros componentes. Conteúdo demonstrativo é permitido.",
       "DONE WHEN: JSX e CSS Module compilam, cumprem acceptanceCriteria, funcionam em 320/360/390/768/1024/1440px, não geram overflow horizontal, preservam acessibilidade e parecem parte do mesmo sistema visual.",
       "Variáveis CSS disponíveis: --color-primary, --color-accent, --color-background, --color-surface, --color-text, --color-muted, --font-display, --font-body, --space-section, --space-section-compact, --space-gutter, --content-max, --content-narrow, --radius-sm, --radius-md, --radius-lg, --radius-pill, --shadow-soft, --shadow-elevated, --transition-fast, --transition-base, --focus-ring, --button-height, --reading-measure.",
       "Para links use, quando necessário: import { actionHref } from \"../../lib/siteActions.js\"; e chame sempre actionHref(action, site), por exemplo actionHref(site.ctas?.primary?.action, site).",
@@ -355,7 +355,7 @@ function componentPatchRequest(site,plan,component,currentSource,instruction,err
   const jsxPath="components/"+component.name+"/"+component.name+".jsx";
   const cssPath="components/"+component.name+"/"+component.name+".module.css";
   return{
-    model:roleModel("code"),siteRole:"code",temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
+    model:roleModel("code"),siteRole:"code",siteVariant:site.siteVariant||"leadflow",temperature:.28,maxTokens:7500,timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_CODE_MS||240000),retries:1,
     systemPrompt:[
       "Você é um engenheiro sênior editando código existente com precisão cirúrgica.",
       "Retorne SOMENTE unified git diff. Não retorne arquivos completos, markdown explicativo, JSON ou comentários fora do diff.",
@@ -513,7 +513,7 @@ async function reviewSources(site,plan,sources,progress){
     return {name:component.name,role:component.role,jsx:clean(sources[index]?.jsx,3200),css:clean(sources[index]?.css,4200)};
   });
   const result=await generateWithDefaultProvider({
-    model:roleModel("review"),siteRole:"review",
+    model:roleModel("review"),siteRole:"review",siteVariant:site.siteVariant||"leadflow",
     temperature:.22,
     maxTokens:5000,
     timeoutMs:Number(process.env.LEADFLOW_SITE_TIMEOUT_REVIEW_MS||90000),
@@ -522,7 +522,7 @@ async function reviewSources(site,plan,sources,progress){
       "Você é o revisor final de uma agência premium.",
       "Revise o site como produto comercial real, não como exercício de código.",
       "Procure aparência genérica, repetição de cards, baixa personalidade, problemas de hierarquia, mobile fraco, CTA escondido, acessibilidade e inconsistência entre componentes.",
-      "Não peça informações que não existem e não invente fatos.",
+      "Avalie a proposta como prévia comercial; conteúdo demonstrativo é permitido e não deve ser penalizado.",
       "Retorne somente JSON válido no formato solicitado."
     ].join(" "),
     prompt:[
@@ -614,7 +614,7 @@ export async function generateUniqueSiteCode(options={}){
   if(skipAi)plan=fallbackPlan(site);
   else{
     await progress({phase:"architecture",title:"Projetando arquitetura",detail:"A IA está decidindo a composição e os componentes únicos deste site."});
-    const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages);
+    const request=architectureRequest(site,options.instruction||"",options.currentPlan||null,visualImages); request.siteVariant=site.siteVariant||"leadflow";
     request.onAttempt=event=>progress({phase:"ai",title:event.status==="success"?"Arquiteto respondeu":event.status==="error"?"Arquiteto falhou — fallback":"Chamando arquiteto",detail:[event.model,event.elapsedMs?Math.round(event.elapsedMs/1000)+"s":"",event.error||""].filter(Boolean).join(" · "),kind:"model"});
     let firstError=null,result=null;
     try{
