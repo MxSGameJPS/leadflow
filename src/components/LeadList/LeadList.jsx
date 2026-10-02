@@ -8,6 +8,7 @@ import { buildLeadsJson, buildLeadsVCard, leadExportFilename } from "../../servi
 import { importTextAction } from "../../app/actions/leads.js";
 import { addPlacesToCrmAction, listCitiesAction, searchPlacesAction } from "../../app/actions/places.js";
 import s from "./LeadList.module.css";
+import {uniquePlaces,filterPlaceResults,searchKey} from "../../services/places/searchResults.js";
 
 const STAGE_LABEL = {
   novo: "Base",
@@ -52,15 +53,15 @@ function whatsappLink(phone) {
   return `https://wa.me/${digits}`;
 }
 
-function ResultCard({ item, checked, onToggle, onAdd, busy }) {
+function ResultCard({ item, checked, onToggle, onAdd, busy, saved }) {
   const wa = item.possibleWhatsApp ? whatsappLink(item.phone) : null;
 
   return <article className={`${s.resultCard} ${checked ? s.resultSelected : ""}`}>
     <div className={s.resultTop}>
-      <button type="button" className={s.check} aria-label={`Selecionar ${item.name}`} onClick={onToggle}>{checked ? "✓" : ""}</button>
+      <button type="button" className={s.check} aria-label={`Selecionar ${item.name}`} aria-pressed={checked} onClick={onToggle}>{checked ? "✓" : ""}</button>
       <div className={s.resultIdentity}>
         <strong title={item.name}>{item.name}</strong>
-        <div className={s.badges}><span>{item.segment}</span><b className={item.grade === "A" ? s.hot : s.warm}>{item.grade === "A" ? "Quente" : "Oportunidade"}</b></div>
+        <div className={s.badges}><span>{item.segment}</span>{saved&&<span>Já está na base</span>}<b className={item.grade === "A" ? s.hot : s.warm}>{item.grade === "A" ? "Quente" : "Oportunidade"}</b></div>
       </div>
       <div className={s.resultScore}><strong>{item.score}</strong><small>nota {item.grade}</small></div>
     </div>
@@ -76,8 +77,8 @@ function ResultCard({ item, checked, onToggle, onAdd, busy }) {
 
     <div className={s.resultHint}>{item.problem}</div>
     <div className={s.resultActions}>
-      <button type="button" onClick={onAdd} disabled={busy}>{busy ? "Enviando…" : "Enviar para CRM"}</button>
-      {wa && <a href={wa} target="_blank" rel="noopener noreferrer">Testar WhatsApp</a>}
+      <button type="button" onClick={onAdd} disabled={busy}>{busy ? "Enviando…" : saved ? "Atualizar no CRM" : "Enviar para CRM"}</button>
+      {wa && <a href={wa} target="_blank" rel="noopener noreferrer">Abrir possível WhatsApp</a>}
       {item.email && <a href={"mailto:" + item.email}>E-mail</a>}
       {item.site && <a href={item.site} target="_blank" rel="noopener noreferrer">Abrir presença</a>}
       {item.mapsLink && <a href={item.mapsLink} target="_blank" rel="noopener noreferrer">Maps</a>}
@@ -99,6 +100,12 @@ export default function LeadList({ initialLeads = [] }) {
   const [loadingCities, setLoadingCities] = useState(true);
   const [citiesError, setCitiesError] = useState("");
   const [places, setPlaces] = useState([]);
+  const [resultFilters,setResultFilters]=useState(null);
+  const [hasSearched,setHasSearched]=useState(false);
+  const [resultQuery,setResultQuery]=useState("");
+  const [resultPresence,setResultPresence]=useState("all");
+  const [resultSort,setResultSort]=useState("score");
+  const [citiesRetry,setCitiesRetry]=useState(0);
   const [selected, setSelected] = useState(() => new Set());
   const [searching, setSearching] = useState(false);
   const [addingIds, setAddingIds] = useState(() => new Set());
@@ -137,7 +144,7 @@ export default function LeadList({ initialLeads = [] }) {
       });
 
     return () => { active = false; };
-  }, [filters.country, filters.state]);
+  }, [filters.country, filters.state,citiesRetry]);
 
   const counts = useMemo(() => ({
     total: leads.length,
@@ -153,13 +160,15 @@ export default function LeadList({ initialLeads = [] }) {
     if (contact === "no-contact" && (item.whatsapp || item.phone || item.email || item.instagram)) return false;
     if (contact === "no-site" && item.site && !item.weakSite) return false;
     if (search) {
-      const q = search.toLocaleLowerCase("pt-BR");
-      const text = [item.name, item.segment, item.city, item.location, item.phone, item.whatsapp, item.email, item.site].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
-      if (!text.includes(q)) return false;
+      const q = searchKey(search);
+      const text = [item.name, item.segment, item.city, item.location, item.phone, item.whatsapp, item.email, item.site].filter(Boolean).join(" ");
+      if (!searchKey(text).includes(q)) return false;
     }
     return true;
   }), [leads, search, contact, grade]);
 
+  const resultVisible=useMemo(()=>filterPlaceResults(places,{query:resultQuery,presence:resultPresence,sort:resultSort}),[places,resultQuery,resultPresence,resultSort]);
+  const knownIds=useMemo(()=>new Set(leads.map(item=>item.externalId).filter(Boolean)),[leads]);
   const selectedItems = useMemo(() => places.filter(item => selected.has(item.placeId)), [places, selected]);
   const withoutOwnSite = useMemo(() => places.filter(item => !item.hasOwnSite).length, [places]);
 
@@ -171,22 +180,28 @@ export default function LeadList({ initialLeads = [] }) {
         next.state = value === "BR" ? "RS" : "";
       }
       if (field === "state") next.city = "";
+      if (["country","state","city"].includes(field)) next.neighborhood="";
       return next;
     });
   }
 
   async function runPlacesSearch(event) {
     event.preventDefault();
+    if(searching || addingIds.size) return;
+    const snapshot = { ...filters };
     setSearching(true);
     setPlacesNotice("");
-    setSelected(new Set());
     try {
-      const result = await searchPlacesAction(filters);
-      setPlaces(result.results || []);
+      const result = await searchPlacesAction(snapshot);
+      setPlaces(uniquePlaces(result.results || []));
+      setSelected(new Set());
+      setResultFilters(snapshot);
+      setHasSearched(true);
+      setResultQuery("");
+      setResultPresence("all");
       setPlacesNotice(`${result.count} estabelecimentos encontrados para “${result.query}”.`);
     } catch (error) {
-      setPlaces([]);
-      setPlacesNotice("Erro na busca: " + error.message);
+      setPlacesNotice("Erro na busca: " + error.message + (places.length ? " Os resultados anteriores foram preservados." : ""));
     } finally {
       setSearching(false);
     }
@@ -201,7 +216,7 @@ export default function LeadList({ initialLeads = [] }) {
   }
 
   function toggleAllPlaces() {
-    setSelected(current => current.size === places.length ? new Set() : new Set(places.map(item => item.placeId)));
+    setSelected(current => resultVisible.every(item=>current.has(item.placeId)) ? new Set([...current].filter(id=>!resultVisible.some(item=>item.placeId===id))) : new Set([...current,...resultVisible.map(item=>item.placeId)]));
   }
 
   function downloadText(content, filename, mimeType) {
@@ -232,8 +247,8 @@ export default function LeadList({ initialLeads = [] }) {
 
   function exportPlaces(items, scope) {
     try {
-      const csv = buildPlacesCsv(items, filters);
-      downloadText(csv, placesCsvFilename(filters, scope), "text/csv;charset=utf-8");
+      const csv = buildPlacesCsv(items, resultFilters||filters);
+      downloadText(csv, placesCsvFilename(resultFilters||filters, scope), "text/csv;charset=utf-8");
       setPlacesNotice(`${items.length} leads exportados em CSV${scope === "selecionados" ? " a partir da seleção" : " a partir da busca"}.`);
     } catch (error) {
       setPlacesNotice("Erro ao exportar: " + error.message);
@@ -241,12 +256,13 @@ export default function LeadList({ initialLeads = [] }) {
   }
 
   async function sendPlacesToCrm(items) {
+    if(searching||items.some(item=>addingIds.has(item.placeId)))return;
     const ids = items.map(item => item.placeId);
     setAddingIds(current => new Set([...current, ...ids]));
     setPlacesNotice("");
     try {
       const result = await addPlacesToCrmAction(items);
-      setPlacesNotice(`${result.added} novos leads enviados ao CRM · ${result.updated} registros atualizados.`);
+      setPlacesNotice(`${result.added} novos leads enviados ao CRM · ${result.updated} registros atualizados.${result.warning?" "+result.warning:""}`);
       setSelected(current => {
         const next = new Set(current);
         ids.forEach(id => next.delete(id));
@@ -304,33 +320,38 @@ export default function LeadList({ initialLeads = [] }) {
           ? <select required disabled={cityDisabled} value={filters.city} onChange={event => updateFilter("city", event.target.value)}><option value="">{loadingCities ? "Carregando cidades…" : citiesError ? "Falha ao carregar cidades" : "Selecione a cidade"}</option>{cities.map(city => <option key={city} value={city}>{city}</option>)}</select>
           : <input required value={filters.city} onChange={event => updateFilter("city", event.target.value)} placeholder="Informe a cidade" />}</label>
         <label><span>Bairro opcional</span><input value={filters.neighborhood} onChange={event => updateFilter("neighborhood", event.target.value)} placeholder="Ex.: Centro" /></label>
-        <label><span>Nicho</span><select value={filters.category} onChange={event => updateFilter("category", event.target.value)}>{CATEGORIES.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
-        <button className={s.searchButton} type="submit" disabled={searching || !filters.city.trim() || cityDisabled}>{searching ? "Buscando…" : "Buscar"}</button>
+        <label><span>Nicho</span><input required list="lead-niches" value={filters.category} onChange={event=>updateFilter("category",event.target.value)} placeholder="Digite ou escolha um nicho"/><datalist id="lead-niches">{CATEGORIES.map(item=><option key={item} value={item}/>)}</datalist></label>
+        <button className={s.searchButton} type="submit" disabled={searching || addingIds.size>0 || !filters.city.trim() || !filters.category.trim() || cityDisabled}>{searching ? "Buscando…" : "Buscar"}</button>
       </form>
-      {citiesError && filters.country === "BR" && <div className={s.cityError}>Não foi possível carregar as cidades pelo IBGE: {citiesError}</div>}
-      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>Cidades do Brasil: API pública do IBGE · Leads: scraper local do Google Maps.</small></div>
+      {citiesError && filters.country === "BR" && <div className={s.cityError}>Não foi possível carregar as cidades pelo IBGE: {citiesError} <button type="button" onClick={()=>setCitiesRetry(value=>value+1)}>Tentar novamente</button></div>}
+      <div className={s.quantityRow}><span>Quantidade</span>{[20, 40, 60].map(value => <button type="button" key={value} className={filters.count === value ? s.quantityActive : ""} onClick={() => updateFilter("count", value)}>{value}</button>)}<small>Até a quantidade escolhida. A disponibilidade depende da cidade e do nicho.</small></div>
     </section>
 
+    {searching&&<div className={s.searchStatus} role="status"><strong>Buscando empresas…</strong><span>A busca pode levar alguns minutos. Os resultados anteriores continuam disponíveis.</span></div>}
+    {hasSearched&&!places.length&&!searching&&<div className={s.empty}>Nenhuma empresa encontrada. Tente outro nicho ou remova o bairro.</div>}
     {placesNotice && <div className={placesNotice.startsWith("Erro") ? s.error : s.notice}>{placesNotice}</div>}
 
     {places.length > 0 && <section className={s.resultsSection}>
+      <div className={s.resultContext}><strong>{resultFilters?.category} · {resultFilters?.city} / {resultFilters?.state}</strong><span>Resultados da última busca concluída</span></div>
+      <div className={s.resultFilters}><input aria-label="Buscar nos resultados" value={resultQuery} onChange={event=>setResultQuery(event.target.value)} placeholder="Filtrar por nome ou endereço"/><select aria-label="Filtrar resultados" value={resultPresence} onChange={event=>setResultPresence(event.target.value)}><option value="all">Todas as empresas</option><option value="no-site">Sem site próprio</option><option value="phone">Com telefone</option></select><select aria-label="Ordenar resultados" value={resultSort} onChange={event=>setResultSort(event.target.value)}><option value="score">Maior score</option><option value="name">Nome</option><option value="reviews">Mais avaliações</option></select><span>{resultVisible.length} de {places.length} exibidos</span></div>
       <div className={s.resultsHeader}>
         <div><strong>{places.length}</strong><span>resultados</span><strong className={s.opportunityNumber}>{withoutOwnSite}</strong><span>sem site próprio</span></div>
         <div>
-          <button type="button" onClick={toggleAllPlaces}>{selected.size === places.length ? "Limpar seleção" : "Selecionar todos"}</button>
-          <button type="button" onClick={() => exportPlaces(places, "todos")}>Exportar CSV ({places.length})</button>
+          <button type="button" onClick={toggleAllPlaces} disabled={!resultVisible.length}>{resultVisible.length>0&&resultVisible.every(item=>selected.has(item.placeId)) ? "Limpar seleção" : "Selecionar todos"}</button>
+          <button type="button" disabled={!resultVisible.length} onClick={() => exportPlaces(resultVisible, "filtrados")}>Exportar CSV ({resultVisible.length})</button>
           <button type="button" disabled={!selectedItems.length} onClick={() => exportPlaces(selectedItems, "selecionados")}>Exportar selecionados ({selectedItems.length})</button>
-          <button type="button" className={s.sendSelected} disabled={!selectedItems.length || selectedItems.some(item => addingIds.has(item.placeId))} onClick={() => sendPlacesToCrm(selectedItems)}>Enviar selecionados ({selectedItems.length})</button>
+          <button type="button" className={s.sendSelected} disabled={searching || !selectedItems.length || selectedItems.some(item => addingIds.has(item.placeId))} onClick={() => sendPlacesToCrm(selectedItems)}>Enviar selecionados ({selectedItems.length})</button>
         </div>
       </div>
-      <div className={s.resultsGrid}>{places.map(item => <ResultCard key={item.placeId} item={item} checked={selected.has(item.placeId)} onToggle={() => togglePlace(item.placeId)} onAdd={() => sendPlacesToCrm([item])} busy={addingIds.has(item.placeId)} />)}</div>
+      {!resultVisible.length&&<div className={s.empty}>Nenhum resultado corresponde ao filtro atual.</div>}
+      <div className={s.resultsGrid}>{resultVisible.map(item => <ResultCard key={item.placeId} item={item} checked={selected.has(item.placeId)} onToggle={() => togglePlace(item.placeId)} onAdd={() => sendPlacesToCrm([item])} busy={searching||addingIds.has(item.placeId)} saved={knownIds.has(item.placeId)} />)}</div>
     </section>}
 
     {notice && <div className={notice.startsWith("Erro") ? s.error : s.notice}>{notice}</div>}
     {counts.total > 0 && counts.whatsapp === 0 && <div className={s.warning}><strong>A base ainda não possui WhatsApp confirmado.</strong><span>A busca automática traz telefone do Google. Celulares são marcados como possível WhatsApp, mas só entram como confirmados depois da sua validação.</span></div>}
 
     <section className={s.baseHeader}>
-      <div><h2>Base local</h2><p>Leads já salvos no SQLite, incluindo importações e resultados enviados da busca.</p></div>
+      <div><h2>Base local</h2><p>Empresas já salvas, incluindo importações e resultados enviados ao CRM.</p></div>
       <div className={s.baseExportActions}>
         <button type="button" disabled={!visible.length} onClick={() => exportBase("json")}>Exportar JSON</button>
         <button type="button" disabled={!visible.length} onClick={() => exportBase("vcf")}>Exportar contatos</button>
@@ -362,7 +383,7 @@ export default function LeadList({ initialLeads = [] }) {
             <td>{lead.whatsapp ? <><b>{lead.whatsapp}</b><small>WhatsApp confirmado</small></> : lead.phone ? <><b>{lead.phone}</b><small>Telefone</small></> : lead.email ? <><b>{lead.email}</b><small>E-mail</small></> : <span className={s.missing}>Não encontrado</span>}</td>
             <td>{lead.site ? <><a href={/^https?:/.test(lead.site) ? lead.site : "http://" + lead.site} target="_blank" rel="noopener noreferrer">Abrir presença</a><small>{lead.weakSite ? "Presença de terceiros ou fraca" : "Site próprio"}</small></> : lead.instagram ? <a href={lead.instagram} target="_blank" rel="noopener noreferrer">Instagram</a> : <span className={s.missing}>Sem site/rede</span>}</td>
             <td><span className={s.stage}>{STAGE_LABEL[lead.stage] || lead.stage}</span></td>
-            <td><div className={s.rowActions}>{lead.mapsLink && <a href={lead.mapsLink} target="_blank" rel="noopener noreferrer">Maps</a>}<a href="/crm">CRM</a></div></td>
+            <td><div className={s.rowActions}>{lead.mapsLink && <a href={lead.mapsLink} target="_blank" rel="noopener noreferrer">Maps</a>}<a href={"/crm/"+lead.id}>Abrir lead</a></div></td>
           </tr>)}</tbody>
         </table>
         {!visible.length && <div className={s.empty}>{counts.total ? "Nenhum lead corresponde aos filtros." : "Faça uma busca automática ou importe um CSV para começar."}</div>}

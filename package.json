@@ -18,13 +18,21 @@
     "test:projects": "node tests/projects.test.mjs",
     "test:workspaces": "node tests/workspaces.test.mjs",
     "test:consulting": "node tests/consulting.test.mjs",
-    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:project-versions && npm run test:workspaces && npm run test:consulting",
+    "test": "npm run test:services && npm run test:repo && npm run test:ai && npm run test:projects && npm run test:project-versions && npm run test:workspaces && npm run test:consulting && npm run test:builder && npm run test:provider-http && npm run test:autonomous-builder && npm run test:premium-design && npm run test:integration && npm run test:site-variants && npm run test:crm && npm run test:search",
     "scraper:up": "docker compose pull google-maps-scraper && docker compose up -d --force-recreate google-maps-scraper",
     "scraper:down": "docker compose down",
     "scraper:logs": "docker compose logs -f google-maps-scraper",
     "scraper:status": "docker compose ps google-maps-scraper",
     "scraper:update": "docker compose pull google-maps-scraper && docker compose up -d --force-recreate google-maps-scraper",
-    "test:project-versions": "node tests/project-versions.test.mjs"
+    "test:project-versions": "node tests/project-versions.test.mjs",
+    "test:builder": "node tests/builder-policy.test.mjs",
+    "test:provider-http": "node tests/provider-http.test.mjs",
+    "test:autonomous-builder": "node tests/autonomous-builder.test.mjs",
+    "test:premium-design": "node tests/premium-design.test.mjs",
+    "test:integration": "node tests/integration.test.mjs",
+    "test:site-variants": "node tests/site-variants.test.mjs",
+    "test:crm": "node tests/crm-folders.test.mjs",
+    "test:search": "node tests/search-results.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",

@@ -1,3 +1,4 @@
+import { requestLongLocalProvider } from "./providerHttp.js";
 import { loadProviders, newProviderId, saveProviders, toPublicProvider } from "./configStore.js";
 
 const TYPES = new Set(["openai-compatible", "ollama", "custom-rest"]);
@@ -104,7 +105,9 @@ async function requestJson(provider, { url, method = "POST", body, timeoutMs = n
     const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
     const started = Date.now();
     try {
-      const response = await fetch(target, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal, cache: "no-store" }), raw = await response.text();
+      const requestOptions={method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal,cache:"no-store"};
+      const local=["localhost","127.0.0.1","[::1]"].includes(target.hostname);
+      const response = await (local&&effectiveTimeout>300000?requestLongLocalProvider(target,requestOptions):fetch(target,requestOptions)), raw = await response.text();
       let parsed;
       try { parsed = raw ? JSON.parse(raw) : {}; } catch { parsed = { raw }; }
       if (!response.ok) {

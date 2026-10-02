@@ -20,3 +20,5 @@ generated-sites/
 .env.local
 .env
 .env.*
+
+.leadflow-app-audit/

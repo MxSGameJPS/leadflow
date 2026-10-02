@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {runSiteVariants} from '../src/services/projects/siteVariantRunner.js';
+const save=async(project,metadata)=>({...project,...metadata});
+const started=[];let resolveA;
+const both=runSiteVariants({comparisonId:'cmp',create:async name=>{started.push(name);if(name==='leadflow')await new Promise(resolve=>resolveA=resolve);else resolveA();return{id:name}},save});
+const success=await both;assert.deepEqual(started,['leadflow','testelead']);assert.equal(success.variants.length,2);assert.equal(success.leadflow.comparisonVariant,'leadflow');assert.equal(success.testelead.comparisonVariant,'testelead');
+const partial=await runSiteVariants({comparisonId:'cmp',create:async name=>{if(name==='leadflow')throw Error('timeout');return{id:name}},save});
+assert.equal(partial.leadflow,null);assert.equal(partial.testelead.id,'testelead');assert.equal(partial.variants.length,1);assert.match(partial.variants[0].warning,/preservada/);assert.equal(partial.failures[0].variant,'leadflow');
+await assert.rejects(runSiteVariants({comparisonId:'cmp',create:async()=>{throw Error('offline')},save}),/duas propostas falharam/);
+console.log('Variant audit tests passed: concurrent execution, separate identities, partial success and total failure.');

@@ -35,7 +35,7 @@ async function waitForServer(url,entry){
   while(Date.now()<deadline){
     if(entry.child.exitCode!=null)throw new Error("O servidor da prévia encerrou antes de iniciar. "+entry.logs.slice(-1800));
     try{
-      const response=await fetch(url,{cache:"no-store"});
+      const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(3000)});
       if(response.status<500)return;
       lastError="HTTP "+response.status;
       if(/MODULE_NOT_FOUND|pages[\\/]_document|Cannot find module/i.test(entry.logs)){
@@ -83,7 +83,7 @@ export async function ensureProjectPreviewServer(folderPath){
   const nextBin=await resolveNextBin(key);
   const child=spawn(process.execPath,[nextBin,"dev","-H","127.0.0.1","-p",String(port)],{
     cwd:key,
-    env:{...process.env,NODE_ENV:"development",NEXT_TELEMETRY_DISABLED:"1"},
+    env:{...process.env,NODE_ENV:"development",NEXT_TELEMETRY_DISABLED:"1",LEADFLOW_BUILD_DIST_DIR:".leadflow-preview-"+port},
     stdio:["ignore","pipe","pipe"],
     windowsHide:true,
   });

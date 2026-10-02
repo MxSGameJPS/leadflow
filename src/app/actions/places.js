@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { listIbgeCities } from "../../services/locations/ibge.js";
+import { uniquePlaces } from "../../services/places/searchResults.js";
 import { searchPlaces } from "../../services/places/placeSearch.js";
 
 function refreshLeadViews() {
@@ -21,6 +22,9 @@ export async function searchPlacesAction(filters) {
 export async function addPlacesToCrmAction(items) {
   if (!Array.isArray(items) || !items.length) throw new Error("Selecione ao menos um estabelecimento.");
   if (items.length > 60) throw new Error("O limite por envio é de 60 estabelecimentos.");
+
+  items=uniquePlaces(items);
+  if(!items.length||items.some(item=>!String(item.name||"").trim()))throw new Error("Estabelecimentos precisam de identificador e nome válidos.");
 
   // Carrega Prisma/Supabase somente quando o usuário realmente envia leads ao CRM.
   // Assim, a action leve de cidades não recompila todo o grafo de persistência no HMR.
@@ -56,7 +60,7 @@ export async function addPlacesToCrmAction(items) {
 
   const result = await importLeads(leads);
   const { saveLeadAssetSeed } = await import("../../services/projects/leadAssetStore.js");
-  await Promise.all(items.map(item => saveLeadAssetSeed(item.placeId || item.externalId, {
+  const assetResults=await Promise.allSettled(items.map(item => saveLeadAssetSeed(item.placeId || item.externalId, {
     thumbnail: item.thumbnail,
     imageUrls: item.imageUrls,
     site: item.site,
@@ -64,5 +68,5 @@ export async function addPlacesToCrmAction(items) {
     mapsLink: item.mapsLink,
   })));
   refreshLeadViews();
-  return result;
+  return {...result,warning:assetResults.some(item=>item.status==="rejected")?"Leads salvos, mas algumas imagens de referência não puderam ser guardadas.":""};
 }

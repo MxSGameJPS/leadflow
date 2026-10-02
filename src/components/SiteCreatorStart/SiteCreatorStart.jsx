@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { chooseSiteVariantAction,clearSiteReferenceImagesAction,createSiteVariantsAction,refineSiteProjectAction,restorePreviousSiteProjectVersionAction } from "../../app/actions/projects.js";
 import { SITE_SKILL_OPTIONS,resolveSiteSkills } from "../../services/projects/siteSkillsCatalog.js";
 import s from "./SiteCreatorStart.module.css";
+import {qualityPresentation,selectionFromPreviewMessage} from "../../services/projects/siteBuilderPresentation.js";
 import GenerationLivePanel from "../GenerationLivePanel/GenerationLivePanel.jsx";
 
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
@@ -39,6 +40,8 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
   const[generationId,setGenerationId]=useState("");
   const[pendingCreate,setPendingCreate]=useState(null);
   const[pendingRefine,setPendingRefine]=useState(null);
+  const[inspect,setInspect]=useState(false);
+  const previewFrame=useRef(null);
   const createStartedRef=useRef("");
   const refineStartedRef=useRef("");
 
@@ -52,6 +55,11 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     setSelectedComponent("");
   },[project]);
 
+  useEffect(()=>{
+    const receive=event=>{const value=selectionFromPreviewMessage(event,previewFrame.current?.contentWindow,window.location.origin,activeProject?.siteData?.codegenPlan?.components||[]);if(value!==null)setSelectedComponent(value)};
+    window.addEventListener("message",receive);return()=>window.removeEventListener("message",receive);
+  },[activeProject]);
+  useEffect(()=>{if(initialVariants.length)setVariants(initialVariants)},[initialVariants]);
   const selectedLead=useMemo(()=>leads.find(lead=>lead.id===leadId)||null,[leadId,leads]);
   const routedReferences=useMemo(()=>[...pendingReferences,...(activeProject?.referenceImages||[])],[pendingReferences,activeProject?.referenceImages]);
   const autoRouting=useMemo(()=>resolveSiteSkills({
@@ -97,7 +105,8 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
       await new Promise(resolve=>setTimeout(resolve,30));
       try{
         const result=await createSiteVariantsAction(pendingCreate);
-        const created=result.leadflow;
+        const created=result.leadflow||result.testelead;
+        if(result.warning)setNotice(result.warning);
         setVariants(result.variants||[created]);
         if(!alive)return;
         setActiveProject(created);setEffects(created.effects||[]);setSkillMode(created.skillMode||"auto");setSelectedSkills(created.skills||[]);setPendingReferences([]);setInstruction("");
@@ -124,7 +133,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
       try{
         const updated=await refineSiteProjectAction(pendingRefine);
         if(!alive)return;
-        setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
+        setVariants(current=>current.map(item=>item.id===updated.id?updated:item));setActiveProject(updated);setEffects(updated.effects||[]);setSkillMode(updated.skillMode||"auto");setSelectedSkills(updated.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setNotice("Alterações aplicadas. A prévia foi atualizada.");router.refresh();
       }catch(error){if(alive)setNotice("Erro: "+error.message)}
       finally{if(alive){setBusy("");setPendingRefine(null)}}
     };
@@ -136,6 +145,7 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     setBusy("restore");setNotice("");
     try{
       const restored=await restorePreviousSiteProjectVersionAction(activeProject.id);
+      setVariants(current=>current.map(item=>item.id===restored.id?restored:item));
       setActiveProject(restored);
       setEffects(restored.effects||[]);
       setSkillMode(restored.skillMode||"auto");
@@ -203,17 +213,22 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
     </form>
   </main>;
 
-  const previewSrc="/preview-internal/"+activeProject.id+"?v="+activeProject.version;
+  const previewSrc="/preview-internal/"+activeProject.id+"?v="+activeProject.version+(inspect?"&inspect=1":"");
   const activeVariant=activeProject?.generatorInput?.siteVariant||activeProject?.siteData?.siteVariant||"leadflow";
   const history=activeProject.instructions||[];
   const quality=activeProject.siteData?.codegenQuality||null;
+  function selectVariant(item){
+    setActiveProject(item);setEffects(item.effects||[]);setSkillMode(item.skillMode||"auto");setSelectedSkills(item.skills||[]);setPendingReferences([]);setInstruction("");setSelectedComponent("");setInspect(false);
+    router.replace("/criar-site?project="+encodeURIComponent(item.id)+(item.leadId?"&lead="+encodeURIComponent(item.leadId):""));
+  }
   async function chooseWinner(item){try{setBusy("winner");await chooseSiteVariantAction({projectId:item.id});setVariants(current=>current.map(project=>({...project,comparisonWinner:project.id===item.id})));setActiveProject(current=>({...current,comparisonWinner:current.id===item.id}));router.refresh()}finally{setBusy("")}}
   function downloadBoth(){for(const item of variants){const a=document.createElement("a");a.href="/api/projects/"+item.id+"/zip";a.download="";document.body.appendChild(a);a.click();a.remove()}}
-  const qualityLabels={visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
+  const qualityView=qualityPresentation(quality||{});
+  const qualityLabels={brandFidelity:"Fidelidade à marca",productIntent:"Jornada do produto",visualCraft:"Acabamento",brandSpecificity:"Identidade",conversion:"Conversão",mobile:"Mobile",coherence:"Coerência",commercialReadiness:"Pronto p/ vender"};
   return <main className={s.builderPage}>
     {generationId&&<GenerationLivePanel generationId={generationId} variants={variants} onClose={()=>setGenerationId("")}/>}
     <header className={s.builderHeader}><div><a href={activeProject.leadId?"/crm/"+activeProject.leadId:"/projetos"}>← Voltar</a><h1>{activeProject.name}</h1><p>Versão {activeProject.version||1} · {activeProject.imageCount||0} imagens · {activeProject.referenceImages?.length||0} referências · {activeProject.skills?.length||0} skills{quality?.available&&quality.score!==null?" · QA "+quality.score+"/100":""}</p></div><div className={s.headerActions}>{Number(activeProject.version||1)>1&&<button type="button" className={s.undo} disabled={busy==="restore"} onClick={restorePrevious}>{busy==="restore"?"Restaurando...":"↶ Desfazer"}</button>}<a className={s.download} href={"/api/projects/"+activeProject.id+"/zip"}>Baixar ZIP</a><a href="/projetos">Projetos</a></div></header>
-    {variants.length>1&&<nav className={s.variantBar}><div><strong>Battle A/B</strong><span>Escolha a melhor proposta ou baixe qualquer uma</span></div>{variants.map((item,index)=>{const variant=item?.comparisonVariant||item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <div key={item.id} className={s.variantChoice}><button type="button" className={activeProject.id===item.id?s.variantActive:s.variantButton} onClick={()=>{setActiveProject(item);setInstruction("");setSelectedComponent("")}}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}{item.comparisonWinner?" · ESCOLHIDA":""}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button><div><button type="button" disabled={busy==="winner"} onClick={()=>chooseWinner(item)}>{item.comparisonWinner?"✓ Escolhida":"Escolher esta"}</button><a href={"/api/projects/"+item.id+"/zip"}>Baixar ZIP</a></div></div>})}<button type="button" className={s.downloadBoth} onClick={downloadBoth}>Baixar os 2 ZIPs</button></nav>}
+    {variants.length>1&&<nav className={s.variantBar}><div><strong>Battle A/B</strong><span>Escolha a melhor proposta ou baixe qualquer uma</span></div>{variants.map((item,index)=>{const variant=item?.comparisonVariant||item?.generatorInput?.siteVariant||item?.siteData?.siteVariant||"leadflow";const q=item?.siteData?.codegenQuality;return <div key={item.id} className={s.variantChoice}><button type="button" className={activeProject.id===item.id?s.variantActive:s.variantButton} disabled={Boolean(busy)} onClick={()=>selectVariant(item)}><b>Proposta {index===0?"A":"B"} · {variant==="testelead"?"TesteLead":"LeadFlow"}{item.comparisonWinner?" · ESCOLHIDA":""}</b><small>{q?.available&&q.score!==null?"QA "+q.score+"/100":"QA técnico"}</small></button><div><button type="button" disabled={busy==="winner"} onClick={()=>chooseWinner(item)}>{item.comparisonWinner?"✓ Escolhida":"Escolher esta"}</button><a href={"/api/projects/"+item.id+"/zip"}>Baixar ZIP</a></div></div>})}<button type="button" className={s.downloadBoth} onClick={downloadBoth}>Baixar os 2 ZIPs</button></nav>}
     <section className={s.builder}>
       <aside className={s.chatPanel}>
         <div className={s.context}><span>Projeto ativo · {activeVariant==="testelead"?"TesteLead":"LeadFlow"}</span><strong>{activeProject.segment||"Landing page"}</strong><small>{activeProject.city||"Local não informado"}</small></div>
@@ -233,15 +248,16 @@ export default function SiteCreatorStart({leads=[],initialLeadId="",project=null
         {quality&&<div className={quality.available?s.qualityPanel:s.qualitySkipped}>
           {quality.available?<>
             <div className={s.qualityTop}>
-              <div><span>Auditoria do site renderizado</span><strong className={quality.pass?s.qualityGood:s.qualityWarn}>{quality.score===null?"Métricas":quality.score+"/100"}</strong><small>Mínimo {quality.threshold||78}{quality.attempts>1?" · "+quality.attempts+" ciclos":""}</small></div>
+              <div><span>Auditoria do site renderizado</span><strong className={quality.pass?s.qualityGood:s.qualityWarn}>{qualityView.visual}</strong><small>Mínimo {quality.threshold||85}{quality.attempts>1?" · "+quality.attempts+" ciclos":""}</small></div>
               <p>{quality.summary||"Desktop e mobile foram executados em navegador real antes da entrega."}</p>
             </div>
+            <div className={s.functionalStatus} aria-live="polite"><strong>{qualityView.status}</strong><span>{qualityView.functional}{qualityView.steps?" · "+qualityView.steps+" verificações":""}</span><p>{qualityView.summary}</p></div>
             {quality.dimensions&&Object.keys(quality.dimensions).length>0&&<div className={s.qualityDimensions}>{Object.entries(quality.dimensions).map(([key,value])=><span key={key}><b>{qualityLabels[key]||key}</b><em>{value}/10</em></span>)}</div>}
             {quality.issues?.length>0&&<details className={s.qualityIssues}><summary>{quality.issues.length} ponto(s) encontrados</summary><div>{quality.issues.slice(0,6).map((issue,index)=><article key={issue.component+index}><b>{issue.component}</b><span>{issue.severity}</span><p>{issue.instruction}</p>{issue.evidence&&<small>{issue.evidence}</small>}</article>)}</div></details>}
           </>:<div><strong>QA visual não executado</strong><p>{quality.skippedReason||"A auditoria renderizada não ficou disponível neste ambiente."}</p></div>}
         </div>}
-        <div className={s.previewToolbar}><div><button className={device==="desktop"?s.active:""} onClick={()=>setDevice("desktop")}>Desktop</button><button className={device==="tablet"?s.active:""} onClick={()=>setDevice("tablet")}>Tablet</button><button className={device==="mobile"?s.active:""} onClick={()=>setDevice("mobile")}>Mobile</button></div><a href={previewSrc} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a></div>
-        <div className={s.canvas}><div className={s["device-"+device]}><iframe key={previewSrc} title={"Prévia de "+activeProject.name} src={previewSrc}/></div></div>
+        <div className={s.previewToolbar}><button type="button" aria-pressed={inspect} className={inspect?s.inspectActive:""} onClick={()=>setInspect(value=>!value)}>{inspect?"Selecionando seção":"Selecionar na prévia"}</button><div><button className={device==="desktop"?s.active:""} onClick={()=>setDevice("desktop")}>Desktop</button><button className={device==="tablet"?s.active:""} onClick={()=>setDevice("tablet")}>Tablet</button><button className={device==="mobile"?s.active:""} onClick={()=>setDevice("mobile")}>Mobile</button></div><a href={previewSrc} target="_blank" rel="noopener noreferrer">Abrir prévia ↗</a></div>
+        <div className={s.canvas}><div className={s["device-"+device]}><iframe ref={previewFrame} key={previewSrc} title={"Prévia de "+activeProject.name} src={previewSrc}/></div></div>
       </section>
     </section>
   </main>;

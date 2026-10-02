@@ -469,7 +469,7 @@ function fontConfig(pair){
   return configs[pair]||configs.modern;
 }
 function inspectorScript(){
-  return '(function(){if(new URLSearchParams(location.search).get("leadflowInspect")!=="1")return;var current=null;function marker(event){return event.target&&event.target.closest?event.target.closest("[data-leadflow-component]"):null}function clear(){if(current)current.classList.remove("leadflow-inspect-selected");current=null}document.addEventListener("mouseover",function(event){var item=marker(event);if(item)item.classList.add("leadflow-inspect-hover")},true);document.addEventListener("mouseout",function(event){var item=marker(event);if(item)item.classList.remove("leadflow-inspect-hover")},true);document.addEventListener("click",function(event){var item=marker(event);if(!item)return;event.preventDefault();event.stopPropagation();clear();current=item;item.classList.add("leadflow-inspect-selected");window.top.postMessage({type:"leadflow:component-selected",component:item.getAttribute("data-leadflow-component")},"*")},true);window.addEventListener("keydown",function(event){if(event.key==="Escape"){clear();window.top.postMessage({type:"leadflow:component-selected",component:""},"*")}})})();';
+  return '(function(){if(new URLSearchParams(location.search).get("leadflowInspect")!=="1")return;var current=null;function marker(event){return event.target&&event.target.closest?event.target.closest("[data-leadflow-component]"):null}function clear(){if(current)current.classList.remove("leadflow-inspect-selected");current=null}document.addEventListener("mouseover",function(event){var item=marker(event);if(item)item.classList.add("leadflow-inspect-hover")},true);document.addEventListener("mouseout",function(event){var item=marker(event);if(item)item.classList.remove("leadflow-inspect-hover")},true);document.addEventListener("click",function(event){var item=marker(event);if(!item)return;event.preventDefault();event.stopPropagation();clear();current=item;item.classList.add("leadflow-inspect-selected");window.parent.postMessage({type:"leadflow:component-selected",component:item.getAttribute("data-leadflow-component")},"*")},true);window.addEventListener("keydown",function(event){if(event.key==="Escape"){clear();window.parent.postMessage({type:"leadflow:component-selected",component:""},"*")}})})();';
 }
 function layoutSource(site){
   const fonts=fontConfig(site.design?.fontPair);
@@ -720,6 +720,7 @@ export async function generateUniqueSiteCode(options={}){
 }
 
 export async function refineUniqueSiteComponent(options={}){
+  if(options.siteData?.generatorFormat&&options.siteData.generatorFormat!=="unique-codegen-v4"){const {refineAutonomousSiteComponent}=await import("./siteAutonomousBuilderV5.js");return refineAutonomousSiteComponent(options)}
   const progress=async event=>{try{await options.onProgress?.(event)}catch{}};
   const root=path.resolve(process.cwd(),options.folderPath||"");
   const site=options.siteData||{};
@@ -788,6 +789,7 @@ export async function refineUniqueSiteComponent(options={}){
 
 export async function hardenUniqueCodegenProject(folderPath){
   const root=path.resolve(process.cwd(),folderPath);
+  try{const format=JSON.parse(await fs.readFile(path.join(root,"generation-format.json"),"utf8"));if(format.format!=="unique-codegen-v4")return {changed:0}}catch{}
   let changed=0;
   try{
     await cleanupBuildArtifacts(root);
@@ -826,7 +828,7 @@ export async function isUniqueCodegenProject(folderPath){
   try{
     const file=path.join(path.resolve(process.cwd(),folderPath),"generation-format.json");
     const data=JSON.parse(await fs.readFile(file,"utf8"));
-    return ["unique-codegen-v4","autonomous-builder-v5","autonomous-builder-v5-task-loop"].includes(data?.format);
+    return ["unique-codegen-v4","autonomous-builder-v5","autonomous-builder-v5-task-loop","autonomous-builder-v6-isolated-workers","product-builder-v7"].includes(data?.format);
   }catch{return false}
 }
 export async function enforceLatestPackage(folderPath){

@@ -955,7 +955,7 @@ export async function generateSiteFolder(input = {}) {
     siteVariant: clean(input.siteVariant, 40).toLowerCase() || "leadflow",
   };
 
-  placeData.productContract = buildProductContract({template:placeData.template,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
+  placeData.productContract = buildProductContract({template:placeData.template,segment:placeData.segment,instruction:input.instruction,hasWhatsapp:Boolean(mobileWhatsapp(placeData.phone)),hasPhone:Boolean(placeData.phone),hasMenu:false});
 
   const skillRouting = resolveSiteSkills({
     mode: input.skillMode,
@@ -1057,21 +1057,23 @@ export async function generateSiteFolder(input = {}) {
     skipAi: Boolean(input.skipAi),
     validateBuild: input.validateBuild !== false,
     onProgress: input.onProgress,
+    visualQa: input.visualQa,
   });
+  aiUsed = !input.skipAi && Boolean(codegen.buildOk);
   siteData.codegenPlan = codegen.plan;
   siteData.codegenQuality = codegen.quality || null;
   siteData.generatorFormat = codegen.format;
 
   const report = {
     generatedAt: new Date().toISOString(),
-    generatorVersion: 5,
+    generatorVersion: 7,
     aiUsed,
     aiWarning,
     source: place ? "Google Places + CRM" : "CRM ou descrição",
     design: siteData.design,
     composition: siteData.design?.composition,
     blueprint: siteData.blueprint,
-    runtimeIntegrity: "autonomous-builder-v5",
+    runtimeIntegrity: codegen.format,
     codegenPlan: codegen.plan,
     codegenBuildOk: codegen.buildOk,
     codegenQuality: codegen.quality || null,
@@ -1093,8 +1095,8 @@ export async function generateSiteFolder(input = {}) {
     validationRequired: true,
   };
 
-  if (codegen.quality?.available && codegen.quality.score !== null && !codegen.quality.pass) {
-    const qualityMessage = `Auditoria visual: ${codegen.quality.score}/100 (mínimo ${codegen.quality.threshold}). O site foi entregue, mas ainda merece revisão visual.`;
+  if (!input.skipAi && codegen.quality && !codegen.quality.pass) {
+    const qualityMessage = `Prévia com revisão pendente. ${codegen.quality.skippedReason || codegen.quality.metrics?.functional?.summary || codegen.quality.summary || "Qualidade ainda não aprovada."}`;
     aiWarning = [aiWarning, qualityMessage].filter(Boolean).join(" ");
     report.aiWarning = aiWarning;
   } else if (codegen.quality?.skippedReason && !input.skipAi) {
@@ -1102,6 +1104,7 @@ export async function generateSiteFolder(input = {}) {
     report.aiWarning = aiWarning;
   }
 
+  await fs.mkdir(path.join(folder.absolutePath, "data"), { recursive: true });
   await Promise.all([
     fs.writeFile(path.join(folder.absolutePath, "generation-report.json"), JSON.stringify(report, null, 2), "utf8"),
     fs.writeFile(path.join(folder.absolutePath, "CLAUDE-REFINEMENT.md"), refinementPrompt(siteData), "utf8"),

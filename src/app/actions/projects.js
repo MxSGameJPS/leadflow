@@ -10,6 +10,8 @@ import { clearReferenceImages,listReferenceImages,saveReferenceImages } from "..
 import { createProjectSourceSnapshot,restoreLatestProjectSourceSnapshot } from "../../services/projects/projectVersionStore.js";
 import { failGenerationProgress,finishGenerationProgress,reportGenerationProgress,startGenerationProgress } from "../../services/projects/generationProgressStore.js";
 
+import {runSiteVariants} from "../../services/projects/siteVariantRunner.js";
+
 const DEFAULT_EFFECTS=["entrance-motion","section-reveal","hover-lift"];
 const VALID_EFFECTS=new Set(["entrance-motion","section-reveal","parallax-hero","glass-header","hover-lift","ambient-glow","cta-pulse","smooth-scroll"]);
 function normalizeEffects(value,fallback=DEFAULT_EFFECTS){if(!Array.isArray(value))return[...fallback];return[...new Set(value.map(item=>String(item||"").trim()).filter(item=>VALID_EFFECTS.has(item)))]}
@@ -55,17 +57,9 @@ export async function createSiteVariantsAction(input={}){
       reportGenerationProgress(generationId,{phase:"variant-a",title:"Proposta A · LeadFlow",detail:"LeadFlow iniciou seu builder autônomo.",kind:"model"}),
       reportGenerationProgress(generationId,{phase:"variant-b",title:"Proposta B · TesteLead",detail:"TesteLead iniciou em paralelo com o modelo escolhido pelo OmniRoute.",kind:"model"})
     ]);
-    const [leadflowRaw,testeleadRaw]=await Promise.all([
-      createSiteProjectAction(leadflowInput),
-      createSiteProjectAction(testeleadInput)
-    ]);
-    const comparisonId="cmp_"+runId;
-    const [leadflow,testelead]=await Promise.all([
-      updateSiteProject(leadflowRaw.id,{comparisonId,comparisonVariant:"leadflow",comparisonWinner:false}),
-      updateSiteProject(testeleadRaw.id,{comparisonId,comparisonVariant:"testelead",comparisonWinner:false})
-    ]);
-    if(generationId)await finishGenerationProgress(generationId,{projectId:leadflow.id,variantProjectIds:[leadflow.id,testelead.id],comparisonId});
-    return{leadflow,testelead,variants:[leadflow,testelead],comparisonId};
+    const result=await runSiteVariants({comparisonId:"cmp_"+runId,create:name=>createSiteProjectAction(name==="leadflow"?leadflowInput:testeleadInput),save:(project,metadata)=>updateSiteProject(project.id,metadata)});
+    if(generationId)await finishGenerationProgress(generationId,{projectId:result.variants[0].id,variantProjectIds:result.variants.map(item=>item.id),comparisonId:result.comparisonId,partial:result.failures.length>0});
+    return result;
   }catch(error){if(generationId)await failGenerationProgress(generationId,error);throw error}
 }
 
@@ -103,9 +97,7 @@ export async function refineSiteProjectAction(input={}){
       onProgress,
     });
     const siteData={...(project.siteData||{}),codegenPlan:refined.plan,codegenQuality:refined.quality};
-    const warning=refined.quality?.available&&refined.quality.score!==null&&!refined.quality.pass
-      ? `Auditoria visual: ${refined.quality.score}/100. O componente foi corrigido, mas o site ainda merece revisão visual.`
-      : project.warning;
+    const warning=refined.quality?.pass ? null : "Alteração aplicada; revisão de qualidade pendente. "+(refined.quality?.skippedReason||refined.quality?.metrics?.functional?.summary||refined.quality?.summary||"Avaliação ainda não concluída.");
     const updated=await updateSiteProject(project.id,{status:"ready",aiUsed:true,warning,siteData,generatorInput,instructions:[...(project.instructions||[]),`[${targetComponent}] ${instruction}`],version:Number(project.version||1)+1,effects,skillMode,skills,referenceScope,referenceImages:references});
     if(generationId)await finishGenerationProgress(generationId,{projectId:updated.id,version:updated.version});refreshProject(updated);return updated;
   }

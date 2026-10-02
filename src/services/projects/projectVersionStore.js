@@ -4,7 +4,7 @@ import { resolveProjectFolder } from "./projectStore.js";
 
 const ROOT=path.join(process.cwd(),"data","project-versions");
 const SOURCE_DIRS=["app","components","data","lib"];
-const SOURCE_FILES=["package.json","next.config.mjs","README.md","generation-format.json","generation-report.json",".gitignore"];
+const SOURCE_FILES=["package.json","next.config.mjs","README.md","generation-format.json","generation-report.json","builder-report.json","director-plan.json","public/leadflow-inspector.js",".gitignore"];
 const MAX_SNAPSHOTS=8;
 
 function safe(value){const text=String(value||"").trim();if(!/^[a-zA-Z0-9_-]+$/.test(text))throw new Error("Identificador de projeto inválido.");return text}

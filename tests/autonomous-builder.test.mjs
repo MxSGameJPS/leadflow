@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
+const cwd=process.cwd(),temp=await fs.mkdtemp(path.join(os.tmpdir(),'leadflow-builder-'));
+process.env.LEADFLOW_DATA_DIR=path.join(temp,'data');process.env.LEADFLOW_SITE_TASK_TIMEOUT_MS='1000';
+const {upsertProvider}=await import('../src/services/ai/providerService.js');
+const {generateAutonomousSite}=await import('../src/services/projects/siteAutonomousBuilderV5.js');
+const originalFetch=global.fetch,requests=[];process.chdir(temp);
+const plan={concept:'Specific brand',productVision:'Complete order',visualDirection:{palette:{red:'#E93624'}},sharedInterfaces:{stateApi:{owner:'Cart'}},tasks:[{id:'state',title:'State',goal:'Persistent cart',targetFiles:['lib/cart.js'],dependsOn:[]},{id:'shop',title:'Shop',goal:'Catalog and checkout',targetFiles:['components/Shop.jsx','components/Shop.module.css'],dependsOn:['state']}]};
+const outputs=[JSON.stringify(plan),'<FILE path="lib/cart.js">export const cart=[];</FILE>','<FILE path="components/Shop.jsx">export default function Shop(){return null}</FILE>','<FILE path="app/page.jsx">export default function Page(){return <main>Review pending</main>}</FILE>'];
+global.fetch=async(url,options)=>{const body=JSON.parse(options.body);requests.push({body,headers:options.headers});return Response.json({choices:[{message:{content:outputs.shift()}}]})};
+try {
+ await upsertProvider({name:'LeadFlow',baseUrl:'http://localhost:20128/v1',model:'test',enabled:true,isDefault:true,authType:'none'});
+ const result=await generateAutonomousSite({folderPath:'generated-sites/test',siteData:{brandName:'Test',template:'delivery',effects:['entrance-motion'],skills:['ui-ux-pro-max']},validateBuild:false,visualQa:false});
+ assert.equal(requests.length,4);assert.equal(result.quality.pass,false);assert.equal(result.quality.status,'review-required');
+ assert.ok(requests.every(r=>r.body.tool_choice==='none'&&r.headers['x-omniroute-no-memory']==='true'));
+ assert.match(requests[1].body.messages[1].content,/persistent-cart/);assert.match(requests[1].body.messages[1].content,/stateApi/);assert.match(requests[1].body.messages[1].content,/entrance-motion/);assert.match(requests[1].body.messages[1].content,/ui-ux-pro-max/);
+ await assert.rejects(fs.access(path.join(temp,'generated-sites/test/components/Shop.jsx')));
+ await fs.access(path.join(temp,'generated-sites/test/data/siteData.js'));
+ assert.match(requests[3].body.messages[1].content,/omitiu arquivo contratado/);
+ const report=JSON.parse(await fs.readFile(path.join(temp,'generated-sites/test/builder-report.json'),'utf8'));
+ assert.equal(report.calls.length,4);assert.equal(report.buildOk,false);
+ const {refineUniqueSiteComponent}=await import('../src/services/projects/siteCodegenV4.js');
+ const editOptions={folderPath:'generated-sites/test',siteData:{generatorFormat:'product-builder-v7'},currentPlan:plan,componentName:'Shop',instruction:'Melhore a legibilidade'};
+ outputs.push('<FILE path="lib/cart.js">export const cart=["outside"];</FILE>');
+ await assert.rejects(refineUniqueSiteComponent(editOptions),/fora da seção/);
+ assert.equal(await fs.readFile(path.join(temp,'generated-sites/test/lib/cart.js'),'utf8'),'export const cart=[];');
+ await fs.mkdir(path.join(temp,'generated-sites/test/components'),{recursive:true});
+ await fs.writeFile(path.join(temp,'generated-sites/test/components/Shop.jsx'),'export function Shop(){return null}');
+ outputs.push('<FILE path="components/Shop.jsx">function Shop(){return null}</FILE>');
+ await assert.rejects(refineUniqueSiteComponent(editOptions),/interface exportada/);
+ assert.match(await fs.readFile(path.join(temp,'generated-sites/test/components/Shop.jsx'),'utf8'),/export function Shop/);
+ console.log('Autonomous builder tests passed: shared contract, atomic blocks, recovery context and honest pending status.');
+}finally{global.fetch=originalFetch;process.chdir(cwd);await fs.rm(temp,{recursive:true,force:true})}

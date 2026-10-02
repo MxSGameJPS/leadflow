@@ -214,6 +214,7 @@ export async function searchGooglePlaces(input, { fetchImpl = fetch } = {}) {
       },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!response.ok) throw new Error(await readGoogleError(response));

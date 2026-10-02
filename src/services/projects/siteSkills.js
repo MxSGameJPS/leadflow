@@ -4,9 +4,9 @@ export { SITE_SKILL_OPTIONS,normalizeSiteSkillIds,normalizeSiteSkillMode,resolve
 
 const SKILL_PROMPTS={
   "impeccable":[
-    "Aplique a disciplina do Impeccable como diretor de design premiado: o trabalho deve ter ponto de vista, personalidade e craft de produção, nunca parecer seguro, tímido ou intercambiável.",
-    "Trate esta landing como modo Persuade: atenção, decisão e ação são parte do produto visual.",
-    "Antes de compor, defina uma tese visual específica; depois faça uma passada mental de critique, bolder, layout, typeset, colorize, animate e polish.",
+    "Aplique a disciplina do Impeccable como diretor de design premiado: o trabalho deve ter ponto de vista, personalidade e craft de produção, evitando soluções intercambiáveis, sem exigir extravagância.",
+    "Respeite o tipo de produto solicitado: catálogo, delivery, reserva, serviço ou apresentação. Não transforme todo projeto em landing.",
+    "Antes de compor, defina uma tese visual específica; depois faça uma passada mental de crítica, composição, tipografia, cor, movimento quando apropriado e acabamento.",
     "Evite os sinais clássicos de frontend genérico: Inter/system font por hábito, gradiente roxo-azul automático, cards dentro de cards, ícone em quadrado arredondado acima de cada título, texto cinza em fundos coloridos, repetição excessiva de radius e composição SaaS.",
     "Escolha pelo menos uma decisão visual claramente autoral e justificável para este negócio, mantendo usabilidade, acessibilidade e performance.",
     "Sua influência deve aparecer no blueprint da página: ordem de seções, variante de hero, tratamento de imagem, ritmo e hierarquia. Se o blueprint continuar com a estrutura padrão de uma landing genérica, o trabalho não está concluído."

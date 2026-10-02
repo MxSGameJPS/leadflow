@@ -1,3 +1,7 @@
+import {weakPremiumDimensions} from "./sitePremiumDesign.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { auditProductJourney } from "./siteFunctionalQa.js";
 import net from "node:net";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -69,7 +73,7 @@ async function capture(browser,url,config){
     await page.waitForTimeout(1200);
     const metrics=await page.evaluate(()=>{
       const viewport=window.innerWidth;
-      const markerFor=element=>element?.closest?.("[data-leadflow-component]")?.getAttribute("data-leadflow-component")||"";
+      const markerFor=element=>element?.closest?.("[data-leadflow-component]")?.getAttribute("data-leadflow-component")||"Page";
       const visible=element=>{
         const style=getComputedStyle(element),rect=element.getBoundingClientRect();
         return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
@@ -183,7 +187,7 @@ function objectiveIssues(metrics,known){
   }
   return out;
 }
-async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,mobile390Image}){
+async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,mobile390Image,generateRequest}){
   const known=plan.components.map(item=>item.name);
   const baseRequest={
     temperature:.12,
@@ -215,9 +219,9 @@ async function judgeScreenshots({site,plan,metrics,desktopImage,mobile320Image,m
     ].join("\n\n")
   };
   let lastError=null;
-  for(const model of (site?.siteVariant==="testelead"?[""]:visualReviewModels())){
+  for(const model of (generateRequest?[""]:(site?.siteVariant==="testelead"?[""]:visualReviewModels()))){
     try{
-      const result=await generateWithDefaultProvider({...baseRequest,model,siteRole:"visualReview",siteVariant:site?.siteVariant||"leadflow"});
+      const result=await (generateRequest||generateWithDefaultProvider)({...baseRequest,model,retries:0,siteRole:"visualReview",siteVariant:site?.siteVariant||"leadflow"});
       return parseJudgeJson(result.text);
     }catch(error){lastError=error}
   }
@@ -234,18 +238,18 @@ function normalizeJudge(raw,known){
   })).filter(item=>known.has(item.component)&&item.instruction).slice(0,8);
   return{dimensions,summary:clean(raw?.summary,2400),issues};
 }
-export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
-  const threshold=Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||78);
+export async function runVisualQualityAudit({root,nextBin,site,plan,generateRequest}={}){
+  const threshold=Number(process.env.LEADFLOW_SITE_QUALITY_MIN_SCORE||85);
   let chromium;
   try{chromium=await loadChromium()}catch(error){
     const packageMissing=error?.message==="PLAYWRIGHT_PACKAGE_MISSING";
-    return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:packageMissing?"playwright_package_missing":"playwright_load_failed",skippedReason:packageMissing?"Auditoria visual não executada porque o módulo de renderização não está instalado. Execute npm install e tente novamente.":"Auditoria visual não executada porque o módulo de renderização não pôde ser carregado."};
+    return{available:false,pass:false,score:null,threshold,judgeUsed:false,reasonCode:packageMissing?"playwright_package_missing":"playwright_load_failed",skippedReason:packageMissing?"Auditoria visual não executada porque o módulo de renderização não está instalado. Execute npm install e tente novamente.":"Auditoria visual não executada porque o módulo de renderização não pôde ser carregado."};
   }
   let browser=null,child=null,logs="";
   const port=await choosePort(),url="http://127.0.0.1:"+port;
   try{
     try{browser=await chromium.launch({headless:true})}catch(error){
-      return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:"chromium_missing",skippedReason:"Auditoria visual não executada porque o Chromium do Playwright ainda não está disponível. Execute npm run install:browser uma vez nesta máquina."};
+      return{available:false,pass:false,score:null,threshold,judgeUsed:false,reasonCode:"chromium_missing",skippedReason:"Auditoria visual não executada porque o Chromium do Playwright ainda não está disponível. Execute npm run install:browser uma vez nesta máquina."};
     }
     child=spawn(process.execPath,[nextBin,"start","-H","127.0.0.1","-p",String(port)],{
       cwd:root,
@@ -258,24 +262,30 @@ export async function runVisualQualityAudit({root,nextBin,site,plan}={}){
     const desktop=await capture(browser,url,{viewport:{width:1440,height:1000},mobile:false});
     const mobile320=await capture(browser,url,{viewport:{width:320,height:740},mobile:true});
     const mobile390=await capture(browser,url,{viewport:{width:390,height:844},mobile:true});
-    const metrics={desktop:desktop.metrics,mobile320:mobile320.metrics,mobile:mobile390.metrics,mobile390:mobile390.metrics};
+    await fs.mkdir(path.join(root,"quality"),{recursive:true});
+    for(const [name,shot] of [["desktop",desktop],["mobile-320",mobile320],["mobile-390",mobile390]])await fs.writeFile(path.join(root,"quality",name+".jpg"),Buffer.from(shot.image.split(",")[1],"base64"));
+    const functional=await auditProductJourney(browser,url,site?.productContract,site);
+    const metrics={functional,desktop:desktop.metrics,mobile320:mobile320.metrics,mobile:mobile390.metrics,mobile390:mobile390.metrics};
     const known=new Set(plan.components.map(item=>item.name));
     const hardIssues=objectiveIssues(metrics,known);
+    if(functional.available&&!functional.pass)hardIssues.push({component:[...known][0]||"Page",severity:"high",instruction:"Corrija a jornada funcional: "+functional.summary,evidence:JSON.stringify(functional)});
     let judged=null,judgeError="";
-    try{judged=normalizeJudge(await judgeScreenshots({site,plan,metrics,desktopImage:desktop.image,mobile320Image:mobile320.image,mobile390Image:mobile390.image}),known)}
+    try{judged=normalizeJudge(await judgeScreenshots({site,plan,metrics,desktopImage:desktop.image,mobile320Image:mobile320.image,mobile390Image:mobile390.image,generateRequest}),known)}
     catch(error){judgeError=clean(error.message,1200)}
     if(!judged){
-      return{available:true,pass:false,hardFailure:true,score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
+      return{available:true,pass:false,hardFailure:hasHardFailure(metrics)||(functional.available&&!functional.pass),score:null,threshold,judgeUsed:false,judgeError,summary:"A renderização foi validada por métricas do navegador, mas o modelo de visão não concluiu a crítica visual.",dimensions:{},issues:hardIssues,metrics};
     }
     const scoring=calculateVisualQualityScore(judged.dimensions,metrics,threshold);
     const issues=[...hardIssues,...judged.issues.filter(issue=>!hardIssues.some(hard=>hard.component===issue.component&&hard.instruction===issue.instruction))].slice(0,10);
+    const weak=weakPremiumDimensions(judged.dimensions);
+    if(weak.length)issues.push({component:[...known][0]||"Page",severity:"high",instruction:"Melhore os critérios essenciais abaixo de 7/10: "+weak.join(", ")+". Preserve a identidade e a jornada do produto.",evidence:JSON.stringify(judged.dimensions)});
     if(scoring.score<threshold&&!issues.length){
       const hero=plan.components.find(item=>item.role==="hero")||plan.components[0];
       if(hero)issues.push({component:hero.name,severity:"high",instruction:"Reexecute a tese visual com mais identidade, hierarquia e acabamento. O render final ficou abaixo do padrão comercial premium.",evidence:"Score visual final abaixo do mínimo configurado."});
     }
-    return{available:true,pass:scoring.pass,hardFailure:scoring.hardFailure,score:scoring.score,threshold,judgeUsed:true,summary:judged.summary,dimensions:judged.dimensions,issues,metrics};
+    return{available:true,pass:scoring.pass&&functional.pass&&!issues.some(issue=>issue.severity==="high"),hardFailure:scoring.hardFailure||(functional.available&&!functional.pass),score:scoring.score,threshold,judgeUsed:true,summary:judged.summary,dimensions:judged.dimensions,issues,metrics};
   }catch(error){
-    return{available:false,pass:true,score:null,threshold,judgeUsed:false,reasonCode:"visual_qa_failed",skippedReason:"A auditoria visual renderizada encontrou uma falha de ambiente. Consulte os logs técnicos e tente novamente."};
+    return{available:false,pass:false,score:null,threshold,judgeUsed:false,reasonCode:"visual_qa_failed",skippedReason:"A auditoria visual renderizada encontrou uma falha de ambiente. Consulte os logs técnicos e tente novamente."};
   }finally{
     try{if(child&&!child.killed)child.kill()}catch{}
     try{await browser?.close()}catch{}

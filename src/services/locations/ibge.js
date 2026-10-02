@@ -25,6 +25,7 @@ export async function listIbgeCities(state, { fetchImpl = fetch } = {}) {
   const stateId = getIbgeStateId(state);
   const response = await fetchImpl(`${IBGE_BASE_URL}/estados/${stateId}/municipios?orderBy=nome`, {
     headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(15000),
     next: { revalidate: 604800 },
   });
 

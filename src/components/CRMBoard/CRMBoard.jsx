@@ -11,6 +11,7 @@ import {
   recordContactAction,
 } from "../../app/actions/leads.js";
 import s from "./CRMBoard.module.css";
+import {folderKey,nicheKey,nicheLabel,groupNiches} from "../../services/leads/crmFolders.js";
 
 const STAGE_COLOR = {
   novo: "#8b949e",
@@ -30,12 +31,13 @@ const CLOSED_STAGES = new Set(["ganho", "perdido"]);
 function BRL(value) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(Number(value) || 0); }
 
 function csvValue(value) {
-  const text = String(value ?? "");
+  const raw = String(value ?? "");
+  const text = /^[=+@\t\r]|^-\D/.test(raw) ? "'"+raw : raw;
   return /[;\n\r\"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function normalizeFilterValue(value) {
-  return String(value || "").trim().toLocaleLowerCase("pt-BR");
+  return folderKey(value);
 }
 
 function cityLabel(lead) {
@@ -204,6 +206,7 @@ export default function CRMBoard({ initialLeads = [] }) {
 
   function selectCityFolder(value) {
     setCityFolder(value);
+    setNicheFilter("all");
     window.localStorage.setItem("leadflow_crm_city_folder", value);
     setSelectedIds(new Set());
     setActiveLeadId("");
@@ -214,42 +217,29 @@ export default function CRMBoard({ initialLeads = [] }) {
     window.localStorage.setItem("leadflow_crm_view", next);
   }
 
-  const nicheOptions = useMemo(() => {
-    const grouped = new Map();
-    for (const lead of leads) {
-      const label = String(lead.segment || "").trim();
-      if (!label) continue;
-      const value = normalizeFilterValue(label);
-      const current = grouped.get(value);
-      if (current) current.count++;
-      else grouped.set(value, { value, label, count: 1 });
-    }
-    return [...grouped.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-  }, [leads]);
-
-  const cityLeads = useMemo(
-    () => leads.filter(lead => cityFolder === "all" || cityKey(lead) === cityFolder),
-    [leads, cityFolder],
-  );
-
+  const cityLeads = useMemo(()=>leads.filter(lead=>cityFolder==="all"||cityKey(lead)===cityFolder),[leads,cityFolder]);
+  const nicheOptions=useMemo(()=>groupNiches(cityLeads),[cityLeads]);
+  const scopedLeads=useMemo(()=>cityLeads.filter(lead=>nicheFilter==="all"||nicheKey(lead)===nicheFilter),[cityLeads,nicheFilter]);
+  useEffect(()=>{if(nicheFilter!=="all"&&!nicheOptions.some(item=>item.value===nicheFilter))setNicheFilter("all")},[nicheFilter,nicheOptions]);
+  useEffect(()=>{setSelectedIds(new Set());setActiveLeadId("")},[cityFolder,nicheFilter]);
   const stageCounts = useMemo(() => {
     const counts = Object.fromEntries(STAGE_IDS.map(id => [id, 0]));
-    for (const lead of cityLeads) {
+    for (const lead of scopedLeads) {
       if (counts[lead.stage] != null) counts[lead.stage]++;
     }
     return counts;
-  }, [cityLeads]);
+  }, [scopedLeads]);
 
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-BR");
-    const filtered = cityLeads.filter(lead => {
+    const filtered = scopedLeads.filter(lead => {
       if (stageFilter !== "all" && lead.stage !== stageFilter) return false;
       if (query) {
         const haystack = [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp, lead.email]
           .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
         if (!haystack.includes(query)) return false;
       }
-      if (nicheFilter !== "all" && normalizeFilterValue(lead.segment) !== nicheFilter) return false;
+      if (nicheFilter !== "all" && nicheKey(lead) !== nicheFilter) return false;
       if (gradeFilter !== "all" && lead.grade !== gradeFilter) return false;
       if (quick === "no-site" && lead.site && !lead.weakSite) return false;
       if (quick === "score" && Number(lead.score || 0) < 50) return false;
@@ -276,21 +266,21 @@ export default function CRMBoard({ initialLeads = [] }) {
       }
       return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
     });
-  }, [cityLeads, stageFilter, nicheFilter, gradeFilter, quick, contactFilter, search, sort]);
+  }, [scopedLeads, stageFilter, nicheFilter, gradeFilter, quick, contactFilter, search, sort]);
 
   const todayItems = useMemo(() => {
-    return cityLeads
+    return visible
       .map(lead => ({ lead, reason: priorityReason(lead) }))
       .filter(item => item.reason)
       .sort((a, b) => a.reason.rank - b.reason.rank || Number(b.lead.score || 0) - Number(a.lead.score || 0));
-  }, [cityLeads]);
+  }, [visible]);
 
   const todayStats = useMemo(() => ({
     followups: todayItems.filter(item => item.reason.rank === 0).length,
-    replies: cityLeads.filter(lead => lead.stage === "com_resposta").length,
-    hot: cityLeads.filter(lead => lead.grade === "A" && lead.stage === "novo").length,
-    negotiations: cityLeads.filter(lead => ["proposta", "negociacao"].includes(lead.stage)).length,
-  }), [todayItems, cityLeads]);
+    replies: visible.filter(lead => lead.stage === "com_resposta").length,
+    hot: visible.filter(lead => lead.grade === "A" && lead.stage === "novo").length,
+    negotiations: visible.filter(lead => ["proposta", "negociacao"].includes(lead.stage)).length,
+  }), [todayItems, visible]);
 
   const byStage = useMemo(() => {
     const grouped = Object.fromEntries(STAGE_IDS.map(id => [id, []]));
@@ -330,6 +320,7 @@ export default function CRMBoard({ initialLeads = [] }) {
     [leads, activeLeadId],
   );
 
+  useEffect(()=>{const ids=new Set(visible.map(lead=>lead.id));setSelectedIds(current=>new Set([...current].filter(id=>ids.has(id))))},[visible]);
   const selectedCount = selectedIds.size;
   const allVisibleSelected = visible.length > 0 && visible.every(lead => selectedIds.has(lead.id));
   const activeFilterCount = [
@@ -477,7 +468,7 @@ export default function CRMBoard({ initialLeads = [] }) {
   }
 
   function exportCsv() {
-    const source = visible.length ? visible : cityLeads;
+    const source = visible;
     const header = ["Nome", "Categoria", "Cidade", "Estado", "Telefone", "WhatsApp", "Site", "Score", "Nota", "Etapa", "Último contato", "Quantidade de contatos"];
     const rows = source.map(lead => [lead.name, lead.segment, lead.city, lead.location, lead.phone, lead.whatsapp, lead.site, lead.score, lead.grade, lead.stage, lead.lastContactAt || "", lead.contactCount || 0]);
     const content = [header, ...rows].map(row => row.map(csvValue).join(";")).join("\n");
@@ -536,8 +527,8 @@ export default function CRMBoard({ initialLeads = [] }) {
         <article><span>Pipeline</span><strong>{todayStats.negotiations}</strong><small>propostas / negociação</small></article>
       </div>
       <div className={s.todayQueue}>
-        <div className={s.queueHeading}><div><h2>Prioridades de hoje</h2><p>O que merece sua atenção primeiro nesta cidade.</p></div><span>{todayItems.length}</span></div>
-        {todayItems.length === 0 ? <div className={s.emptyState}><strong>Nada urgente por aqui</strong><p>Esta cidade não possui ações prioritárias detectadas agora.</p></div>
+        <div className={s.queueHeading}><div><h2>Prioridades de hoje</h2><p>Prioridades da cidade e do nicho selecionados, respeitando os filtros.</p></div><span>{todayItems.length}</span></div>
+        {todayItems.length === 0 ? <div className={s.emptyState}><strong>Nada urgente por aqui</strong><p>Não há prioridades entre os leads deste recorte.</p></div>
           : todayItems.map(({ lead, reason }) => <button key={lead.id} className={s.priorityItem} onClick={() => setActiveLeadId(lead.id)}>
             <span className={`${s.priorityMark} ${s["priority_" + reason.kind]}`} />
             <span className={`${s.scoreBadge} ${s["grade" + lead.grade]}`}>{lead.score}</span>
@@ -625,7 +616,8 @@ export default function CRMBoard({ initialLeads = [] }) {
 
       <div className={s.quickFacts}>
         {activeLead.googleRating && <div><span>Google</span><strong>★ {activeLead.googleRating}</strong><small>{activeLead.googleReviews || 0} avaliações</small></div>}
-        <div><span>Último contato</span><strong>{lastContactLabel(activeLead)}</strong><small>{activeLead.contactCount || 0} contato{Number(activeLead.contactCount || 0) === 1 ? "" : "s"}</small></div>\n        <div><span>Tempo na etapa</span><strong>{activeLead.pipelineHealth?.stageDays ?? 0} dias</strong><small>{activeLead.pipelineHealth?.stale ? "Requer atenção" : "Dentro do ritmo esperado"}</small></div>
+        <div><span>Último contato</span><strong>{lastContactLabel(activeLead)}</strong><small>{activeLead.contactCount || 0} contato{Number(activeLead.contactCount || 0) === 1 ? "" : "s"}</small></div>
+        <div><span>Tempo na etapa</span><strong>{activeLead.pipelineHealth?.stageDays ?? 0} dias</strong><small>{activeLead.pipelineHealth?.stale ? "Requer atenção" : "Dentro do ritmo esperado"}</small></div>
         <div><span>Prévia</span><strong>{activeLead.landingStatus === "sent" ? "Enviada" : activeLead.landingStatus === "done" ? "Pronta" : activeLead.landingStatus === "todo" ? "A fazer" : "Não iniciada"}</strong><small>{activeLead.previewUrl ? "Link publicado" : "Sem link público"}</small></div>
         <div><span>Proposta</span><strong>{activeLead.proposalValue ? `R$ ${Number(activeLead.proposalValue).toLocaleString("pt-BR")}` : "Não definida"}</strong><small>{stage.label}</small></div>
       </div>
@@ -657,7 +649,7 @@ export default function CRMBoard({ initialLeads = [] }) {
 
   return <main className={s.page}>
     <header className={s.header}>
-      <div><span className={s.eyebrow}>Command Center</span><h1>CRM</h1><p>Encontre a próxima ação sem precisar caçar cards pelo quadro.</p></div>
+      <div><span className={s.eyebrow}>Carteira de oportunidades</span><h1>CRM</h1><p>Organize por cidade e nicho. Acompanhe as próximas ações em cada carteira.</p></div>
       <div className={s.headerActions}>
         <button className={s.primary} onClick={() => setCreating(true)}>+ Criar lead</button>
         <button onClick={exportCsv}>Exportar</button>
@@ -671,17 +663,17 @@ export default function CRMBoard({ initialLeads = [] }) {
     </div>
 
     <section className={s.filterShell}>
-      <div className={s.searchWrap}><span>⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar empresa, nicho, telefone..." /></div>
-      <select value={nicheFilter} onChange={event => setNicheFilter(event.target.value)}><option value="all">Todos os nichos</option>{nicheOptions.map(option => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}</select>
-      <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value)}><option value="all">Todas as notas</option><option value="A">Quentes</option><option value="B">Mornos</option><option value="C">Em análise</option><option value="D">Frios</option></select>
-      <select value={quick} onChange={event => setQuick(event.target.value)}><option value="all">Todas as oportunidades</option><option value="no-site">Sem site próprio</option><option value="score">Score 50+</option><option value="phone">Com telefone</option><option value="whatsapp">WhatsApp testável</option></select>
-      <select value={contactFilter} onChange={event => setContactFilter(event.target.value)}><option value="all">Qualquer contato</option><option value="never">Nunca contatados</option><option value="today">Contato hoje</option><option value="1-3">Há 1–3 dias</option><option value="4-7">Há 4–7 dias</option><option value="8-15">Há 8–15 dias</option><option value="16+">Há mais de 15 dias</option></select>
-      <select value={sort} onChange={event => setSort(event.target.value)}><option value="score">Maior score</option><option value="recent">Mais recentes</option><option value="contact-oldest">Contato mais antigo</option><option value="contact-newest">Contato mais recente</option><option value="name">Nome</option></select>
+      <div className={s.searchWrap}><span>⌕</span><input value={search} onChange={event => setSearch(event.target.value)} aria-label="Buscar leads" placeholder="Buscar empresa, nicho, telefone..." /></div>
+      <select aria-label="Nicho" value={nicheFilter} onChange={event => setNicheFilter(event.target.value)}><option value="all">Todos os nichos</option>{nicheOptions.map(option => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}</select>
+      <select aria-label="Temperatura" value={gradeFilter} onChange={event => setGradeFilter(event.target.value)}><option value="all">Todas as notas</option><option value="A">Quentes</option><option value="B">Mornos</option><option value="C">Em análise</option><option value="D">Frios</option></select>
+      <select aria-label="Oportunidade" value={quick} onChange={event => setQuick(event.target.value)}><option value="all">Todas as oportunidades</option><option value="no-site">Sem site próprio</option><option value="score">Score 50+</option><option value="phone">Com telefone</option><option value="whatsapp">Com WhatsApp</option></select>
+      <select aria-label="Último contato" value={contactFilter} onChange={event => setContactFilter(event.target.value)}><option value="all">Qualquer contato</option><option value="never">Nunca contatados</option><option value="today">Contato hoje</option><option value="1-3">Há 1–3 dias</option><option value="4-7">Há 4–7 dias</option><option value="8-15">Há 8–15 dias</option><option value="16+">Há mais de 15 dias</option></select>
+      <select aria-label="Ordenação" value={sort} onChange={event => setSort(event.target.value)}><option value="score">Maior score</option><option value="recent">Mais recentes</option><option value="contact-oldest">Contato mais antigo</option><option value="contact-newest">Contato mais recente</option><option value="name">Nome</option></select>
       {activeFilterCount > 0 && <button className={s.clearFilters} onClick={clearFilters}>Limpar {activeFilterCount}</button>}
     </section>
 
     <div className={s.stageStrip}>
-      <button className={stageFilter === "all" ? s.stageActive : ""} onClick={() => setStageFilter("all")}><span>Todos</span><b>{cityLeads.length}</b></button>
+      <button className={stageFilter === "all" ? s.stageActive : ""} onClick={() => setStageFilter("all")}><span>Todos</span><b>{scopedLeads.length}</b></button>
       {STAGES.map(stage => <button key={stage.id} className={stageFilter === stage.id ? s.stageActive : ""} onClick={() => setStageFilter(stageFilter === stage.id ? "all" : stage.id)}><i style={{ background: STAGE_COLOR[stage.id] }} /><span>{stage.label}</span><b>{stageCounts[stage.id] || 0}</b></button>)}
     </div>
 
@@ -691,12 +683,12 @@ export default function CRMBoard({ initialLeads = [] }) {
       <aside className={s.citySidebar}>
         <div className={s.cityHeading}><span>Cidades</span><small>{cityFolders.length}</small></div>
         <button className={cityFolder === "all" ? s.cityActive : ""} onClick={() => selectCityFolder("all")}><span className={s.cityIcon}>▰</span><span><strong>Todas</strong><small>{leads.length} leads</small></span></button>
-        <div className={s.cityList}>{cityFolders.map(folder => <button key={folder.key} className={cityFolder === folder.key ? s.cityActive : ""} onClick={() => selectCityFolder(folder.key)}><span className={s.cityIcon}>▰</span><span className={s.cityText}><strong>{folder.label}</strong><small>{folder.count} leads · {folder.hot} quentes{folder.pipeline ? ` · ${folder.pipeline} pipeline` : ""}</small></span><b>{folder.count}</b></button>)}</div>
+        <div className={s.cityList}>{cityFolders.map(folder => <div key={folder.key}><button aria-expanded={cityFolder===folder.key} className={cityFolder===folder.key?s.cityActive:""} onClick={()=>selectCityFolder(folder.key)}><span className={s.cityIcon}>▰</span><span className={s.cityText}><strong>{folder.label}</strong><small>{folder.count} leads · {folder.hot} quentes</small></span><b>{cityFolder===folder.key?"⌄":"›"}</b></button>{cityFolder===folder.key&&<div className={s.nicheFolders}><button className={nicheFilter==="all"?s.nicheActive:""} onClick={()=>setNicheFilter("all")}><span>Todos os nichos</span><b>{folder.count}</b></button>{nicheOptions.map(niche=><button key={niche.value} className={nicheFilter===niche.value?s.nicheActive:""} onClick={()=>setNicheFilter(niche.value)}><span>{niche.label}</span><b>{niche.count}</b></button>)}</div>}</div>)}</div>
       </aside>
 
       <section className={s.center}>
         <div className={s.centerToolbar}>
-          <div><strong>{cityFolder === "all" ? "Todos os leads" : cityFolders.find(folder => folder.key === cityFolder)?.label || "Cidade"}</strong><span>{view === "today" ? `${todayItems.length} prioridades` : `${visible.length} de ${cityLeads.length} leads`}</span></div>
+          <div><strong>{cityFolder === "all" ? "Todos os leads" : cityFolders.find(folder => folder.key === cityFolder)?.label || "Cidade"}{nicheFilter!=="all"?" / "+(nicheOptions.find(item=>item.value===nicheFilter)?.label||"Nicho"):""}</strong><span>{view === "today" ? `${todayItems.length} prioridades` : `${visible.length} de ${scopedLeads.length} leads`}</span></div>
           {view !== "today" && <div className={s.bulkActions}>
             <button onClick={toggleVisibleSelection} disabled={!visible.length || deleting}>{allVisibleSelected ? "Desmarcar" : "Selecionar exibidos"}</button>
             {selectedCount > 0 && <button className={s.bulkDelete} onClick={removeSelectedLeads} disabled={deleting}>Excluir {selectedCount}</button>}

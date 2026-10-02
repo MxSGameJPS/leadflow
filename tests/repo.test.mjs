@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ const root = path.resolve(here, "..");
 const dataDir = path.join(root, "data");
 const testDb = path.join(dataDir, "leadflow-test.db");
 const prismaCli = path.join(root, "node_modules", "prisma", "build", "index.js");
-const databaseUrl = "file:../data/leadflow-test.db";
+const databaseUrl = "file:" + testDb.replace(/\\/g, "/");
 
 mkdirSync(dataDir, { recursive: true });
 for (const suffix of ["", "-journal", "-wal", "-shm"]) {
@@ -16,6 +16,7 @@ for (const suffix of ["", "-journal", "-wal", "-shm"]) {
   if (existsSync(target)) rmSync(target, { force: true });
 }
 
+writeFileSync(testDb, "");
 process.env.DATABASE_URL = databaseUrl;
 const push = spawnSync(process.execPath, [prismaCli, "db", "push", "--skip-generate"], {
   cwd: root,
