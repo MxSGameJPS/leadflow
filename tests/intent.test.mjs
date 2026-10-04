@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { buildFreelanceQueries, buildIntentQueries, cleanIntentQuery } from "../src/services/intent/intentQueries.js";
 import { normalizeRawSignal, extractSignalsFromCommandOutput } from "../src/services/intent/intentNormalizer.js";
 import { calculateIntentScore, fallbackIntentClassification, gradeFromIntentScore, intentBand } from "../src/services/intent/intentScoring.js";
-import { normalizeIntentSearchInput } from "../src/services/intent/intentService.js";
+import { normalizeIntentSearchInput } from "../src/services/intent/intentService.js";\nimport { quoteWindowsCmdArg } from "../src/services/intent/commandRunner.js";
 
-assert.equal(cleanIntentQuery("preciso & site | agora"), "preciso site agora");
+assert.equal(cleanIntentQuery('"preciso" & site | agora'), "preciso site agora");\nassert.equal(quoteWindowsCmdArg("preciso de site"), '"preciso de site"');\nassert.throws(() => quoteWindowsCmdArg("site & whoami"), /caractere especial de shell/);
 assert.deepEqual(buildIntentQueries({ service: "app", maxQueries: 2 }), ["preciso criar um aplicativo", "procuro desenvolvedor de aplicativo"]);
 assert.equal(buildFreelanceQueries("site").length, 3);
 
