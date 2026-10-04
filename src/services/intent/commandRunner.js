@@ -19,7 +19,7 @@ export async function runIntentCommand(command, args = [], { timeoutMs = 30000, 
       cwd: process.cwd(),
       env: { ...process.env, ...env },
       windowsHide: true,
-      shell: process.platform === "win32" && !path.isAbsolute(command),
+      shell: false,
     });
 
     let stdout = "";
