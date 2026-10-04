@@ -1,6 +1,4 @@
 import { spawn } from "node:child_process";
-import path from "node:path";
-
 const MAX_OUTPUT = 4 * 1024 * 1024;
 
 export class IntentCommandError extends Error {
