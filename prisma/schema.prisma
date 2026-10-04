@@ -45,3 +45,35 @@ model Lead {
   @@index([stage])
   @@index([grade])
 }
+
+model IntentSignal {
+  id             String   @id @default(cuid())
+  fingerprint    String   @unique
+  source         String
+  sourceUrl      String?
+  author         String?
+  title          String?
+  content        String
+  query          String?
+  publishedAt    String?
+  matchedService String   @default("unknown")
+  intentType     String   @default("other")
+  buyerStage     String   @default("unknown")
+  intentLevel    String   @default("unknown")
+  urgencyScore   Int      @default(0)
+  fitScore       Int      @default(0)
+  confidence     Float    @default(0)
+  explicitIntent Boolean  @default(false)
+  intentScore    Int      @default(0)
+  band           String   @default("low")
+  reason         String?
+  status         String   @default("new")
+  leadId         String?
+  rawPayload     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([intentScore])
+  @@index([status])
+  @@index([source])
+}
