@@ -7,6 +7,7 @@ import s from "./AppShell.module.css";
 const ITEMS = [
   { href: "/dashboard", icon: "▦", label: "Dashboard" },
   { href: "/leads", icon: "◎", label: "Leads" },
+  { href: "/intencao", icon: "⌁", label: "Intenção" },
   { href: "/crm", icon: "▤", label: "CRM" },
   { href: "/consultoria", icon: "✦", label: "Consultorias" },
   { href: "/agendamentos", icon: "□", label: "Agendamentos" },
