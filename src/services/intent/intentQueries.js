@@ -65,7 +65,7 @@ const FREELANCE_DOMAINS = [
 export function cleanIntentQuery(value, max = 220) {
   return String(value || "")
     .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/[&|<>^%!`]/g, " ")
+    .replace(/[&|<>^%!"`]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
