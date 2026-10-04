@@ -89,29 +89,35 @@ function resolveWindowsCommand(command) {
   return shim || command;
 }
 
+export function buildWindowsCmdLine(command, args = []) {
+  const parts = [
+    quoteWindowsCmdArg(command),
+    ...args.map(quoteWindowsCmdArg),
+  ];
+  // cmd.exe /s /c requires an extra outer quote pair when the executable
+  // itself is quoted. Example:
+  //   ""C:\\path\\tool.cmd" "arg one" "arg two""
+  return `"${parts.join(" ")}"`;
+}
+
 function prepareCommand(command, args) {
   const validated = validateCommand(command);
   const stringArgs = args.map(value => String(value));
 
   if (process.platform !== "win32") {
-    return { command: validated, args: stringArgs };
+    return { command: validated, args: stringArgs, windowsVerbatimArguments: false };
   }
 
   const resolved = resolveWindowsCommand(validated);
   if (!/\.(cmd|bat)$/i.test(resolved)) {
-    return { command: resolved, args: stringArgs };
+    return { command: resolved, args: stringArgs, windowsVerbatimArguments: false };
   }
 
   const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
-  const commandLine = [
-    "call",
-    quoteWindowsCmdArg(resolved),
-    ...stringArgs.map(quoteWindowsCmdArg),
-  ].join(" ");
-
   return {
     command: comspec,
-    args: ["/d", "/s", "/v:off", "/c", commandLine],
+    args: ["/d", "/s", "/v:off", "/c", buildWindowsCmdLine(resolved, stringArgs)],
+    windowsVerbatimArguments: true,
   };
 }
 
@@ -130,6 +136,7 @@ export async function runIntentCommand(command, args = [], { timeoutMs = 30000, 
       env: { ...process.env, ...env },
       windowsHide: true,
       shell: false,
+      windowsVerbatimArguments: prepared.windowsVerbatimArguments === true,
     });
 
     let stdout = "";
