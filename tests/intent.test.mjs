@@ -7,9 +7,11 @@ import { buildWindowsCmdLine, quoteWindowsCmdArg } from "../src/services/intent/
 
 assert.equal(cleanIntentQuery('"preciso" & site | agora'), "preciso site agora");
 assert.equal(quoteWindowsCmdArg("preciso de site"), '"preciso de site"');
-assert.equal(buildWindowsCmdLine("C:\\\\Users\\\\marys\\\\AppData\\\\Roaming\\\
-pm\\\\mcporter.cmd", ["call", "exa.web_search_exa", "query=preciso de site"]), '""C:\\\\Users\\\\marys\\\\AppData\\\\Roaming\\\
-pm\\\\mcporter.cmd" "call" "exa.web_search_exa" "query=preciso de site""');
+const mcporterPath = String.raw`C:\\Users\\marys\\AppData\\Roaming\\npm\\mcporter.cmd`;
+assert.equal(
+  buildWindowsCmdLine(mcporterPath, ["call", "exa.web_search_exa", "query=preciso de site"]),
+  `"${quoteWindowsCmdArg(mcporterPath)} "call" "exa.web_search_exa" "query=preciso de site""`,
+);
 assert.throws(() => quoteWindowsCmdArg("site & whoami"), /caractere especial de shell/);
 assert.deepEqual(buildIntentQueries({ service: "app", maxQueries: 2 }), ["preciso criar um aplicativo", "procuro desenvolvedor de aplicativo"]);
 assert.equal(buildFreelanceQueries("site").length, 3);
