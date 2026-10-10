@@ -96,7 +96,7 @@ function defaultCallScript(lead, profile) {
     `\nCONTEXTO\nEncontrei o perfil da empresa no Google${location ? ` em ${location}` : ""}${lead.googleRating ? ` e vi a avaliação ${lead.googleRating}/5` : ""}.`,
     `\nDIAGNÓSTICO\nHoje vocês usam qual canal como principal para apresentar o negócio e receber novos contatos?`,
     `\nCONEXÃO\n${lead.problem || `Percebi uma oportunidade de criar uma presença digital mais clara para o nicho de ${lead.segment || "vocês"}.`}`,
-    lead.previewUrl ? `\nPRÓXIMO PASSO\nEu já preparei uma prévia visual para vocês e deixei publicada aqui: ${lead.previewUrl}\nQueria te mostrar rapidamente a lógica da página e ouvir o que você achou.` : `\nPRÓXIMO PASSO\nEu já estou trabalhando em uma prévia visual específica para vocês. Assim que publicar, envio o link para você avaliar.`,
+    `\nPRÓXIMO PASSO\nCaso faça sentido para vocês, posso apresentar uma ideia inicial de site e mostrar como ela poderia ser adaptada à empresa.`,
   ].join("\n");
 }
 
@@ -108,7 +108,10 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [kind, setKind] = useState("initial");
   const initialMessages = buildProfileMessages(initialLead, initialProfile, initialWorkspace.previewUrl);
   const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript({ ...initialLead, previewUrl: initialWorkspace.previewUrl }, initialProfile));
-  const [whatsappMessage, setWhatsappMessage] = useState(initialWorkspace.whatsappMessage || initialMessages.initial);
+  const [whatsappMessage, setWhatsappMessage] = useState(() => {
+    const saved = initialWorkspace.whatsappMessage || "";
+    return /https?:\/\//i.test(saved) ? initialMessages.initial : (saved || initialMessages.initial);
+  });
   const [outreach, setOutreach] = useState(initialWorkspace.outreach || {});
   const [qualification, setQualification] = useState(initialWorkspace.qualification || {});
   const [salesIntel, setSalesIntel] = useState(initialWorkspace.salesIntel || {});
@@ -143,7 +146,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const qualificationResult = useMemo(() => calculateSalesQualification(lead, qualification), [lead, qualification]);
   const currentStage = useMemo(() => STAGES.find(item => item.id === lead.stage), [lead.stage]);
   const status = lead.stage === "ganho" ? "won" : lead.stage === "perdido" ? "lost" : "open";
-  const whatsapp = kind === "initial" && !previewUrl ? null : waLink(lead, whatsappMessage);
+  const whatsapp = waLink(lead, whatsappMessage);
 
   async function mutateLead(action, patch, success) {
     const before = lead;
@@ -558,9 +561,10 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
       </div>
 
       <div className={s.scriptCard}>
-        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>{previewUrl ? "Primeiro contato já envia a prévia publicada para o lead." : "Publique a prévia e salve o link na aba Informações antes do primeiro contato."}</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={() => trackContact(kind)}>Chamar no WhatsApp</a>}</div>
-        <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
+        <div className={s.cardHeading}><div><h3>Mensagem WhatsApp</h3><p>{kind === "preview" ? "Envie esta mensagem com a prévia somente após o lead demonstrar interesse." : "Comece despertando interesse, sem compartilhar a prévia. O envio é manual."}</p></div>{whatsapp && <a className={s.whatsapp} href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={() => trackContact(kind)}>Chamar no WhatsApp</a>}</div>
+        <div className={s.messageTabs}>{[["initial", "Primeiro contato"], ["preview", "Enviar prévia"], ["followup", "Follow-up"], ["last_attempt", "Última tentativa"], ["recovery", "Recuperar"]].map(([value, label]) => <button key={value} className={kind === value ? s.activePill : ""} onClick={() => selectMessageKind(value)}>{label}</button>)}</div>
         <textarea value={whatsappMessage} onChange={event => setWhatsappMessage(event.target.value)} />
+        {kind === "preview" && !previewUrl && <p>Adicione o link da prévia na aba Informações antes de compartilhar esta mensagem.</p>}
         <div className={s.buttonRow}><button className={s.primary} disabled={busy === "whatsapp"} onClick={() => generateAI("whatsapp")}>{busy === "whatsapp" ? "Gerando..." : "Gerar com IA"}</button><button onClick={() => persistWorkspace({ whatsappMessage }, "Mensagem salva.")}>Salvar</button><button onClick={() => copy(whatsappMessage, "Mensagem copiada.")}>Copiar</button></div>
       </div>
 
