@@ -1,6 +1,23 @@
-function firstName(lead){return String(lead?.name||"").split(/\s|–|-/)[0]}
-function signature(profile={}){return[profile.name,profile.profession].filter(Boolean).join(" · ")}
-function introduction(profile={}){const name=profile.name?"Meu nome é "+profile.name:"Trabalho com criação de sites";const profession=profile.profession?" e sou "+profile.profession:"";const brand=profile.brandName?" na "+profile.brandName:"";return name+profession+brand+"."}
-function observedContext(lead){if(lead.googleRating)return"Encontrei o perfil de vocês no Google e vi a avaliação "+lead.googleRating+"/5"+(lead.googleReviews?" com "+lead.googleReviews+" avaliações":"")+". Isso mostra uma reputação muito positiva.";if(lead.instagram)return"Encontrei o negócio e também vi que vocês possuem presença no Instagram.";return"Conheci o negócio pelo perfil do Google e achei interessante o trabalho de vocês."}
-function previewOffer(lead){const niche=lead.segment?" para "+String(lead.segment).toLowerCase():"";return"uma prévia de site profissional pensada"+niche}
-export function buildProfileMessages(lead,profile={},previewUrl=""){const business=lead.name||"seu negócio";const first=firstName(lead);const sign=signature(profile);const ending=sign?"\n\n"+sign:"";const initial=previewUrl?"Oi! Falo com a pessoa responsável pela "+business+"? 👋\n\n"+introduction(profile)+" "+observedContext(lead)+" Preparei "+previewOffer(lead)+" especialmente para a "+business+" e já deixei a demonstração pronta para vocês verem:\n\n"+previewUrl+"\n\nÉ uma proposta visual inicial, sem compromisso. Quando puder dar uma olhada, me diz o que achou."+ending:"A mensagem de primeiro contato fica pronta assim que você publicar a prévia e salvar o link no CRM.";const followup=previewUrl?"Oi"+(first?", "+first:"")+"! Passando para retomar a prévia que preparei para a "+business+":\n"+previewUrl+"\n\nQuando puder olhar, me diz o que achou. Se quiser, eu também consigo ajustar a ideia ao que vocês realmente precisam."+ending:"Oi"+(first?", "+first:"")+"! Estou finalizando uma prévia visual da "+business+"; assim que estiver publicada eu te envio o link para avaliar com calma."+ending;const last_attempt=previewUrl?"Oi"+(first?", "+first:"")+"! Essa é minha última mensagem para não ficar insistindo. A prévia da "+business+" continua disponível aqui:\n"+previewUrl+"\n\nSe isso não for prioridade agora, sem problema — encerro o contato por aqui. Se fizer sentido conversar mais adiante, posso deixar a porta aberta?"+ending:"Oi"+(first?", "+first:"")+"! Essa é minha última mensagem para não ficar insistindo. Vou encerrar o contato por aqui e deixo a porta aberta caso faça sentido conversarmos no futuro."+ending;const recovery=previewUrl?"Oi"+(first?", "+first:"")+"! Retomei nossa conversa porque a prévia da "+business+" continua disponível aqui:\n"+previewUrl+"\n\nPosso ajustar a ideia com base no que vocês realmente precisam. O que você mudaria primeiro?"+ending:"Oi"+(first?", "+first:"")+"! Retomei nossa conversa porque acredito que ainda existe espaço para uma proposta visual mais alinhada ao que a "+business+" precisa. Se fizer sentido, posso retomar a ideia quando a prévia estiver publicada."+ending;return{initial,followup,last_attempt,recovery}}
+function signature(profile = {}) {
+  return [profile.name, profile.profession].filter(Boolean).join(" · ");
+}
+function introduction(profile = {}) {
+  const who = profile.name ? `Sou ${profile.name}` : "Trabalho com desenvolvimento de sites";
+  return profile.profession ? `${who}, ${profile.profession}.` : `${who}.`;
+}
+function context(lead = {}) {
+  if (lead.googleRating) return `Vi o perfil da empresa no Google, com avaliação ${lead.googleRating}/5${lead.googleReviews ? ` em ${lead.googleReviews} avaliações` : ""}.`;
+  if (lead.instagram) return "Conheci o perfil da empresa no Instagram.";
+  return "Conheci o trabalho de vocês e pensei em uma oportunidade digital.";
+}
+export function buildProfileMessages(lead = {}, profile = {}, previewUrl = "") {
+  const business = lead.name || "empresa";
+  const sign = signature(profile);
+  const ending = sign ? `\n\n${sign}` : "";
+  const initial = `Olá! Falo com quem cuida da ${business}? ${introduction(profile)} ${context(lead)} Tenho uma ideia de como um site próprio poderia apresentar melhor o negócio e facilitar o contato de novos clientes. Posso explicar a ideia por aqui?${ending}`;
+  const preview = `Conforme conversamos, esta é uma prévia inicial do que poderíamos desenvolver para a ${business}.${previewUrl ? `\n\n${previewUrl}` : " Assim que o link estiver disponível, posso encaminhá-lo."}\n\nÉ apenas uma ideia visual: podemos ajustar todo o layout, textos, estrutura e funcionalidades ao jeito de vocês. Um site próprio ajuda a reunir informações em um endereço da empresa, facilita sua descoberta nas buscas e complementa o Instagram e o WhatsApp. O que você gostaria de adaptar primeiro?${ending}`;
+  const followup = `Oi! Retomando brevemente: minha ideia é ajudar a ${business} a apresentar seus serviços em um espaço próprio na internet, complementar às redes sociais. Faz sentido eu te explicar como seria? Se não for o momento, sem problema.${ending}`;
+  const last_attempt = `Oi! Esta é minha última mensagem para não ficar insistindo. Entendo se uma solução digital não for prioridade agora; vou encerrar o contato por aqui. Se no futuro fizer sentido conversar, fico à disposição.${ending}`;
+  const recovery = `Entendi, agradeço seu retorno! Respeito sua decisão e fico à disposição caso precisem de alguma solução digital mais adiante.${ending}`;
+  return { initial, preview, followup, last_attempt, recovery };
+}
