@@ -175,12 +175,12 @@ try {
   });
   t("prompt contém lead", prompt.prompt.includes("Mercado Silva"));
   t("prompt exige fatos reais", prompt.systemPrompt.includes("Não invente"));
-  t("primeiro contato não envia prévia", prompt.prompt.includes("NÃO inclua URL") && prompt.prompt.includes("ignore-o nesta etapa."));
+  t("primeiro contato inclui portfólio sem link individual", prompt.prompt.includes("https://www.saulopavanello.com.br/previas") && prompt.prompt.includes("NÃO inclua a URL previewUrl"));
   const previewPrompt = buildLeadMessagePrompt({ kind: "preview", lead: { name: "Mercado Silva", previewUrl: "https://preview.example.com" } });
   t("prévia explica personalização e importância do site", previewPrompt.prompt.includes("totalmente ajustável") && previewPrompt.prompt.includes("site próprio"));
   const { buildProfileMessages } = await import("../src/services/leads/profileMessages.js");
   const messages = buildProfileMessages({ name: "Mercado Silva" }, { name: "Saulo", profession: "Desenvolvedor" }, "https://preview.example.com");
-  t("modelo de primeiro contato não contém link", !messages.initial.includes("https://preview.example.com"));
+  t("modelo inicial inclui portfólio sem prévia individual", messages.initial.includes("https://www.saulopavanello.com.br/previas") && !messages.initial.includes("https://preview.example.com"));
   t("modelo de apresentação possui link e explica flexibilidade", messages.preview.includes("https://preview.example.com") && messages.preview.includes("ajustar todo o layout"));
 
   const lastAttemptPrompt = buildLeadMessagePrompt({
