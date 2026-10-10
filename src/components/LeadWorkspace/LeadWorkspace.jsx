@@ -108,7 +108,10 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
   const [kind, setKind] = useState("initial");
   const initialMessages = buildProfileMessages(initialLead, initialProfile, initialWorkspace.previewUrl);
   const [callScript, setCallScript] = useState(initialWorkspace.callScript || defaultCallScript({ ...initialLead, previewUrl: initialWorkspace.previewUrl }, initialProfile));
-  const [whatsappMessage, setWhatsappMessage] = useState(initialWorkspace.whatsappMessage || initialMessages.initial);
+  const [whatsappMessage, setWhatsappMessage] = useState(() => {
+    const saved = initialWorkspace.whatsappMessage || "";
+    return /https?:\/\//i.test(saved) ? initialMessages.initial : (saved || initialMessages.initial);
+  });
   const [outreach, setOutreach] = useState(initialWorkspace.outreach || {});
   const [qualification, setQualification] = useState(initialWorkspace.qualification || {});
   const [salesIntel, setSalesIntel] = useState(initialWorkspace.salesIntel || {});
