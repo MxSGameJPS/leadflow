@@ -131,7 +131,10 @@ export async function generateLeadMessage(input = {}) {
     ? await generateWithProvider(String(input.providerId), request)
     : await generateWithDefaultProvider(request);
 
-  const generated = String(result.text || "").trim().replace(/^["']|["']$/g, "");
+  const rawText = String(result.text || "").trim().replace(/^["']|["']$/g, "");
+  const generated = request.kind === "initial"
+    ? rawText.replace(/https?:\/\/\S+/gi, "").replace(/\s+([,.!?])/g, "$1").trim()
+    : rawText;
   if (!generated) throw new Error("A IA retornou uma mensagem vazia.");
 
   return {
