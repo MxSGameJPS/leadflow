@@ -45,7 +45,7 @@ export async function loadWhatsAppInbox(leads) {
   try { settings = endpoint(); } catch { return { ready: false, chats: [], message: "Configuração OpenWA inválida." }; }
   if (!settings) return { ready: false, chats: [], message: "Configure o OpenWA para visualizar os leads da etiqueta." };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
   try {
     const payload = await requestJson(settings, "labels", controller.signal);
     const labels = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.data?.labels) ? payload.data.labels : Array.isArray(payload?.labels) ? payload.labels : [];
@@ -63,9 +63,14 @@ export async function loadWhatsAppInbox(leads) {
     }
     // Query every distinct matching label; never fall back to all chats.
     // Fail closed on any label error to avoid presenting a misleading partial set.
-    const results = await Promise.all(targets.map(target =>
-      requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal)
-    ));
+    const results = [];
+    for (const target of targets) {
+      try {
+        results.push(await requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal));
+      } catch (error) {
+        throw new Error(`Falha ao consultar etiqueta ID ${String(target.id)}: ${error.message}`);
+      }
+    }
     const uniqueChats = new Map();
     for (const result of results) {
       for (const chat of normalizeChatList(result)) {
@@ -78,6 +83,6 @@ export async function loadWhatsAppInbox(leads) {
     });
     return { ready: true, chats, label: TARGET_LABEL, labelCount: targets.length, message: null };
   } catch (error) {
-    return { ready: false, chats: [], message: `Não foi possível carregar a etiqueta "${TARGET_LABEL}": ${error.message}. A consulta por etiqueta exige whatsapp-web.js; Baileys pode retornar HTTP 501.` };
+    return { ready: false, chats: [], message: error.name === "AbortError" ? "A consulta de etiquetas excedeu 60 segundos. Verifique a conexão do motor whatsapp-web.js e os logs do OpenWA." : `Não foi possível carregar a etiqueta "${TARGET_LABEL}": ${error.message}.` };
   } finally { clearTimeout(timeout); }
 }
