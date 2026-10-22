@@ -45,10 +45,19 @@ export async function loadWhatsAppInbox(leads) {
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const payload = await requestJson(settings, "labels", controller.signal);
-    const labels = Array.isArray(payload) ? payload : payload?.data ?? [];
+    const labels = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.data?.labels) ? payload.data.labels : Array.isArray(payload?.labels) ? payload.labels : [];
     if (!Array.isArray(labels)) return { ready: false, chats: [], message: "Formato de etiquetas inesperado na API OpenWA." };
     const target = selectProspectingLabel(labels);
-    if (!target) return { ready: false, chats: [], message: `Etiqueta "${TARGET_LABEL}" não encontrada no OpenWA. Confira o nome no WhatsApp Business.` };
+    if (!target) {
+      const available = labels.map(label => String(label.name || "").trim()).filter(Boolean).slice(0, 20);
+      return {
+        ready: false,
+        chats: [],
+        message: available.length
+          ? `Etiqueta "${TARGET_LABEL}" não encontrada. O OpenWA retornou estas etiquetas: ${available.join(", ")}. Configure OPENWA_PROSPECTING_LABEL conforme o nome listado.`
+          : "O OpenWA respondeu à consulta, mas retornou zero etiquetas. Confira se a sessão usa whatsapp-web.js, se o WhatsApp Business sincronizou as etiquetas e se elas aparecem no próprio OpenWA. Não carregaremos conversas pessoais como alternativa.",
+      };
+    }
     const raw = await requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal);
     const chats = normalizeChatList(raw).map(chat => {
       const lead = matchChatToLead(chat, leads);
