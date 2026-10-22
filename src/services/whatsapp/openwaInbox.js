@@ -15,7 +15,21 @@ export async function loadWhatsAppInbox(leads) {
       const response = await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/chats`, {
         headers: { "X-API-Key": apiKey, Accept: "application/json" }, cache: "no-store", signal: controller.signal,
       });
-      if (!response.ok) return { ready: false, chats: [], message: `A leitura das conversas retornou HTTP ${response.status}. Verifique permissões e sessão.` };
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const errorBody = await response.json();
+          const raw = errorBody?.message ?? errorBody?.error ?? "";
+          detail = Array.isArray(raw) ? raw.join("; ") : String(raw || "");
+        } catch { /* Some gateways return an empty/non-JSON error body. */ }
+        const hint = response.status === 400
+          ? "Confirme se a sessão está READY no painel OpenWA e se OPENWA_SESSION_ID é o UUID da sessão."
+          : response.status === 401 || response.status === 403
+            ? "Verifique a chave de API e suas permissões sobre esta sessão."
+            : response.status === 404 ? "Verifique se o identificador da sessão existe." : "Verifique a conexão e os logs do OpenWA.";
+        const sanitized = detail.replace(/[\r\n]+/g, " ").slice(0, 250);
+        return { ready: false, chats: [], message: `OpenWA HTTP ${response.status}. ${sanitized ? sanitized + " — " : ""}${hint}` };
+      }
       const payload = await response.json();
       const chats = normalizeChatList(payload).map(chat => {
         const lead = matchChatToLead(chat, leads);
