@@ -5,3 +5,5 @@
 .linkActions{display:flex;gap:8px;flex-wrap:wrap}
 .linkActions button{padding:9px 13px;border-radius:7px;border:1px solid #7f8795;background:transparent;color:inherit;cursor:pointer}
 .linkActions button:disabled{opacity:.45;cursor:not-allowed}
+
+.chat{flex-wrap:wrap}.linkForm{flex-basis:100%}
