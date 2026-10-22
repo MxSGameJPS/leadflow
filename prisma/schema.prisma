@@ -77,3 +77,15 @@ model IntentSignal {
   @@index([status])
   @@index([source])
 }
+
+model WhatsAppLeadLink {
+  id        String   @id @default(cuid())
+  sessionId String
+  chatId    String
+  leadId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, chatId])
+  @@index([leadId])
+}
