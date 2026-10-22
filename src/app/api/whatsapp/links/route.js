@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { saveManualLink, removeManualLink } from "../../../../services/whatsapp/manualLinks.js";
 export const runtime = "nodejs";
+function localOnly() { return process.env.NODE_ENV !== "production"; }
 export async function POST(request) {
+  if (!localOnly()) return NextResponse.json({ error: "Vinculação disponível apenas em ambiente de desenvolvimento local." }, { status: 403 });
   try {
     const { chatId, leadId } = await request.json();
     const sessionId = process.env.OPENWA_SESSION_ID;
@@ -12,6 +14,7 @@ export async function POST(request) {
   } catch (error) { return NextResponse.json({ error: error.message || "Falha ao vincular." }, { status: 400 }); }
 }
 export async function DELETE(request) {
+  if (!localOnly()) return NextResponse.json({ error: "Vinculação disponível apenas em ambiente de desenvolvimento local." }, { status: 403 });
   try {
     const { chatId } = await request.json();
     const sessionId = process.env.OPENWA_SESSION_ID;
