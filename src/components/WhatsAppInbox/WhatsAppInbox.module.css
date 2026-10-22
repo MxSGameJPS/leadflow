@@ -7,3 +7,11 @@
 .linkActions button:disabled{opacity:.45;cursor:not-allowed}
 
 .chat{flex-wrap:wrap}.linkForm{flex-basis:100%}
+
+/* Explicit colors override global button styles in both themes. */
+.chat .refresh{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 14px;background:#293448;color:#fff;border:1px solid #8999af;border-radius:8px;font-weight:600;cursor:pointer}
+.chat .refresh:hover{background:#354762;border-color:#c3a36b;color:#fff}
+.chat .refresh:focus-visible,.linkActions button:focus-visible{outline:3px solid #d9b56d;outline-offset:2px}
+.linkActions button{background:#293448;color:#fff;border:1px solid #8999af;font-weight:600}
+.linkActions button:hover:not(:disabled){background:#354762;color:#fff}
+.linkActions button:disabled{opacity:.55}
