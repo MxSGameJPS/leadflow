@@ -5,13 +5,16 @@ const ALIASES = ["Prospecção de Cliente", "Prospecção de Clientes"];
 function labelKey(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
 }
+export function selectProspectingLabels(labels, wanted = TARGET_LABEL) {
+  const exact = labels.filter(label => label.id != null && labelKey(label.name) === labelKey(wanted));
+  if (exact.length) return [...new Map(exact.map(label => [String(label.id), label])).values()];
+  if (process.env.OPENWA_PROSPECTING_LABEL) return [];
+  const aliases = labels.filter(label => label.id != null && ALIASES.some(alias => labelKey(alias) === labelKey(label.name)));
+  return [...new Map(aliases.map(label => [String(label.id), label])).values()];
+}
+// Kept for compatibility with existing consumers.
 export function selectProspectingLabel(labels, wanted = TARGET_LABEL) {
-  const matches = labels.filter(label => labelKey(label.name) === labelKey(wanted));
-  if (matches.length === 1) return matches[0];
-  if (matches.length > 1) return null;
-  if (process.env.OPENWA_PROSPECTING_LABEL) return null;
-  const variants = labels.filter(label => ALIASES.some(alias => labelKey(alias) === labelKey(label.name)));
-  return variants.length === 1 ? variants[0] : null;
+  return selectProspectingLabels(labels, wanted)[0] ?? null;
 }
 function endpoint() {
   const base = process.env.OPENWA_URL?.trim().replace(/\/+$/, "");
@@ -47,8 +50,8 @@ export async function loadWhatsAppInbox(leads) {
     const payload = await requestJson(settings, "labels", controller.signal);
     const labels = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.data?.labels) ? payload.data.labels : Array.isArray(payload?.labels) ? payload.labels : [];
     if (!Array.isArray(labels)) return { ready: false, chats: [], message: "Formato de etiquetas inesperado na API OpenWA." };
-    const target = selectProspectingLabel(labels);
-    if (!target) {
+    const targets = selectProspectingLabels(labels);
+    if (!targets.length) {
       const available = labels.map(label => String(label.name || "").trim()).filter(Boolean).slice(0, 20);
       return {
         ready: false,
@@ -58,12 +61,22 @@ export async function loadWhatsAppInbox(leads) {
           : "O OpenWA respondeu à consulta, mas retornou zero etiquetas. Confira se a sessão usa whatsapp-web.js, se o WhatsApp Business sincronizou as etiquetas e se elas aparecem no próprio OpenWA. Não carregaremos conversas pessoais como alternativa.",
       };
     }
-    const raw = await requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal);
-    const chats = normalizeChatList(raw).map(chat => {
+    // Query every distinct matching label; never fall back to all chats.
+    // Fail closed on any label error to avoid presenting a misleading partial set.
+    const results = await Promise.all(targets.map(target =>
+      requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal)
+    ));
+    const uniqueChats = new Map();
+    for (const result of results) {
+      for (const chat of normalizeChatList(result)) {
+        if (!uniqueChats.has(chat.id)) uniqueChats.set(chat.id, chat);
+      }
+    }
+    const chats = [...uniqueChats.values()].map(chat => {
       const lead = matchChatToLead(chat, leads);
       return { ...chat, leadId: lead?.id ?? null, leadName: lead?.name ?? null, leadStage: lead?.stage ?? null };
     });
-    return { ready: true, chats, label: target.name, message: null };
+    return { ready: true, chats, label: TARGET_LABEL, labelCount: targets.length, message: null };
   } catch (error) {
     return { ready: false, chats: [], message: `Não foi possível carregar a etiqueta "${TARGET_LABEL}": ${error.message}. A consulta por etiqueta exige whatsapp-web.js; Baileys pode retornar HTTP 501.` };
   } finally { clearTimeout(timeout); }
