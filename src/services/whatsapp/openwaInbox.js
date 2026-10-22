@@ -52,7 +52,7 @@ export async function loadWhatsAppInbox(leads) {
     if (!Array.isArray(labels)) return { ready: false, chats: [], message: "Formato de etiquetas inesperado na API OpenWA." };
     const targets = selectProspectingLabels(labels);
     if (!targets.length) {
-      const available = labels.map(label => String(label.name || "").trim()).filter(Boolean).slice(0, 20);
+      const available = labels.map(label => String(label.name || "").trim()).filter(Boolean).slice(0, 8);
       return {
         ready: false,
         chats: [],
