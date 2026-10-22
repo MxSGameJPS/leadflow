@@ -1,6 +1,18 @@
 import { normalizeChatList, matchChatToLead } from "./chatMatching.js";
 
-const TARGET_LABEL = "Prospecção de Clientes";
+const TARGET_LABEL = process.env.OPENWA_PROSPECTING_LABEL?.trim() || "Prospecção de Cliente";
+const ALIASES = ["Prospecção de Cliente", "Prospecção de Clientes"];
+function labelKey(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+}
+export function selectProspectingLabel(labels, wanted = TARGET_LABEL) {
+  const matches = labels.filter(label => labelKey(label.name) === labelKey(wanted));
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) return null;
+  if (process.env.OPENWA_PROSPECTING_LABEL) return null;
+  const variants = labels.filter(label => ALIASES.some(alias => labelKey(alias) === labelKey(label.name)));
+  return variants.length === 1 ? variants[0] : null;
+}
 function endpoint() {
   const base = process.env.OPENWA_URL?.trim().replace(/\/+$/, "");
   const key = process.env.OPENWA_API_KEY?.trim();
@@ -35,14 +47,14 @@ export async function loadWhatsAppInbox(leads) {
     const payload = await requestJson(settings, "labels", controller.signal);
     const labels = Array.isArray(payload) ? payload : payload?.data ?? [];
     if (!Array.isArray(labels)) return { ready: false, chats: [], message: "Formato de etiquetas inesperado na API OpenWA." };
-    const target = labels.find(label => String(label.name || "").trim().toLocaleLowerCase("pt-BR") === TARGET_LABEL.toLocaleLowerCase("pt-BR"));
+    const target = selectProspectingLabel(labels);
     if (!target) return { ready: false, chats: [], message: `Etiqueta "${TARGET_LABEL}" não encontrada no OpenWA. Confira o nome no WhatsApp Business.` };
     const raw = await requestJson(settings, `labels/${encodeURIComponent(String(target.id))}/chats`, controller.signal);
     const chats = normalizeChatList(raw).map(chat => {
       const lead = matchChatToLead(chat, leads);
       return { ...chat, leadId: lead?.id ?? null, leadName: lead?.name ?? null, leadStage: lead?.stage ?? null };
     });
-    return { ready: true, chats, label: TARGET_LABEL, message: null };
+    return { ready: true, chats, label: target.name, message: null };
   } catch (error) {
     return { ready: false, chats: [], message: `Não foi possível carregar a etiqueta "${TARGET_LABEL}": ${error.message}. A consulta por etiqueta exige whatsapp-web.js; Baileys pode retornar HTTP 501.` };
   } finally { clearTimeout(timeout); }
