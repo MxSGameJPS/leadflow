@@ -1,4 +1,4 @@
-import { normalizeChatList, matchChatToLead } from "./chatMatching.js";
+import { normalizeChatList, matchChatToLead, normalizePhone } from "./chatMatching.js";
 
 const TARGET_LABEL = process.env.OPENWA_PROSPECTING_LABEL?.trim() || "Prospecção de Cliente";
 const ALIASES = ["Prospecção de Cliente", "Prospecção de Clientes"];
@@ -81,7 +81,28 @@ export async function loadWhatsAppInbox(leads) {
       const lead = matchChatToLead(chat, leads);
       return { ...chat, leadId: lead?.id ?? null, leadName: lead?.name ?? null, leadStage: lead?.stage ?? null };
     });
-    return { ready: true, chats, label: TARGET_LABEL, labelCount: targets.length, message: null };
+    // Resolve a bounded number of @lid identities per request. OpenWA phone resolution
+    // is best-effort; unresolved identities remain unlinked and are never guessed.
+    const pending = chats.filter(chat => !chat.leadId && chat.id.endsWith("@lid")).slice(0, 20);
+    let resolved = 0;
+    for (const chat of pending) {
+      if (controller.signal.aborted) break;
+      try {
+        const result = await requestJson(settings, `contacts/${encodeURIComponent(chat.id)}/phone`, controller.signal);
+        const phone = normalizePhone(result?.phone);
+        if (!phone) continue;
+        const matching = leads.filter(lead => [lead.phone, lead.whatsapp].some(value => normalizePhone(value) === phone));
+        if (matching.length !== 1) continue;
+        const lead = matching[0];
+        chat.leadId = lead.id;
+        chat.leadName = lead.name;
+        chat.leadStage = lead.stage;
+        resolved += 1;
+      } catch {
+        // The endpoint may have no mapping for a given LID; leave unlinked.
+      }
+    }
+    return { ready: true, chats, label: TARGET_LABEL, labelCount: targets.length, resolved, resolutionAttempted: pending.length, message: null };
   } catch (error) {
     return { ready: false, chats: [], message: error.name === "AbortError" ? "A consulta de etiquetas excedeu 60 segundos. Verifique a conexão do motor whatsapp-web.js e os logs do OpenWA." : `Não foi possível carregar a etiqueta "${TARGET_LABEL}": ${error.message}.` };
   } finally { clearTimeout(timeout); }
