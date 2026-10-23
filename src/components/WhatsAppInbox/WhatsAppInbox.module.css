@@ -39,3 +39,5 @@
 .queueToolbar button,.auditResult button{justify-self:start;background:#293448;color:#fff;border:1px solid #8999af;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer}
 .queueToolbar button:hover:not(:disabled),.auditResult button:hover:not(:disabled){background:#354762;color:#fff}
 .queueToolbar button:disabled{opacity:.5;cursor:not-allowed}
+
+.suggestionFeedback{background:#24344b;color:#fff;border:1px solid #8199b9;border-radius:8px;padding:12px;line-height:1.5;overflow-wrap:anywhere}
