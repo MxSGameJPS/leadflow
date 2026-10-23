@@ -1,0 +1,4 @@
+CREATE TABLE "RecoveryDecision" ("id" TEXT NOT NULL PRIMARY KEY,"sessionId" TEXT NOT NULL,"chatId" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT 'pending',"reason" TEXT NOT NULL DEFAULT '',"messageText" TEXT NOT NULL DEFAULT '',"consentConfirmed" BOOLEAN NOT NULL DEFAULT false,"sentAt" DATETIME,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL);
+CREATE UNIQUE INDEX "RecoveryDecision_sessionId_chatId_key" ON "RecoveryDecision"("sessionId","chatId");
+CREATE TABLE "RecoveryDecisionAudit" ("id" TEXT NOT NULL PRIMARY KEY,"decisionId" TEXT NOT NULL,"action" TEXT NOT NULL,"previousStatus" TEXT NOT NULL,"reason" TEXT NOT NULL DEFAULT '',"messageSnapshot" TEXT,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY ("decisionId") REFERENCES "RecoveryDecision"("id") ON DELETE CASCADE);
+CREATE INDEX "RecoveryDecisionAudit_decisionId_idx" ON "RecoveryDecisionAudit"("decisionId");
