@@ -71,7 +71,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
   const [suggestionBusy,setSuggestionBusy]=useState("");
   const [suggestionStatus,setSuggestionStatus]=useState({});
   async function suggestRecovery(chatId,history){
-    if(!history?.messages?.length || !history?.analysis?.firstApproach?.body){const error="A primeira mensagem enviada não foi recuperada. Sem ela, a IA não consegue personalizar a recuperação com segurança. Confira o histórico do WhatsApp.";setSuggestions(x=>({...x,[chatId]:{error}}));setSuggestionStatus(x=>({...x,[chatId]:error}));return;}
+    if(!history?.messages?.some(m=>String(m.body||"").trim())){const error="Nenhuma mensagem textual disponível neste histórico. Revise a conversa no WhatsApp antes de solicitar análise por IA.";setSuggestions(x=>({...x,[chatId]:{error}}));setSuggestionStatus(x=>({...x,[chatId]:error}));return;}
     setSuggestionBusy(chatId);setSuggestionStatus(x=>({...x,[chatId]:"Consultando OmniRoute / provedor padrão de IA..."}));
     try {
       const r=await fetch("/api/recovery/suggest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,messages:history.messages})});
