@@ -5,6 +5,32 @@ export default function RecoveryQueue({initial}){
  const [queue,setQueue]=useState(initial),[error,setError]=useState(""),[busy,setBusy]=useState("");
  const [followups,setFollowups]=useState({});
  const [aiFollowups,setAiFollowups]=useState({});
+ const [batchRunning,setBatchRunning]=useState(false);
+ const [batchProgress,setBatchProgress]=useState("");
+ const [batchErrors,setBatchErrors]=useState({});
+ const [showOnlyPending,setShowOnlyPending]=useState(false);
+ async function checkAllReplies(){
+  if(batchRunning)return;
+  setBatchRunning(true);setBatchErrors({});setError("");
+  const rows=(queue.sentRows||[]).filter(row=>row.decisionStatus!=="close_approved");
+  let completed=0,failed=0;
+  try{
+   for(const row of rows){
+    setBatchProgress("Verificando "+(completed+1)+" de "+rows.length+" conversas enviadas...");
+    try{
+     const response=await fetch("/api/recovery/followup?chatId="+encodeURIComponent(row.chatId),{cache:"no-store"});
+     const result=await response.json();
+     if(!response.ok)throw Error(result.error||"Falha na consulta.");
+     setFollowups(old=>({...old,[row.chatId]:result}));
+    }catch(e){failed++;setBatchErrors(old=>({...old,[row.chatId]:e.message}));}
+    completed++;
+   }
+   setBatchProgress("Verificação concluída: "+completed+" conversas; "+failed+" erro(s). Nenhuma mensagem foi enviada.");
+  }finally{setBatchRunning(false)}
+ }
+ const pendingReplies=(queue.sentRows||[]).filter(row=>row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0);
+ const pendingRefusals=pendingReplies.filter(row=>followups[row.chatId]?.status==="possible_refusal");
+ const visibleSentRows=(queue.sentRows||[]).filter(row=>!showOnlyPending||(row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0));
  async function analyzeReply(chatId){
   setBusy(chatId);setError("");
   try{
@@ -62,10 +88,23 @@ export default function RecoveryQueue({initial}){
  <section className={s.metrics}><div><span>Limite diário</span><strong>{queue.dailyLimit}</strong></div><div><span>Vagas disponíveis hoje</span><strong>{queue.remaining}</strong></div><div><span>Mensagens aprovadas aguardando</span><strong>{queue.rows.length}</strong></div></section>
  {error&&<p role="alert">{error}</p>}
  <section className={s.list}><h2>Mensagens reservadas para revisão final</h2><p>O teste de envio único só funciona quando habilitado explicitamente no ambiente local. Nada é enviado ao reservar.</p>{(queue.reservations||[]).map(row=><article className={s.card} key={row.chatId}><div><strong>{row.chatId}</strong><p>{row.messageSnapshot}</p></div><button type="button" disabled={busy===row.chatId||queue.testUsed} onClick={()=>sendTest(row.chatId)}>{queue.testUsed?"Teste já utilizado":"Testar envio de 1 mensagem"}</button></article>)}</section>
+ <section className={s.list}><h2>Painel de acompanhamento</h2>
+ <p>Consulte, de uma vez, as conversas já enviadas que ainda não tiveram encerramento aprovado. A consulta não utiliza a etiqueta de prospecção.</p>
+ <div className={s.metrics}>
+ <div><span>Enviadas registradas</span><strong>{(queue.sentRows||[]).length}</strong></div>
+ <div><span>Respostas com revisão pendente</span><strong>{pendingReplies.length}</strong></div>
+ <div><span>Possíveis recusas pendentes</span><strong>{pendingRefusals.length}</strong></div>
+ </div>
+ <button type="button" disabled={batchRunning||!!busy} onClick={checkAllReplies}>{batchRunning?"Consultando histórico...":"Verificar todas as respostas pendentes"}</button>
+ {batchProgress&&<p role="status">{batchProgress}</p>}
+ <label><input type="checkbox" checked={showOnlyPending} onChange={e=>setShowOnlyPending(e.target.checked)}/> Mostrar somente contatos com respostas a revisar</label>
+ <p>As contagens consideram apenas os históricos verificados nesta tela. Use o botão para atualizar. A análise individual pelo OmniRoute continua sob demanda.</p>
+ </section>
  <section className={s.list}><h2>Enviadas — acompanhamento após a retirada da etiqueta</h2>
  <p>Consulte respostas sem depender da etiqueta de prospecção. O sistema não responde nem encerra contatos automaticamente.</p>
- {(queue.sentRows||[]).map(row=><article className={s.card} key={row.chatId}>
+ {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
  <div><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
+ {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
  {followups[row.chatId]&&<div role="status"><p><strong>{followups[row.chatId].suggestion}</strong></p>
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
  <small>{followups[row.chatId].source}</small>
