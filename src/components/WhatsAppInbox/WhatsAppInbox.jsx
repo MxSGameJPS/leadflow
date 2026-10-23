@@ -22,6 +22,20 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       setSelectedChat(""); setSelectedLead(""); setLeadSearch(""); router.refresh();
     } catch (reason) { setError(reason.message); } finally { setSaving(false); }
   }
+  const [reviewChat,setReviewChat] = useState("");
+  const [reviewText,setReviewText] = useState("");
+  const [reviewReason,setReviewReason] = useState("");
+  const [consent,setConsent] = useState(false);
+  const [reviewBusy,setReviewBusy] = useState(false);
+  async function decide(chatId,action){
+    setReviewBusy(true);setError("");
+    try {
+      const response=await fetch("/api/recovery/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,action,messageText:reviewText,reason:reviewReason,consentConfirmed:consent})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Falha ao registrar decisão.");
+      setReviewChat("");router.refresh();
+    } catch(e){setError(e.message)}finally{setReviewBusy(false)}
+  }
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const chats = useMemo(() => inbox.chats.filter(chat => {
