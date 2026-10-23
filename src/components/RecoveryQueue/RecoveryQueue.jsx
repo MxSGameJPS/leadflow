@@ -4,6 +4,17 @@ import s from "./RecoveryQueue.module.css";
 export default function RecoveryQueue({initial}){
  const [queue,setQueue]=useState(initial),[error,setError]=useState(""),[busy,setBusy]=useState("");
  const [followups,setFollowups]=useState({});
+ const [aiFollowups,setAiFollowups]=useState({});
+ async function analyzeReply(chatId){
+  setBusy(chatId);setError("");
+  try{
+   const response=await fetch("/api/recovery/followup/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId})});
+   const data=await response.json();
+   if(!response.ok)throw Error(data.error||"Erro na análise pelo OmniRoute.");
+   setAiFollowups(prev=>({...prev,[chatId]:data.analysis}));
+  }catch(e){setError(e.message)}finally{setBusy("")}
+ }
+
  async function inspectReply(chatId){
   setBusy(chatId);setError("");
   try {
@@ -58,6 +69,15 @@ export default function RecoveryQueue({initial}){
  {followups[row.chatId]&&<div role="status"><p><strong>{followups[row.chatId].suggestion}</strong></p>
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
  <small>{followups[row.chatId].source}</small>
+ <div><button type="button" disabled={!!busy} onClick={()=>analyzeReply(row.chatId)}>{busy===row.chatId?"Analisando...":"Analisar resposta com OmniRoute"}</button></div>
+ {aiFollowups[row.chatId]&&<section className={s.aiResult}>
+ <strong>Análise consultiva do OmniRoute — nenhuma ação automática</strong>
+ <p>Categoria: {({automatic:"Possível mensagem automática",refusal:"Recusa",interested:"Interesse",question:"Dúvida",uncertain:"Indeterminado"})[aiFollowups[row.chatId].category]}</p>
+ <p>Justificativa: {aiFollowups[row.chatId].reasoning}</p>
+ <p>Evidência: {aiFollowups[row.chatId].evidence}</p>
+ <p>Próxima ação sugerida: {aiFollowups[row.chatId].recommendedAction}</p>
+ {aiFollowups[row.chatId].draftReply&&<><p>Rascunho não enviado: {aiFollowups[row.chatId].draftReply}</p><button type="button" onClick={()=>navigator.clipboard.writeText(aiFollowups[row.chatId].draftReply)}>Copiar rascunho</button></>}
+ </section>}
  {followups[row.chatId].status==="possible_refusal"&&row.decisionStatus==="sent"&&<div><button type="button" disabled={!!busy} onClick={()=>reviewClosure(row.chatId,"close_approved")}>Aprovar encerramento</button> <button type="button" disabled={!!busy} onClick={()=>reviewClosure(row.chatId,"close_rejected")}>Rejeitar encerramento</button></div>}
  </div>}</div><button type="button" disabled={!!busy} onClick={()=>inspectReply(row.chatId)}>{busy===row.chatId?"Consultando...":"Consultar respostas"}</button>
  </article>)}
