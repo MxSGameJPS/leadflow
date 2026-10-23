@@ -2,10 +2,10 @@ export function auditConversation(messages,total=0){
  const ordered=[...messages].filter(m=>Number.isFinite(m.timestamp)).sort((a,b)=>a.timestamp-b.timestamp);
  const outgoing=ordered.filter(m=>m.direction==="outgoing");
  const incoming=ordered.filter(m=>m.direction==="incoming");
- const first=outgoing[0]||null;
+ const first=outgoing.find(m=>String(m.body||"").trim().length>0)||null;
  const laterIncoming=first?incoming.filter(m=>m.timestamp>=first.timestamp):incoming;
  const hasReply=laterIncoming.some(m=>String(m.body||"").trim() && m.type!=="unknown");
- const hasInitial=!!first && !!String(first.body||"").trim();
+ const hasInitial=!!first;
  return {
   firstApproach:first,
   lastOutgoing:outgoing.at(-1)||null,
