@@ -26,7 +26,7 @@ export function validatePolicy(value) {
     const service = value.services.find(item => item.id === base.id);
     if (!service || !Number.isSafeInteger(service.minimumPrice) || service.minimumPrice <= 0) throw new Error("Preço inválido: "+base.name);
     const floor = base.id === "express" ? service.minimumNegotiablePrice : Math.round(service.minimumPrice * 0.85 * 100)/100;
-    if (base.id === "express" && (!Number.isSafeInteger(floor) || floor <= 0 || floor > service.minimumPrice)) throw new Error("Limite da Página Express inválido.");
+    if (base.id === "express" && (!Number.isSafeInteger(floor) || floor < 400 || floor > service.minimumPrice)) throw new Error("Limite da Página Express inválido.");
     if (base.id !== "express" && service.maxDiscountPercent !== 15) throw new Error("Desconto máximo deve permanecer em 15%.");
     return { ...base, minimumPrice:service.minimumPrice, ...(base.id==="express"?{minimumNegotiablePrice:floor}:{maxDiscountPercent:15}) };
   });
@@ -36,7 +36,7 @@ export function validateProposal(policy, { serviceId, quotedPrice, meetingComple
   const service = policy.services.find(item=>item.id===serviceId);
   if (!service) return { allowed:false, reason:"Serviço desconhecido." };
   if (!Number.isFinite(quotedPrice) || quotedPrice<=0) return { allowed:false, reason:"Preço inválido." };
-  const floor = service.id==="express" ? service.minimumNegotiablePrice : Math.round(service.minimumPrice*(1-service.maxDiscountPercent/100)*100)/100;
+  const floor = service.id==="express" ? Math.max(400, service.minimumNegotiablePrice) : Math.round(service.minimumPrice*(1-service.maxDiscountPercent/100)*100)/100;
   if (quotedPrice < floor) return { allowed:false, reason:"Valor abaixo do limite comercial autorizado." };
   if (close && !meetingCompleted) return { allowed:false, reason:"É obrigatória uma call ou reunião presencial antes de fechar o contrato." };
   return { allowed:true, minimumAllowedPrice:floor, entryAmount:Math.round(quotedPrice*policy.entryPercent)/100 };
