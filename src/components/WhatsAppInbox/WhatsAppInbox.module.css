@@ -25,3 +25,11 @@
 .reviewForm label{display:grid;gap:7px}
 .reviewForm input:not([type=checkbox]),.reviewForm textarea{background:#202a3a;color:#fff;border:1px solid #8999af;border-radius:7px;padding:10px;width:100%}
 .reviewActions{display:flex!important;flex-flow:row wrap!important;gap:8px}
+
+.historyPanel{display:grid;gap:12px;min-width:0;max-width:100%;padding:14px;border:1px solid #677384;border-radius:10px}
+.historyPanel p{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.historyMessages{display:flex!important;flex-direction:column!important;gap:9px;max-height:460px;overflow:auto}
+.historyMessage{border:1px solid #626e7d;border-radius:9px;padding:10px;background:var(--surface,#202630)}
+.historyMessage strong{font-size:12px;color:#ded6c6}
+.historyMessage span{font-size:12px;color:#b2bccc}
+.historyMessage p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}

@@ -36,6 +36,17 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       setReviewChat("");router.refresh();
     } catch(e){setError(e.message)}finally{setReviewBusy(false)}
   }
+  const [historyChat,setHistoryChat]=useState("");
+  const [historyData,setHistoryData]=useState(null);
+  const [historyBusy,setHistoryBusy]=useState(false);
+  async function loadHistory(chatId) {
+    if(historyChat===chatId){setHistoryChat("");return;}
+    setHistoryChat(chatId);setHistoryBusy(true);setHistoryData(null);
+    try {
+      const r=await fetch("/api/recovery/history?chatId="+encodeURIComponent(chatId),{cache:"no-store"});
+      const d=await r.json();setHistoryData(r.ok?d:{error:d.error||"Não foi possível consultar histórico."});
+    }catch(e){setHistoryData({error:e.message});}finally{setHistoryBusy(false)}
+  }
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const chats = useMemo(() => inbox.chats.filter(chat => {
@@ -60,6 +71,17 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       <button type="button" disabled={saving} onClick={()=>setSelectedChat("")}>Cancelar</button></div>
     </div>}
     {chat.leadId && <section className={s.recoveryControls}>
+      <button type="button" onClick={()=>loadHistory(chat.id)}>{historyChat===chat.id?"Ocultar histórico":"Auditar mensagens anteriores"}</button>
+      {historyChat===chat.id&&<div className={s.historyPanel}>
+        {historyBusy?<p>Consultando mensagens no OpenWA...</p>:historyData?.error?<p role="alert">{historyData.error}</p>:historyData&&<>
+          <p><strong>Diagnóstico informativo:</strong> {historyData.analysis.rationale}</p>
+          <p>Enviadas: {historyData.analysis.outgoingCount} · Recebidas: {historyData.analysis.incomingCount} · Registros: {historyData.analysis.examinedCount}/{historyData.analysis.total}</p>
+          {historyData.analysis.historyIncomplete&&<p>Histórico parcial: não classifique como silêncio definitivo sem revisar outras mensagens.</p>}
+          <div className={s.historyMessages}>{historyData.messages.slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).map((m,i)=><div key={m.id||i} className={s.historyMessage}><strong>{m.direction==="outgoing"?"Você enviou":"Contato respondeu"}</strong><span>{m.timestamp?new Date(m.timestamp*1000).toLocaleString("pt-BR"):"Data indisponível"}</span><p>{m.body||"(mensagem sem texto — "+m.type+")"}</p></div>)}</div>
+          <p>O diagnóstico NÃO aprova nem rejeita o lead. Use os botões de revisão para registrar sua decisão.</p>
+        </>}
+      </div>}
+
       <strong>Recuperação: {({pending:"Pendente de decisão",eligible:"Elegível aprovado",ineligible:"Não elegível aprovado",message_approved:"Mensagem aprovada, não enviada",message_rejected:"Mensagem rejeitada",sent:"Enviada",close_approved:"Encerramento aprovado",close_rejected:"Encerramento rejeitado"})[chat.recovery?.status||"pending"]}</strong>
       <button type="button" onClick={()=>{setReviewChat(chat.id);setReviewText(chat.recovery?.messageText||"");setReviewReason(chat.recovery?.reason||"");setConsent(false);}}>Revisar recuperação</button>
       {reviewChat===chat.id&&<div className={s.reviewForm}>
