@@ -5,6 +5,11 @@ export async function POST(request) {
   // Explicitly single-message diagnostic, disabled in production and by default.
   if (process.env.NODE_ENV === "production" || process.env.LEADFLOW_ENABLE_RECOVERY_SEND_TEST !== "true")
     return NextResponse.json({error:"Teste de envio desabilitado. Ative LEADFLOW_ENABLE_RECOVERY_SEND_TEST=true no ambiente local."},{status:403});
+  const host=request.headers.get("host")||"";
+  const origin=request.headers.get("origin")||"";
+  const localHost=/^(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(host);
+  if(!localHost || (origin && new URL(origin).host!==host))
+    return NextResponse.json({error:"Teste permitido apenas a partir do navegador local."},{status:403});
   const sessionId=process.env.OPENWA_SESSION_ID?.trim();
   const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
   const key=process.env.OPENWA_API_KEY?.trim();
