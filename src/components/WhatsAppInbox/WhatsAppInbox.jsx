@@ -69,14 +69,16 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
   }
   const [suggestions,setSuggestions]=useState({});
   const [suggestionBusy,setSuggestionBusy]=useState("");
+  const [suggestionStatus,setSuggestionStatus]=useState({});
   async function suggestRecovery(chatId,history){
-    if(!history?.messages?.length || !history?.analysis?.firstApproach?.body){setSuggestions(x=>({...x,[chatId]:{error:"A abordagem original não foi recuperada. Confira o WhatsApp antes de solicitar análise por IA."}}));return;}
-    setSuggestionBusy(chatId);
+    if(!history?.messages?.length || !history?.analysis?.firstApproach?.body){const error="A primeira mensagem enviada não foi recuperada. Sem ela, a IA não consegue personalizar a recuperação com segurança. Confira o histórico do WhatsApp.";setSuggestions(x=>({...x,[chatId]:{error}}));setSuggestionStatus(x=>({...x,[chatId]:error}));return;}
+    setSuggestionBusy(chatId);setSuggestionStatus(x=>({...x,[chatId]:"Consultando OmniRoute / provedor padrão de IA..."}));
     try {
       const r=await fetch("/api/recovery/suggest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,messages:history.messages})});
       const data=await r.json();
       setSuggestions(x=>({...x,[chatId]:r.ok?data.suggestion:{error:data.error||"Erro da IA"}}));
-    }catch(e){setSuggestions(x=>({...x,[chatId]:{error:e.message}}));}finally{setSuggestionBusy("");}
+      setSuggestionStatus(x=>({...x,[chatId]:r.ok?"Análise concluída — confira a recomendação acima.":(data.error||"Erro ao consultar o provedor de IA.")}));
+    }catch(e){setSuggestions(x=>({...x,[chatId]:{error:e.message}}));setSuggestionStatus(x=>({...x,[chatId]:e.message}));}finally{setSuggestionBusy("");}
   }
   function reviewSuggestion(chat){
     const item=suggestions[chat.id];
@@ -124,6 +126,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
         </>}
       </div>}
 
+      {suggestionStatus[chat.id]&&<p role="status" className={s.suggestionFeedback}>{suggestionStatus[chat.id]}</p>}
       {suggestions[chat.id]&&<div className={s.auditResult}>
         <strong>Recomendação da IA — não altera a decisão</strong>
         {suggestions[chat.id].error?<p role="alert">{suggestions[chat.id].error}</p>:<>
