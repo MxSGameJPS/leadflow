@@ -12,9 +12,11 @@ export async function getRecoveryQueue(sessionId) {
  const day=saoPauloDate();
  const dailyCount=log.filter(item=>item.dayKey===day&&["reserved","externally_sent"].includes(item.status)).length;
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
+ const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
+ const sentRows=await Promise.all(sent.map(async row=>({ ...row,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent" })));
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
- return {rows,reservations,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
+ return {rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
 }
 export async function reserveRecoveryForManualSend(sessionId,chatId) {
  if(!sessionId||!chatId)throw Error("Conversa inválida.");
