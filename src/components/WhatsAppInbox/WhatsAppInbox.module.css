@@ -33,3 +33,9 @@
 .historyMessage strong{font-size:12px;color:#ded6c6}
 .historyMessage span{font-size:12px;color:#b2bccc}
 .historyMessage p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.queueToolbar,.auditResult{border:1px solid #65748a;border-radius:11px;padding:16px;margin:14px 0;background:var(--surface,#202630);display:grid;gap:10px}
+.queueToolbar p,.auditResult p{margin:0;line-height:1.5;overflow-wrap:anywhere}
+.queueToolbar button,.auditResult button{justify-self:start;background:#293448;color:#fff;border:1px solid #8999af;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer}
+.queueToolbar button:hover:not(:disabled),.auditResult button:hover:not(:disabled){background:#354762;color:#fff}
+.queueToolbar button:disabled{opacity:.5;cursor:not-allowed}
