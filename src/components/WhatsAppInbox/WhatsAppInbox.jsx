@@ -58,7 +58,25 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       <div className={s.linkActions}><button type="button" disabled={!selectedLead || saving} onClick={()=>linkConversation(chat.id, selectedLead)}>Salvar vínculo</button>
       {chat.manuallyLinked && <button type="button" disabled={saving} onClick={()=>linkConversation(chat.id, "__remove__")}>Desvincular</button>}
       <button type="button" disabled={saving} onClick={()=>setSelectedChat("")}>Cancelar</button></div>
-    </div>}</article>)}</div>
+    </div>}
+    {chat.leadId && <section className={s.recoveryControls}>
+      <strong>Recuperação: {({pending:"Pendente de decisão",eligible:"Elegível aprovado",ineligible:"Não elegível aprovado",message_approved:"Mensagem aprovada, não enviada",message_rejected:"Mensagem rejeitada",sent:"Enviada",close_approved:"Encerramento aprovado",close_rejected:"Encerramento rejeitado"})[chat.recovery?.status||"pending"]}</strong>
+      <button type="button" onClick={()=>{setReviewChat(chat.id);setReviewText(chat.recovery?.messageText||"");setReviewReason(chat.recovery?.reason||"");setConsent(false);}}>Revisar recuperação</button>
+      {reviewChat===chat.id&&<div className={s.reviewForm}>
+        <p>Sua decisão prevalece. Nenhum envio é realizado nesta tela.</p>
+        <label>Motivo<input value={reviewReason} onChange={e=>setReviewReason(e.target.value)}/></label>
+        <label>Mensagem para revisão<textarea rows={4} value={reviewText} onChange={e=>setReviewText(e.target.value)} placeholder="Mensagem contextualizada para esta conversa"/></label>
+        <label><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> Confirmo permissão adequada para mensagens comerciais</label>
+        <div className={s.reviewActions}>
+        {["pending","ineligible","message_rejected","message_approved","close_approved"].includes(chat.recovery?.status||"pending")&&<button disabled={reviewBusy} onClick={()=>decide(chat.id,"eligible")}>Aprovar elegível</button>}
+        {["pending","eligible","message_rejected"].includes(chat.recovery?.status||"pending")&&<button disabled={reviewBusy} onClick={()=>decide(chat.id,"ineligible")}>Aprovar não elegível</button>}
+        {["eligible","message_rejected"].includes(chat.recovery?.status)&&<button disabled={reviewBusy||!consent||!reviewText.trim()} onClick={()=>decide(chat.id,"message_approved")}>Aprovar mensagem</button>}
+        {chat.recovery?.status==="message_approved"&&<button disabled={reviewBusy} onClick={()=>decide(chat.id,"message_rejected")}>Rejeitar mensagem</button>}
+        {chat.recovery?.status==="sent"&&<><button disabled={reviewBusy} onClick={()=>decide(chat.id,"close_approved")}>Aprovar encerramento</button><button disabled={reviewBusy} onClick={()=>decide(chat.id,"close_rejected")}>Rejeitar encerramento</button></>}
+        <button disabled={reviewBusy} onClick={()=>setReviewChat("")}>Cancelar</button>
+        </div>
+      </div>}
+    </section>}</article>)}</div>
     <p className={s.note}>Esta consulta utiliza a etiqueta Prospecção de Clientes. Chats com ID @lid não são vinculados automaticamente por telefone. Nenhuma mensagem é enviada, nenhum histórico é importado e nenhum lead é alterado nesta etapa.</p>
   </main>;
 }
