@@ -47,6 +47,26 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       const d=await r.json();setHistoryData(r.ok?d:{error:d.error||"Não foi possível consultar histórico."});
     }catch(e){setHistoryData({error:e.message});}finally{setHistoryBusy(false)}
   }
+  const [auditResults,setAuditResults]=useState({});
+  const [auditRunning,setAuditRunning]=useState(false);
+  const [auditProgress,setAuditProgress]=useState("");
+  async function auditNextBatch(){
+    if(auditRunning)return;
+    setAuditRunning(true);setAuditProgress("");
+    const targets=inbox.chats.filter(chat=>chat.manuallyLinked && (!chat.recovery?.status || chat.recovery.status==="pending") && !auditResults[chat.id]).slice(0,10);
+    try{
+      for(let i=0;i<targets.length;i++){
+        const chat=targets[i];
+        setAuditProgress(`Auditando ${i+1} de ${targets.length}: ${chat.leadName||chat.name}`);
+        try{
+          const response=await fetch("/api/recovery/history?chatId="+encodeURIComponent(chat.id),{cache:"no-store"});
+          const result=await response.json();
+          setAuditResults(current=>({...current,[chat.id]:response.ok?{...result,loaded:true}:{error:result.error||"Falha de consulta"}}));
+        }catch(error){setAuditResults(current=>({...current,[chat.id]:{error:error.message}}));}
+      }
+      setAuditProgress(`Lote concluído: ${targets.length} histórico(s) consultado(s). Nenhuma classificação foi aplicada.`);
+    }finally{setAuditRunning(false);}
+  }
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const chats = useMemo(() => inbox.chats.filter(chat => {
@@ -61,6 +81,12 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
     {!inbox.ready && <div className={s.warning} role="status">{inbox.message}</div>}
     {inbox.ready && inbox.resolutionAttempted > 0 && <p className={s.note}>Mapeamento seguro de identidades: {inbox.resolved} vínculo(s) identificado(s) em {inbox.resolutionAttempted} consulta(s) @lid. Contatos sem mapeamento permanecem separados do CRM.</p>}
     <section className={s.stats}><div><span>Conversas da etiqueta</span><strong>{inbox.chats.length}</strong></div><div><span>Vinculadas a leads</span><strong>{matched}</strong></div><div><span>Ainda não vinculadas</span><strong>{inbox.chats.length-matched}</strong></div></section>
+    <section className={s.queueToolbar}>
+      <strong>Fila de auditoria supervisionada</strong>
+      <p>Consulta até 10 históricos de conversas vinculadas ainda sem decisão. Sugestões não alteram nenhuma classificação. O limite de auditoria não é autorização para enviar mensagens.</p>
+      <button type="button" onClick={auditNextBatch} disabled={auditRunning}>{auditRunning?"Consultando históricos...":"Auditar próximos 10"}</button>
+      {auditProgress&&<p role="status">{auditProgress}</p>}
+    </section>
     <div className={s.controls}><input type="search" placeholder="Buscar nome ou telefone" aria-label="Buscar conversas" value={query} onChange={e=>setQuery(e.target.value)}/><select value={mode} onChange={e=>setMode(e.target.value)} aria-label="Filtrar conversas"><option value="all">Todas as conversas</option><option value="matched">Vinculadas</option><option value="unmatched">Sem vínculo</option></select></div>
     <div className={s.list}>{error && <p role="alert" className={s.warning}>{error}</p>}{chats.length===0?<p>Nenhuma conversa para este filtro.</p>:chats.map(chat=><article key={chat.id} className={s.chat}><div><strong>{chat.leadName || chat.name}</strong><small>{chat.id}</small></div><div className={s.side}>{chat.leadId?<span className={s.linked}>Lead vinculado · {chat.leadStage || "novo"}</span>:<span className={s.pending}>Ainda não vinculado</span>}{chat.unreadCount>0&&<small>{chat.unreadCount} não lida(s)</small>}<button type="button" className={s.refresh} onClick={() => { setSelectedChat(chat.id); setSelectedLead(""); setLeadSearch(""); setError(""); }}> {chat.manuallyLinked ? "Alterar vínculo" : "Vincular manualmente"} </button></div>
     {selectedChat === chat.id && <div className={s.linkForm}>
@@ -71,6 +97,16 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       <button type="button" disabled={saving} onClick={()=>setSelectedChat("")}>Cancelar</button></div>
     </div>}
     {chat.leadId && <section className={s.recoveryControls}>
+      {auditResults[chat.id]&&<div className={s.auditResult}>
+        <strong>Resultado da auditoria (somente sugestão)</strong>
+        {auditResults[chat.id].error?<p role="alert">Consulta não concluída: {auditResults[chat.id].error}</p>:<>
+          <p>{auditResults[chat.id].analysis.rationale}</p>
+          <p>Primeira mensagem identificada: {auditResults[chat.id].analysis.firstApproach?.body||"Não encontrada no trecho consultado."}</p>
+          <p>Mensagens recebidas: {auditResults[chat.id].analysis.incomingCount}. Histórico {auditResults[chat.id].analysis.historyIncomplete?"parcial":"consultado sem paginação pendente"}; isso não garante sincronização completa.</p>
+          <button type="button" onClick={()=>{setReviewChat(chat.id);setReviewText(chat.recovery?.messageText||"");setReviewReason(auditResults[chat.id].analysis.rationale);setConsent(false);}}>Analisar sugestão e decidir</button>
+        </>}
+      </div>}
+
       <button type="button" onClick={()=>loadHistory(chat.id)}>{historyChat===chat.id?"Ocultar histórico":"Auditar mensagens anteriores"}</button>
       {historyChat===chat.id&&<div className={s.historyPanel}>
         {historyBusy?<p>Consultando mensagens no OpenWA...</p>:historyData?.error?<p role="alert">{historyData.error}</p>:historyData&&<>
