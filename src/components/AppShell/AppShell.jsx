@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/dashboard", icon: "▦", label: "Dashboard" },
   { href: "/leads", icon: "◎", label: "Leads" },
   { href: "/recuperacao", icon: "↻", label: "Recuperação" },
+  { href: "/recuperacao/fila", icon: "☷", label: "Fila de recuperação" },
   { href: "/intencao", icon: "⌁", label: "Intenção" },
   { href: "/crm", icon: "▤", label: "CRM" },
   { href: "/consultoria", icon: "✦", label: "Consultorias" },
