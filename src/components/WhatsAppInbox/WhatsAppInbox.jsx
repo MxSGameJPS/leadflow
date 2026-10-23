@@ -70,7 +70,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
   const [suggestions,setSuggestions]=useState({});
   const [suggestionBusy,setSuggestionBusy]=useState("");
   async function suggestRecovery(chatId,history){
-    if(!history?.messages?.length){setSuggestions(x=>({...x,[chatId]:{error:"Histórico vazio ou indisponível."}}));return;}
+    if(!history?.messages?.length || !history?.analysis?.firstApproach?.body){setSuggestions(x=>({...x,[chatId]:{error:"A abordagem original não foi recuperada. Confira o WhatsApp antes de solicitar análise por IA."}}));return;}
     setSuggestionBusy(chatId);
     try {
       const r=await fetch("/api/recovery/suggest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,messages:history.messages})});
@@ -116,7 +116,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       {auditResults[chat.id]&&<div className={s.auditResult}>
         <strong>Resultado da auditoria (somente sugestão)</strong>
         {auditResults[chat.id].error?<p role="alert">Consulta não concluída: {auditResults[chat.id].error}</p>:<>
-          <p>{auditResults[chat.id].analysis.rationale}</p>
+          <p>{auditResults[chat.id].analysis.rationale}</p><p><strong>Fonte:</strong> {auditResults[chat.id].source}</p>
           <p>Primeira mensagem identificada: {auditResults[chat.id].analysis.firstApproach?.body||"Não encontrada no trecho consultado."}</p>
           <p>Mensagens recebidas: {auditResults[chat.id].analysis.incomingCount}. Histórico {auditResults[chat.id].analysis.historyIncomplete?"parcial":"consultado sem paginação pendente"}; isso não garante sincronização completa.</p>
           <button type="button" disabled={suggestionBusy===chat.id} onClick={()=>suggestRecovery(chat.id,auditResults[chat.id])}>{suggestionBusy===chat.id?"Gerando...":"Analisar com IA"}</button>
@@ -135,7 +135,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       <button type="button" onClick={()=>loadHistory(chat.id)}>{historyChat===chat.id?"Ocultar histórico":"Auditar mensagens anteriores"}</button>
       {historyChat===chat.id&&<div className={s.historyPanel}>
         {historyBusy?<p>Consultando mensagens no OpenWA...</p>:historyData?.error?<p role="alert">{historyData.error}</p>:historyData&&<>
-          <p><strong>Diagnóstico informativo:</strong> {historyData.analysis.rationale}</p>
+          <p><strong>Diagnóstico informativo:</strong> {historyData.analysis.rationale}</p><p><strong>Fonte:</strong> {historyData.source}</p>
           <p>Enviadas: {historyData.analysis.outgoingCount} · Recebidas: {historyData.analysis.incomingCount} · Registros: {historyData.analysis.examinedCount}/{historyData.analysis.total}</p>
           {historyData.analysis.historyIncomplete&&<p>Histórico parcial: não classifique como silêncio definitivo sem revisar outras mensagens.</p>}
           <div className={s.historyMessages}>{historyData.messages.slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).map((m,i)=><div key={m.id||i} className={s.historyMessage}><strong>{m.direction==="outgoing"?"Você enviou":"Contato respondeu"}</strong><span>{m.timestamp?new Date(m.timestamp*1000).toLocaleString("pt-BR"):"Data indisponível"}</span><p>{m.body||"(mensagem sem texto — "+m.type+")"}</p></div>)}</div>

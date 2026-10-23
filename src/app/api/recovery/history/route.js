@@ -13,13 +13,29 @@ export async function GET(request){
  if(!link)return NextResponse.json({error:"Vincule manualmente este chat antes da auditoria."},{status:403});
  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),20000);
  try{
-  const url=new URL(`${base}/api/sessions/${encodeURIComponent(sessionId)}/messages`);
-  url.searchParams.set("chatId",chatId);url.searchParams.set("limit","100");url.searchParams.set("offset","0");url.searchParams.set("orderBy","timestamp");
-  const response=await fetch(url,{headers:{"X-API-Key":key,Accept:"application/json"},cache:"no-store",signal:abort.signal});
-  if(!response.ok)throw Error("OpenWA respondeu HTTP "+response.status);
-  const data=await response.json();
-  const messages=(Array.isArray(data.messages)?data.messages:[]).filter(m=>m.chatId===chatId).map(m=>({id:m.id,direction:m.direction,body:String(m.body||"").slice(0,4000),type:m.type,timestamp:Number.isFinite(m.timestamp)?m.timestamp:null,status:m.status}));
-  return NextResponse.json({messages,analysis:auditConversation(messages,Number(data.total)||messages.length),source:"Histórico armazenado no OpenWA; pode estar incompleto."});
+  const headers={"X-API-Key":key,Accept:"application/json"};
+  const liveUrl=new URL(`${base}/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(chatId)}/history`);
+  liveUrl.searchParams.set("limit","100");
+  liveUrl.searchParams.set("includeMedia","false");
+  let messages=[],total=0,source="";
+  const live=await fetch(liveUrl,{headers,cache:"no-store",signal:abort.signal});
+  if(live.ok){
+    const data=await live.json();
+    const rows=Array.isArray(data)?data:Array.isArray(data?.messages)?data.messages:[];
+    messages=rows.filter(m=>m.chatId===chatId&&!m.isGroup).map(m=>({id:m.id,direction:m.fromMe===true?"outgoing":"incoming",body:String(m.body||"").slice(0,4000),type:m.type,timestamp:Number.isFinite(m.timestamp)?m.timestamp:null,status:null}));
+    total=messages.length;
+    source="Histórico ao vivo do WhatsApp, limitado às 100 mensagens recentes.";
+  }else{
+    const url=new URL(`${base}/api/sessions/${encodeURIComponent(sessionId)}/messages`);
+    url.searchParams.set("chatId",chatId);url.searchParams.set("limit","100");url.searchParams.set("offset","0");url.searchParams.set("inlineMedia","false");
+    const response=await fetch(url,{headers,cache:"no-store",signal:abort.signal});
+    if(!response.ok)throw Error(`Histórico ao vivo HTTP ${live.status}; arquivo local HTTP ${response.status}`);
+    const data=await response.json();
+    messages=(Array.isArray(data.messages)?data.messages:[]).filter(m=>m.chatId===chatId).map(m=>({id:m.id,direction:m.direction,body:String(m.body||"").slice(0,4000),type:m.type,timestamp:Number.isFinite(m.timestamp)?m.timestamp:null,status:m.status}));
+    total=Number(data.total)||messages.length;
+    source=`Arquivo local: consulta ao vivo indisponível (HTTP ${live.status}). Pode faltar a abordagem original.`;
+  }
+  return NextResponse.json({messages,analysis:auditConversation(messages,total),source});
  }catch(e){return NextResponse.json({error:e.name==="AbortError"?"Consulta de histórico excedeu 20 segundos.":e.message},{status:502});}
  finally{clearTimeout(timer)}
 }
