@@ -6,7 +6,7 @@ export async function POST(request) {
  try {
   const {chatId,action,messageText,reason,consentConfirmed}=await request.json();
   const sessionId=process.env.OPENWA_SESSION_ID;
-  if(!sessionId||typeof chatId!=="string"||chatId.length>128||!/@(lid|c\\.us|s\\.whatsapp\\.net)$/.test(chatId))return NextResponse.json({error:"Conversa inválida."},{status:400});
+  if(!sessionId||typeof chatId!=="string"||chatId.length>128||!/@(lid|c\.us|s\.whatsapp\.net)$/.test(chatId))return NextResponse.json({error:"Conversa inválida."},{status:400});
   if(!["eligible","ineligible","message_approved","message_rejected","close_approved","close_rejected"].includes(action))return NextResponse.json({error:"Ação inválida."},{status:400});
   const decision=await decideRecovery({sessionId,chatId,action,messageText,reason,consentConfirmed});
   return NextResponse.json({decision});
