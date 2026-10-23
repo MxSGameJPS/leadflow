@@ -92,7 +92,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
   }), [inbox.chats, mode, query]);
   const matched = inbox.chats.filter(chat => chat.leadId).length;
   return <main className={s.main}>
-    <a href="/recuperacao" className={s.back}>← Voltar para Recuperação</a>
+    <a href="/recuperacao" className={s.back}>← Voltar para Recuperação</a> <a href="/recuperacao/fila" className={s.back}>Ver fila de recuperação →</a>
     <div className={s.heading}><div><span className={s.kicker}>LEADFLOW · OPENWA</span><h1>Prospecção de Clientes</h1><p>Exibe somente conversas com a etiqueta Prospecção de Clientes. Vínculos são feitos apenas por telefone já registrado no LeadFlow.</p></div><a href="/recuperacao/conversas" className={s.refresh}>Atualizar lista</a></div>
     {!inbox.ready && <div className={s.warning} role="status">{inbox.message}</div>}
     {inbox.ready && inbox.resolutionAttempted > 0 && <p className={s.note}>Mapeamento seguro de identidades: {inbox.resolved} vínculo(s) identificado(s) em {inbox.resolutionAttempted} consulta(s) @lid. Contatos sem mapeamento permanecem separados do CRM.</p>}
