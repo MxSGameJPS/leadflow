@@ -5,10 +5,10 @@ export const runtime="nodejs";
 export async function GET(request){
  if(process.env.NODE_ENV==="production")return NextResponse.json({error:"Auditoria disponível somente na instalação local de desenvolvimento."},{status:403});
  const sessionId=process.env.OPENWA_SESSION_ID?.trim();
- const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,"");
+ const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
  const key=process.env.OPENWA_API_KEY?.trim();
  const chatId=new URL(request.url).searchParams.get("chatId")||"";
- if(!sessionId||!base||!key||!chatId||chatId.length>128||!/@(lid|c\\.us|s\\.whatsapp\\.net)$/.test(chatId))return NextResponse.json({error:"Configuração ou conversa inválida."},{status:400});
+ if(!sessionId||!base||!key||!chatId||chatId.length>128||!/@(lid|c\.us|s\.whatsapp\.net)$/.test(chatId))return NextResponse.json({error:"Configuração ou conversa inválida."},{status:400});
  const link=await prisma.whatsAppLeadLink.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
  if(!link)return NextResponse.json({error:"Vincule manualmente este chat antes da auditoria."},{status:403});
  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),20000);
