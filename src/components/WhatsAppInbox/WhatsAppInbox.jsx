@@ -67,6 +67,22 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       setAuditProgress(`Lote concluído: ${targets.length} histórico(s) consultado(s). Nenhuma classificação foi aplicada.`);
     }finally{setAuditRunning(false);}
   }
+  const [suggestions,setSuggestions]=useState({});
+  const [suggestionBusy,setSuggestionBusy]=useState("");
+  async function suggestRecovery(chatId,history){
+    if(!history?.messages?.length){setSuggestions(x=>({...x,[chatId]:{error:"Histórico vazio ou indisponível."}}));return;}
+    setSuggestionBusy(chatId);
+    try {
+      const r=await fetch("/api/recovery/suggest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,messages:history.messages})});
+      const data=await r.json();
+      setSuggestions(x=>({...x,[chatId]:r.ok?data.suggestion:{error:data.error||"Erro da IA"}}));
+    }catch(e){setSuggestions(x=>({...x,[chatId]:{error:e.message}}));}finally{setSuggestionBusy("");}
+  }
+  function reviewSuggestion(chat){
+    const item=suggestions[chat.id];
+    if(!item?.proposedMessage)return;
+    setReviewChat(chat.id);setReviewText(item.proposedMessage);setReviewReason(item.reasoning||"");setConsent(false);
+  }
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const chats = useMemo(() => inbox.chats.filter(chat => {
@@ -103,10 +119,19 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
           <p>{auditResults[chat.id].analysis.rationale}</p>
           <p>Primeira mensagem identificada: {auditResults[chat.id].analysis.firstApproach?.body||"Não encontrada no trecho consultado."}</p>
           <p>Mensagens recebidas: {auditResults[chat.id].analysis.incomingCount}. Histórico {auditResults[chat.id].analysis.historyIncomplete?"parcial":"consultado sem paginação pendente"}; isso não garante sincronização completa.</p>
-          <button type="button" onClick={()=>{setReviewChat(chat.id);setReviewText(chat.recovery?.messageText||"");setReviewReason(auditResults[chat.id].analysis.rationale);setConsent(false);}}>Analisar sugestão e decidir</button>
+          <button type="button" disabled={suggestionBusy===chat.id} onClick={()=>suggestRecovery(chat.id,auditResults[chat.id])}>{suggestionBusy===chat.id?"Gerando...":"Analisar com IA"}</button>
+          <button type="button" onClick={()=>{setReviewChat(chat.id);setReviewText(chat.recovery?.messageText||"");setReviewReason(auditResults[chat.id].analysis.rationale);setConsent(false);}}>Revisar e decidir</button>
         </>}
       </div>}
 
+      {suggestions[chat.id]&&<div className={s.auditResult}>
+        <strong>Recomendação da IA — não altera a decisão</strong>
+        {suggestions[chat.id].error?<p role="alert">{suggestions[chat.id].error}</p>:<>
+          <p>{({review:"Revisão humana necessária",potentially_eligible:"Possivelmente elegível",potentially_ineligible:"Possivelmente não elegível"})[suggestions[chat.id].recommendation]}</p>
+          <p>{suggestions[chat.id].reasoning}</p><p>{suggestions[chat.id].context}</p>
+          {suggestions[chat.id].proposedMessage&&<><p>Mensagem sugerida: {suggestions[chat.id].proposedMessage}</p><button type="button" onClick={()=>reviewSuggestion(chat)}>Usar rascunho na revisão (sem aprovar)</button></>}
+        </>}
+      </div>}
       <button type="button" onClick={()=>loadHistory(chat.id)}>{historyChat===chat.id?"Ocultar histórico":"Auditar mensagens anteriores"}</button>
       {historyChat===chat.id&&<div className={s.historyPanel}>
         {historyBusy?<p>Consultando mensagens no OpenWA...</p>:historyData?.error?<p role="alert">{historyData.error}</p>:historyData&&<>
@@ -114,6 +139,7 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
           <p>Enviadas: {historyData.analysis.outgoingCount} · Recebidas: {historyData.analysis.incomingCount} · Registros: {historyData.analysis.examinedCount}/{historyData.analysis.total}</p>
           {historyData.analysis.historyIncomplete&&<p>Histórico parcial: não classifique como silêncio definitivo sem revisar outras mensagens.</p>}
           <div className={s.historyMessages}>{historyData.messages.slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).map((m,i)=><div key={m.id||i} className={s.historyMessage}><strong>{m.direction==="outgoing"?"Você enviou":"Contato respondeu"}</strong><span>{m.timestamp?new Date(m.timestamp*1000).toLocaleString("pt-BR"):"Data indisponível"}</span><p>{m.body||"(mensagem sem texto — "+m.type+")"}</p></div>)}</div>
+          <button type="button" disabled={suggestionBusy===chat.id} onClick={()=>suggestRecovery(chat.id,historyData)}>{suggestionBusy===chat.id?"Gerando...":"Analisar com IA"}</button>
           <p>O diagnóstico NÃO aprova nem rejeita o lead. Use os botões de revisão para registrar sua decisão.</p>
         </>}
       </div>}
