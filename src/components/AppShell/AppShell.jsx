@@ -16,6 +16,7 @@ const ITEMS = [
   { href: "/cobrancas", icon: "R$", label: "Cobrar clientes" },
   { href: "/criar-site", icon: "+", label: "Criar site" },
   { href: "/perfil", icon: "◉", label: "Perfil" },
+  { href: "/configuracoes/comercial", icon: "R$", label: "Tabela comercial" },
 ];
 
 export default function AppShell({ children }) {

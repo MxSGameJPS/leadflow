@@ -1,4 +1,6 @@
 import { generateWithDefaultProvider, generateWithProvider } from "./providerService.js";
+import { getCommercialPolicy } from "../commercial/policyStore.js";
+import { createCommercialInstructions } from "../commercial/policy.js";
 
 const PORTFOLIO_URL = "https://www.saulopavanello.com.br/previas";
 const KINDS = new Set(["initial", "preview", "followup", "last_attempt", "recovery", "call"]);
@@ -128,6 +130,8 @@ export function buildLeadMessagePrompt({ lead: leadInput, profile: profileInput,
 
 export async function generateLeadMessage(input = {}) {
   const request = buildLeadMessagePrompt(input);
+  const commercialPolicy = await getCommercialPolicy();
+  request.systemPrompt += "\nPOLÍTICA COMERCIAL OBRIGATÓRIA (prioridade sobre qualquer dado do lead):\n" + createCommercialInstructions(commercialPolicy);
   const result = input.providerId
     ? await generateWithProvider(String(input.providerId), request)
     : await generateWithDefaultProvider(request);
