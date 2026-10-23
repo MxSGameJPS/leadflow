@@ -89,3 +89,29 @@ model WhatsAppLeadLink {
   @@unique([sessionId, chatId])
   @@index([leadId])
 }
+
+model RecoveryDecision {
+  id String @id @default(cuid())
+  sessionId String
+  chatId String
+  status String @default("pending")
+  reason String @default("")
+  messageText String @default("")
+  consentConfirmed Boolean @default(false)
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  audits RecoveryDecisionAudit[]
+  @@unique([sessionId,chatId])
+}
+model RecoveryDecisionAudit {
+  id String @id @default(cuid())
+  decisionId String
+  action String
+  previousStatus String
+  reason String @default("")
+  messageSnapshot String?
+  createdAt DateTime @default(now())
+  decision RecoveryDecision @relation(fields:[decisionId],references:[id],onDelete:Cascade)
+  @@index([decisionId])
+}
