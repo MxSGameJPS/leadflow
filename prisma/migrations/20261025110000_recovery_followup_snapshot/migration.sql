@@ -1,0 +1,3 @@
+CREATE TABLE "RecoveryFollowupSnapshot" ("id" TEXT NOT NULL PRIMARY KEY,"sessionId" TEXT NOT NULL,"chatId" TEXT NOT NULL,"status" TEXT NOT NULL,"suggestion" TEXT NOT NULL,"messagesJson" TEXT NOT NULL,"nonTextCount" INTEGER NOT NULL DEFAULT 0,"checkedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"latestReplyAt" DATETIME);
+CREATE UNIQUE INDEX "RecoveryFollowupSnapshot_sessionId_chatId_key" ON "RecoveryFollowupSnapshot"("sessionId","chatId");
+CREATE INDEX "RecoveryFollowupSnapshot_sessionId_checkedAt_idx" ON "RecoveryFollowupSnapshot"("sessionId","checkedAt");
