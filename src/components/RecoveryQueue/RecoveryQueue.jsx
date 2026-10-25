@@ -1,9 +1,12 @@
 "use client";
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import s from "./RecoveryQueue.module.css";
 export default function RecoveryQueue({initial}){
  const [queue,setQueue]=useState(initial),[error,setError]=useState(""),[busy,setBusy]=useState("");
- const [followups,setFollowups]=useState({});
+ const [followups,setFollowups]=useState(()=>Object.fromEntries((initial.sentRows||[]).filter(row=>row.followup).map(row=>[row.chatId,row.followup])));
+ const [autoCheck,setAutoCheck]=useState(false);
+ const checkCallback=useRef(null);
+ useEffect(()=>{if(!autoCheck)return;const interval=setInterval(()=>checkCallback.current?.(),300000);return ()=>clearInterval(interval)},[autoCheck]);
  const [aiFollowups,setAiFollowups]=useState({});
  const [batchRunning,setBatchRunning]=useState(false);
  const [batchProgress,setBatchProgress]=useState("");
@@ -28,6 +31,7 @@ export default function RecoveryQueue({initial}){
    setBatchProgress("Verificação concluída: "+completed+" conversas; "+failed+" erro(s). Nenhuma mensagem foi enviada.");
   }finally{setBatchRunning(false)}
  }
+ checkCallback.current=checkAllReplies;
  const pendingReplies=(queue.sentRows||[]).filter(row=>row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0);
  const pendingRefusals=pendingReplies.filter(row=>followups[row.chatId]?.status==="possible_refusal");
  const visibleSentRows=(queue.sentRows||[]).filter(row=>!showOnlyPending||(row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0));
@@ -96,6 +100,7 @@ export default function RecoveryQueue({initial}){
  <div><span>Possíveis recusas pendentes</span><strong>{pendingRefusals.length}</strong></div>
  </div>
  <button type="button" disabled={batchRunning||!!busy} onClick={checkAllReplies}>{batchRunning?"Consultando histórico...":"Verificar todas as respostas pendentes"}</button>
+ <label><input type="checkbox" checked={autoCheck} onChange={e=>setAutoCheck(e.target.checked)}/> Verificar a cada 5 minutos enquanto esta página estiver aberta</label>
  {batchProgress&&<p role="status">{batchProgress}</p>}
  <label><input type="checkbox" checked={showOnlyPending} onChange={e=>setShowOnlyPending(e.target.checked)}/> Mostrar somente contatos com respostas a revisar</label>
  <p>As contagens consideram apenas os históricos verificados nesta tela. Use o botão para atualizar. A análise individual pelo OmniRoute continua sob demanda.</p>
@@ -105,7 +110,8 @@ export default function RecoveryQueue({initial}){
  {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
  <div><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
- {followups[row.chatId]&&<div role="status"><p><strong>{followups[row.chatId].suggestion}</strong></p>
+ {followups[row.chatId]&&<div role="status">
+ {followups[row.chatId].checkedAt&&<p><small>Última verificação: {new Date(followups[row.chatId].checkedAt).toLocaleString("pt-BR")}</small></p>}<p><strong>{followups[row.chatId].suggestion}</strong></p>
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
  <small>{followups[row.chatId].source}</small>
  <div><button type="button" disabled={!!busy} onClick={()=>analyzeReply(row.chatId)}>{busy===row.chatId?"Analisando...":"Analisar resposta com OmniRoute"}</button></div>
