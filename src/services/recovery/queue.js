@@ -13,7 +13,17 @@ export async function getRecoveryQueue(sessionId) {
  const dailyCount=log.filter(item=>item.dayKey===day&&["reserved","sending","sent","uncertain","externally_sent"].includes(item.status)).length;
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
- const sentRows=await Promise.all(sent.map(async row=>({ ...row,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent" })));
+ const snapshots=await prisma.recoveryFollowupSnapshot.findMany({where:{sessionId}});
+ const snapshotByChat=new Map(snapshots.map(item=>[item.chatId,item]));
+ const sentRows=sent.map(row=>{
+   const snapshot=snapshotByChat.get(row.chatId);
+   let followup=null;
+   if(snapshot){
+     let messages=[];try{messages=JSON.parse(snapshot.messagesJson)}catch{}
+     followup={status:snapshot.status,suggestion:snapshot.suggestion,messages,nonTextCount:snapshot.nonTextCount,checkedAt:snapshot.checkedAt,source:"Última verificação salva no LeadFlow; atualize para consultar o WhatsApp novamente."};
+   }
+   return {...row,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
+ });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
  return {rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};

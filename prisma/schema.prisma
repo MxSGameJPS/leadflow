@@ -129,3 +129,17 @@ model RecoveryDispatch {
   @@unique([sessionId, chatId])
   @@index([sessionId, dayKey])
 }
+
+model RecoveryFollowupSnapshot {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ status String
+ suggestion String
+ messagesJson String
+ nonTextCount Int @default(0)
+ checkedAt DateTime @default(now())
+ latestReplyAt DateTime?
+ @@unique([sessionId,chatId])
+ @@index([sessionId,checkedAt])
+}
