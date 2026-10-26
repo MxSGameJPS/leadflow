@@ -143,3 +143,16 @@ model RecoveryFollowupSnapshot {
  @@unique([sessionId,chatId])
  @@index([sessionId,checkedAt])
 }
+
+model RecoveryAiReview {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ category String
+ reasoning String
+ evidence String
+ recommendedAction String
+ draftReply String
+ analyzedAt DateTime @default(now())
+ @@unique([sessionId,chatId])
+}

@@ -7,7 +7,7 @@ export default function RecoveryQueue({initial}){
  const [autoCheck,setAutoCheck]=useState(false);
  const checkCallback=useRef(null);
  useEffect(()=>{if(!autoCheck)return;const interval=setInterval(()=>checkCallback.current?.(),300000);return ()=>clearInterval(interval)},[autoCheck]);
- const [aiFollowups,setAiFollowups]=useState({});
+ const [aiFollowups,setAiFollowups]=useState(()=>Object.fromEntries((initial.sentRows||[]).filter(row=>row.aiReview).map(row=>[row.chatId,row.aiReview])));
  const [batchRunning,setBatchRunning]=useState(false);
  const [batchProgress,setBatchProgress]=useState("");
  const [batchErrors,setBatchErrors]=useState({});

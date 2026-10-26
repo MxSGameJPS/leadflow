@@ -1,0 +1,2 @@
+CREATE TABLE "RecoveryAiReview" ("id" TEXT NOT NULL PRIMARY KEY,"sessionId" TEXT NOT NULL,"chatId" TEXT NOT NULL,"category" TEXT NOT NULL,"reasoning" TEXT NOT NULL,"evidence" TEXT NOT NULL,"recommendedAction" TEXT NOT NULL,"draftReply" TEXT NOT NULL,"analyzedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE UNIQUE INDEX "RecoveryAiReview_sessionId_chatId_key" ON "RecoveryAiReview"("sessionId","chatId");

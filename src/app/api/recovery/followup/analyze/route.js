@@ -38,6 +38,8 @@ export async function POST(request){
   // Enforce opt-out conservatively independent of the model classification.
   const refused=messages.some(m=>m.direction==="incoming"&&/n[aã]o\s+temos?\s+interesse|n[aã]o\s+tenho\s+interesse|sem\s+interesse|pare\s+de\s+enviar|n[aã]o\s+me\s+mande/i.test(m.text));
   const noContact=refused||category==="refusal"||decision.status==="close_approved";
-  return NextResponse.json({analysis:{category:noContact?"refusal":category,reasoning:String(data.reasoning||"").slice(0,1200),evidence:String(data.evidence||"").slice(0,1000),recommendedAction:noContact?"Não enviar novas mensagens. Revisar eventual encerramento, se ainda pendente.":String(data.recommendedAction||"Revisão humana necessária.").slice(0,600),draftReply:noContact?"":String(data.draftReply||"").slice(0,1600)},advisoryOnly:true});
+  const analysis={category:noContact?"refusal":category,reasoning:String(data.reasoning||"").slice(0,1200),evidence:String(data.evidence||"").slice(0,1000),recommendedAction:noContact?"Não enviar novas mensagens. Revisar eventual encerramento, se ainda pendente.":String(data.recommendedAction||"Revisão humana necessária.").slice(0,600),draftReply:noContact?"":String(data.draftReply||"").slice(0,1600)};
+  await prisma.recoveryAiReview.upsert({where:{sessionId_chatId:{sessionId,chatId}},create:{sessionId,chatId,...analysis,analyzedAt:new Date()},update:{...analysis,analyzedAt:new Date()}});
+  return NextResponse.json({analysis,advisoryOnly:true});
  }catch(e){return NextResponse.json({error:String(e.message||e).slice(0,400)},{status:502})}
 }
