@@ -92,7 +92,7 @@ async function dispatchOne(){
 }
 
 async function findLatestLiveReply(chatId,sentAt){
- const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
+ const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
  if(!base||!key)return null;
  const url=new URL(`${base}/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(chatId)}/history`);
  url.searchParams.set("limit","100");url.searchParams.set("includeMedia","false");
