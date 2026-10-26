@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma.js";
+import { getRecoveryRest } from "../../../../services/recovery/workSchedule.js";
 export const runtime="nodejs";
 export async function POST(request) {
   // Explicitly single-message diagnostic, disabled in production and by default.
@@ -22,6 +23,12 @@ export async function POST(request) {
   let dispatch;
   try {
     dispatch=await prisma.$transaction(async tx=>{
+      const now=new Date();
+      const latest=await tx.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+      const response=latest?await tx.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
+      const schedule=getRecoveryRest({now,lastSentAt:latest?.sentAt,lastReplyAt:response?.latestReplyAt});
+      if(!schedule.working)throw Error("O agente está fora do expediente do Windows (08:00–18:00).");
+      if(schedule.resting)throw Error("Descanso de 30 minutos em andamento. Próximo envio após "+schedule.restUntil.toLocaleTimeString("pt-BR")+".");
       const prior=await tx.recoveryDispatch.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
       if(!prior || prior.status!=="reserved")throw Error("Somente mensagens previamente reservadas podem ser enviadas.");
       const tested=await tx.recoveryDispatch.count({where:{sessionId,status:{in:["sending","sent","uncertain"]}}});
