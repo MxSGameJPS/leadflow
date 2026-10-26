@@ -8,6 +8,18 @@ export default function RecoveryQueue({initial}){
  const checkCallback=useRef(null);
  useEffect(()=>{if(!autoCheck)return;const interval=setInterval(()=>checkCallback.current?.(),300000);return ()=>clearInterval(interval)},[autoCheck]);
  const [aiFollowups,setAiFollowups]=useState(()=>Object.fromEntries((initial.sentRows||[]).filter(row=>row.aiReview).map(row=>[row.chatId,row.aiReview])));
+ const [previewData,setPreviewData]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(row=>[row.chatId,row.preview||null])));
+ const [previewForms,setPreviewForms]=useState({});
+ async function savePreview(chatId,status){
+  if(!confirm("Confirmar manualmente a etapa '"+status+"' para esta conversa? Nenhuma mensagem será enviada."))return;
+  const form=previewForms[chatId]||{};
+  setBusy(chatId);setError("");
+  try{
+   const response=await fetch("/api/recovery/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,status,previewUrl:form.previewUrl??previewData[chatId]?.previewUrl??"",notes:form.notes??previewData[chatId]?.notes??""})});
+   const result=await response.json();if(!response.ok)throw Error(result.error||"Erro ao salvar a etapa.");
+   setPreviewData(old=>({...old,[chatId]:result.preview}));
+  }catch(e){setError(e.message)}finally{setBusy("")}
+ }
  const [batchRunning,setBatchRunning]=useState(false);
  const [batchProgress,setBatchProgress]=useState("");
  const [batchErrors,setBatchErrors]=useState({});
@@ -58,6 +70,11 @@ export default function RecoveryQueue({initial}){
  }
  function stage(row){
   if(row.decisionStatus==="close_approved")return "Encerrado";
+  const preview=previewData[row.chatId];
+  if(preview?.status==="presented")return "Prévia apresentada";
+  if(preview?.status==="ready")return "Prévia pronta";
+  if(preview?.status==="preparing")return "Preparando prévia";
+  if(preview?.status==="interested")return "Aguardando prévia";
   if(pendingReply(row))return "Nova resposta";
   if(!followups[row.chatId]?.messages?.length)return "Aguardando resposta";
   if(!aiFresh(row))return "Aguardando análise";
@@ -147,7 +164,18 @@ export default function RecoveryQueue({initial}){
  {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
  <div><p><strong>Situação: {stage(row)}</strong></p><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
- {followups[row.chatId]&&<div role="status">
+ {row.decisionStatus!=="close_approved"&&<section className={s.aiResult}>
+ <strong>Prévia personalizada — registro manual</strong>
+ <p>Etapa: {previewData[row.chatId]?.status||"Não iniciada"}</p>
+ <label>URL da prévia <input type="url" value={previewForms[row.chatId]?.previewUrl??previewData[row.chatId]?.previewUrl??""} onChange={e=>setPreviewForms(old=>({...old,[row.chatId]:{...old[row.chatId],previewUrl:e.target.value}}))}/></label>
+ <label>Observações <input value={previewForms[row.chatId]?.notes??previewData[row.chatId]?.notes??""} onChange={e=>setPreviewForms(old=>({...old,[row.chatId]:{...old[row.chatId],notes:e.target.value}}))}/></label>
+ <div><button type="button" disabled={!!busy} onClick={()=>savePreview(row.chatId,"interested")}>Confirmar interesse</button>{" "}
+ <button type="button" disabled={!!busy||!previewData[row.chatId]} onClick={()=>savePreview(row.chatId,"preparing")}>Em preparação</button>{" "}
+ <button type="button" disabled={!!busy||!previewData[row.chatId]} onClick={()=>savePreview(row.chatId,"ready")}>Prévia pronta</button>{" "}
+ <button type="button" disabled={!!busy||!previewData[row.chatId]} onClick={()=>savePreview(row.chatId,"presented")}>Prévia apresentada</button></div>
+ <small>Somente registro; o LeadFlow não transmite links nem mensagens nesta etapa.</small>
+ </section>}
+  {followups[row.chatId]&&<div role="status">
  {pendingReply(row)?<button type="button" disabled={!!busy} onClick={()=>markReviewed(row.chatId)}>Marcar resposta como revisada</button>:followups[row.chatId].messages?.length>0?<p>Respostas já revisadas ou oportunidade encerrada.</p>:null}
  {followups[row.chatId].checkedAt&&<p><small>Última verificação: {new Date(followups[row.chatId].checkedAt).toLocaleString("pt-BR")}</small></p>}<p><strong>{followups[row.chatId].suggestion}</strong></p>
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
