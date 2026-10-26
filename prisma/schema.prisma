@@ -140,6 +140,8 @@ model RecoveryFollowupSnapshot {
  nonTextCount Int @default(0)
  checkedAt DateTime @default(now())
  latestReplyAt DateTime?
+ reviewedReplyAt DateTime?
+ reviewedAt DateTime?
  @@unique([sessionId,chatId])
  @@index([sessionId,checkedAt])
 }
