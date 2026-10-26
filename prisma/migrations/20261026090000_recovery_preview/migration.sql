@@ -1,0 +1,3 @@
+CREATE TABLE "RecoveryPreview" ("id" TEXT NOT NULL PRIMARY KEY, "sessionId" TEXT NOT NULL, "chatId" TEXT NOT NULL, "status" TEXT NOT NULL, "previewUrl" TEXT NOT NULL DEFAULT '', "notes" TEXT NOT NULL DEFAULT '', "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL);
+CREATE UNIQUE INDEX "RecoveryPreview_sessionId_chatId_key" ON "RecoveryPreview"("sessionId","chatId");
+CREATE INDEX "RecoveryPreview_sessionId_status_idx" ON "RecoveryPreview"("sessionId","status");
