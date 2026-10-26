@@ -1,4 +1,3 @@
-import {spawn} from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
@@ -20,8 +19,18 @@ const prisma=new PrismaClient();
 const sessionId=process.env.OPENWA_SESSION_ID?.trim();
 const lock=path.join(root,".recovery-worker.lock");
 let lockFd;
-try{lockFd=fs.openSync(lock,"wx");fs.writeSync(lockFd,String(process.pid));}
-catch(e){if(e.code==="EEXIST")throw Error("Monitor de expediente já possui uma instância. Remova o lock apenas se tiver certeza de que não existe processo ativo.");throw e}
+try{
+ lockFd=fs.openSync(lock,"wx");
+}catch(e){
+ if(e.code!=="EEXIST")throw e;
+ const oldPid=Number(fs.readFileSync(lock,"utf8").trim());
+ let active=false;
+ if(Number.isInteger(oldPid)&&oldPid>0){try{process.kill(oldPid,0);active=true}catch(error){if(error.code!=="ESRCH")active=true}}
+ if(active)throw Error("Monitor de expediente já está executando (PID "+oldPid+").");
+ fs.unlinkSync(lock);
+ lockFd=fs.openSync(lock,"wx");
+}
+fs.writeSync(lockFd,String(process.pid));
 let running=true,abortSleep=null;
 function stop(){running=false;abortSleep?.();}
 process.on("SIGINT",stop);process.on("SIGTERM",stop);
