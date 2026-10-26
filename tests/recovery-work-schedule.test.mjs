@@ -1,18 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {getWorkWindow,getRecoveryRest} from "../src/services/recovery/workSchedule.js";
-const d=s=>new Date(s);
-test("starts at 08:00 and stops at 18:00 Sao Paulo",()=>{
- assert.equal(getWorkWindow(d("2026-10-26T10:59:00Z")).working,false);
- assert.equal(getWorkWindow(d("2026-10-26T11:00:00Z")).working,true);
- assert.equal(getWorkWindow(d("2026-10-26T20:59:00Z")).working,true);
- assert.equal(getWorkWindow(d("2026-10-26T21:00:00Z")).working,false);
+const local=(hour,minute)=>new Date(2026,9,26,hour,minute,0,0);
+test("uses Windows local hours: 08:00 inclusive, 18:00 exclusive",()=>{
+ assert.equal(getWorkWindow(local(7,59)).working,false);
+ assert.equal(getWorkWindow(local(8,0)).working,true);
+ assert.equal(getWorkWindow(local(17,59)).working,true);
+ assert.equal(getWorkWindow(local(18,0)).working,false);
 });
-test("wait 30 minutes after last send; reply ends rest",()=>{
- const sent=d("2026-10-26T13:00:00Z");
- assert.equal(getRecoveryRest({now:d("2026-10-26T13:29:00Z"),lastSentAt:sent}).resting,true);
- assert.equal(getRecoveryRest({now:d("2026-10-26T13:30:00Z"),lastSentAt:sent}).resting,false);
- const wake=getRecoveryRest({now:d("2026-10-26T13:08:00Z"),lastSentAt:sent,lastReplyAt:d("2026-10-26T13:05:00Z")});
+test("rests for 30 minutes after last sent unless recipient replies",()=>{
+ const sent=local(10,0);
+ assert.equal(getRecoveryRest({now:local(10,29),lastSentAt:sent}).resting,true);
+ assert.equal(getRecoveryRest({now:local(10,30),lastSentAt:sent}).resting,false);
+ const wake=getRecoveryRest({now:local(10,8),lastSentAt:sent,lastReplyAt:local(10,5)});
  assert.equal(wake.resting,false);
  assert.equal(wake.reason,"reply_woke_agent");
 });
