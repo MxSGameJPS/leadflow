@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { canSend } from "./decisionEngine.js";
+import {getRecoveryRest} from "./workSchedule.js";
 const DAILY_LIMIT = 10;
 function saoPauloDate(value=new Date()) {
  return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(value);
@@ -36,7 +37,10 @@ export async function getRecoveryQueue(sessionId) {
  });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
- return {rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
+ const latest=decisions.filter(d=>d.sentAt).sort((a,b)=>b.sentAt-a.sentAt)[0];
+ const latestSnapshot=latest?snapshotByChat.get(latest.chatId):null;
+ const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt:latestSnapshot?.latestReplyAt});
+ return {schedule,rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
 }
 export async function reserveRecoveryForManualSend(sessionId,chatId) {
  if(!sessionId||!chatId)throw Error("Conversa inválida.");
