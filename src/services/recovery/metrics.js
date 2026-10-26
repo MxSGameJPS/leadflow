@@ -5,12 +5,13 @@ function pct(n, denominator) {
 }
 export async function getRecoveryMetrics(sessionId) {
   if (!sessionId) return { error: "OPENWA_SESSION_ID não configurado." };
-  const [decisions, dispatches, snapshots, previews, commercials] = await Promise.all([
+  const [decisions, dispatches, snapshots, previews, commercials, outcomes] = await Promise.all([
     prisma.recoveryDecision.findMany({where:{sessionId},select:{chatId:true,status:true,consentConfirmed:true}}),
     prisma.recoveryDispatch.findMany({where:{sessionId},select:{chatId:true,status:true,dayKey:true}}),
     prisma.recoveryFollowupSnapshot.findMany({where:{sessionId},select:{chatId:true,status:true,latestReplyAt:true}}),
     prisma.recoveryPreview.findMany({where:{sessionId},select:{chatId:true,status:true}}),
     prisma.recoveryCommercial.findMany({where:{sessionId},select:{chatId:true,phase:true}}),
+    prisma.recoveryOutcome.findMany({where:{sessionId},select:{chatId:true,result:true,contractAmount:true}}),
   ]);
   const closed=new Set(decisions.filter(d=>d.status==="close_approved").map(d=>d.chatId));
   const approved=new Set(decisions.filter(d=>d.status==="message_approved"||d.status==="sent"||d.status==="close_approved"||d.status==="close_rejected").map(d=>d.chatId));
@@ -22,6 +23,9 @@ export async function getRecoveryMetrics(sessionId) {
   const negotiating=new Set(commercials.filter(c=>presented.has(c.chatId)).map(c=>c.chatId));
   const meetings=new Set(commercials.filter(c=>presented.has(c.chatId)&&["meeting_held","proposal_prepared","proposal_presented"].includes(c.phase)).map(c=>c.chatId));
   const proposals=new Set(commercials.filter(c=>presented.has(c.chatId)&&c.phase==="proposal_presented").map(c=>c.chatId));
+  const won=outcomes.filter(o=>sent.has(o.chatId)&&o.result==="won");
+  const lost=outcomes.filter(o=>sent.has(o.chatId)&&o.result==="lost");
+  const contractTotalCents=won.reduce((sum,o)=>sum+(o.contractAmount||0),0);
   const checked=new Set(snapshots.filter(s=>sent.has(s.chatId)).map(s=>s.chatId));
   const steps=[
     {key:"approved",label:"Mensagens aprovadas (inclusive já enviadas)",value:approved.size},
@@ -34,16 +38,20 @@ export async function getRecoveryMetrics(sessionId) {
     {key:"negotiating",label:"Negociação registrada",value:negotiating.size},
     {key:"meetings",label:"Reunião realizada",value:meetings.size},
     {key:"proposals",label:"Proposta apresentada",value:proposals.size},
+    {key:"won",label:"Contratos fechados (confirmados)",value:won.length},
+    {key:"lost",label:"Negócios perdidos (registrados)",value:lost.length},
   ];
   return {
     steps,
     closed:closed.size,
+    contractTotalCents,
     pendingReview: snapshots.filter(s=>sent.has(s.chatId)&&s.latestReplyAt&&!closed.has(s.chatId)).length,
     rates:{
       replyAmongSent:pct(replied.size,sent.size),
       interestAmongReplied:pct([...interested].filter(id=>replied.has(id)).length,replied.size),
       proposalAmongSent:pct(proposals.size,sent.size),
+      winAmongProposals:pct(won.length,proposals.size),
     },
-    disclaimer:"Respostas dependem de histórico OpenWA consultado; ausências não comprovam silêncio. Interesse, prévia e negociação dependem de registro humano. Este painel não mede contratos fechados nem receita.",
+    disclaimer:"Respostas dependem de histórico OpenWA consultado; ausências não comprovam silêncio. Interesse, prévia e negociação dependem de registro humano. Receita aqui representa valor contratado registrado manualmente, não recebimentos ou faturamento efetivo.",
   };
 }
