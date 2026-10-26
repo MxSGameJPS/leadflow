@@ -51,6 +51,21 @@ export default function RecoveryQueue({initial}){
   }finally{setBatchRunning(false)}
  }
  checkCallback.current=checkAllReplies;
+ function aiFresh(row){
+  const ai=aiFollowups[row.chatId],history=followups[row.chatId];
+  if(!ai?.analyzedReplyAt||!history?.latestReplyAt)return false;
+  return new Date(ai.analyzedReplyAt).getTime()===new Date(history.latestReplyAt).getTime();
+ }
+ function stage(row){
+  if(row.decisionStatus==="close_approved")return "Encerrado";
+  if(pendingReply(row))return "Nova resposta";
+  if(!followups[row.chatId]?.messages?.length)return "Aguardando resposta";
+  if(!aiFresh(row))return "Aguardando análise";
+  if(aiFollowups[row.chatId]?.category==="interested")return "Interesse identificado";
+  if(aiFollowups[row.chatId]?.category==="refusal")return "Encerramento a revisar";
+  return "Resposta revisada / acompanhar";
+ }
+ const stages=(queue.sentRows||[]).reduce((acc,row)=>{const name=stage(row);acc[name]=(acc[name]||0)+1;return acc},{});
  const pendingReplies=(queue.sentRows||[]).filter(pendingReply);
  const pendingRefusals=pendingReplies.filter(row=>followups[row.chatId]?.status==="possible_refusal");
  const visibleSentRows=(queue.sentRows||[]).filter(row=>!showOnlyPending||pendingReply(row));
@@ -111,6 +126,9 @@ export default function RecoveryQueue({initial}){
  <section className={s.metrics}><div><span>Limite diário</span><strong>{queue.dailyLimit}</strong></div><div><span>Vagas disponíveis hoje</span><strong>{queue.remaining}</strong></div><div><span>Mensagens aprovadas aguardando</span><strong>{queue.rows.length}</strong></div></section>
  {error&&<p role="alert">{error}</p>}
  <section className={s.list}><h2>Mensagens reservadas para revisão final</h2><p>O teste de envio único só funciona quando habilitado explicitamente no ambiente local. Nada é enviado ao reservar.</p>{(queue.reservations||[]).map(row=><article className={s.card} key={row.chatId}><div><strong>{row.chatId}</strong><p>{row.messageSnapshot}</p></div><button type="button" disabled={busy===row.chatId||queue.testUsed} onClick={()=>sendTest(row.chatId)}>{queue.testUsed?"Teste já utilizado":"Testar envio de 1 mensagem"}</button></article>)}</section>
+ <section className={s.list}><h2>Situação comercial dos contatos enviados</h2>
+ <div className={s.metrics}>{Object.entries(stages).map(([name,count])=><div key={name}><span>{name}</span><strong>{count}</strong></div>)}</div>
+ <p>Os estágios são indicativos; não alteram decisões ou encerramentos. Análises antigas não são consideradas após uma nova resposta.</p></section>
  <section className={s.list}><h2>Painel de acompanhamento</h2>
  <p>Consulte, de uma vez, as conversas já enviadas que ainda não tiveram encerramento aprovado. A consulta não utiliza a etiqueta de prospecção.</p>
  <div className={s.metrics}>
@@ -127,7 +145,7 @@ export default function RecoveryQueue({initial}){
  <section className={s.list}><h2>Enviadas — acompanhamento após a retirada da etiqueta</h2>
  <p>Consulte respostas sem depender da etiqueta de prospecção. O sistema não responde nem encerra contatos automaticamente.</p>
  {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
- <div><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
+ <div><p><strong>Situação: {stage(row)}</strong></p><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
  {followups[row.chatId]&&<div role="status">
  {pendingReply(row)?<button type="button" disabled={!!busy} onClick={()=>markReviewed(row.chatId)}>Marcar resposta como revisada</button>:followups[row.chatId].messages?.length>0?<p>Respostas já revisadas ou oportunidade encerrada.</p>:null}
@@ -135,7 +153,8 @@ export default function RecoveryQueue({initial}){
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
  <small>{followups[row.chatId].source}</small>
  <div><button type="button" disabled={!!busy} onClick={()=>analyzeReply(row.chatId)}>{busy===row.chatId?"Analisando...":"Analisar resposta com OmniRoute"}</button></div>
- {aiFollowups[row.chatId]&&<section className={s.aiResult}>
+ {aiFollowups[row.chatId]&&!aiFresh(row)&&<p role="status">Análise anterior desatualizada. Consulte as respostas e solicite nova análise ao OmniRoute.</p>}
+ {aiFollowups[row.chatId]&&aiFresh(row)&&<section className={s.aiResult}>
  <strong>Análise consultiva do OmniRoute — nenhuma ação automática</strong>
  <p>Categoria: {({automatic:"Possível mensagem automática",refusal:"Recusa",interested:"Interesse",question:"Dúvida",uncertain:"Indeterminado"})[aiFollowups[row.chatId].category]}</p>
  <p>Justificativa: {aiFollowups[row.chatId].reasoning}</p>
