@@ -10,6 +10,20 @@ export default function RecoveryQueue({initial}){
  const [aiFollowups,setAiFollowups]=useState(()=>Object.fromEntries((initial.sentRows||[]).filter(row=>row.aiReview).map(row=>[row.chatId,row.aiReview])));
  const [previewData,setPreviewData]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(row=>[row.chatId,row.preview||null])));
  const [previewForms,setPreviewForms]=useState({});
+ const [commercialData,setCommercialData]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(r=>[r.chatId,r.commercial||null])));
+ const [commercialForms,setCommercialForms]=useState({});
+ const commercialPhases=[["negotiating","Iniciar negociação"],["meeting_scheduled","Reunião agendada"],["meeting_held","Reunião realizada"],["proposal_prepared","Proposta preparada"],["proposal_presented","Proposta apresentada"]];
+ async function saveCommercial(chatId,phase){
+  if(!confirm("Registrar a etapa comercial '"+phase+"' para este contato? Nenhuma mensagem será enviada."))return;
+  const form=commercialForms[chatId]||{},saved=commercialData[chatId]||{};
+  setBusy(chatId);setError("");
+  try{
+   const response=await fetch("/api/recovery/commercial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,phase,meetingAt:form.meetingAt??saved.meetingAt??null,proposalAmount:form.proposalAmount!==undefined&&form.proposalAmount!==""?Math.round(Number(form.proposalAmount)*100):saved.proposalAmount??null,notes:form.notes??saved.notes??""})});
+   const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao atualizar negociação.");
+   setCommercialData(old=>({...old,[chatId]:data.commercial}));
+  }catch(e){setError(e.message)}finally{setBusy("")}
+ }
+
  async function savePreview(chatId,status){
   if(!confirm("Confirmar manualmente a etapa '"+status+"' para esta conversa? Nenhuma mensagem será enviada."))return;
   const form=previewForms[chatId]||{};
@@ -70,6 +84,8 @@ export default function RecoveryQueue({initial}){
  }
  function stage(row){
   if(row.decisionStatus==="close_approved")return "Encerrado";
+  const commercial=commercialData[row.chatId];
+  if(commercial?.phase)return ({negotiating:"Em negociação",meeting_scheduled:"Reunião agendada",meeting_held:"Reunião realizada",proposal_prepared:"Proposta preparada",proposal_presented:"Proposta apresentada"})[commercial.phase]||"Em negociação";
   const preview=previewData[row.chatId];
   if(preview?.status==="presented")return "Prévia apresentada";
   if(preview?.status==="ready")return "Prévia pronta";
@@ -164,6 +180,15 @@ export default function RecoveryQueue({initial}){
  {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
  <div><p><strong>Situação: {stage(row)}</strong></p><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
+ {row.decisionStatus!=="close_approved"&&previewData[row.chatId]?.status==="presented"&&<section className={s.aiResult}>
+ <strong>Negociação, reunião e proposta — controle manual</strong>
+ <p>Etapa atual: {commercialPhases.find(p=>p[0]===commercialData[row.chatId]?.phase)?.[1]||"Ainda não iniciada"}</p>
+ <label>Data/hora da reunião <input type="datetime-local" value={commercialForms[row.chatId]?.meetingAt??(commercialData[row.chatId]?.meetingAt?new Date(commercialData[row.chatId].meetingAt).toISOString().slice(0,16):"")} onChange={e=>setCommercialForms(old=>({...old,[row.chatId]:{...old[row.chatId],meetingAt:e.target.value}}))}/></label>
+ <label>Valor da proposta (R$) <input type="number" min="0" step="0.01" value={commercialForms[row.chatId]?.proposalAmount??(commercialData[row.chatId]?.proposalAmount!=null?commercialData[row.chatId].proposalAmount/100:"")} onChange={e=>setCommercialForms(old=>({...old,[row.chatId]:{...old[row.chatId],proposalAmount:e.target.value}}))}/></label>
+ <label>Observações <input value={commercialForms[row.chatId]?.notes??commercialData[row.chatId]?.notes??""} onChange={e=>setCommercialForms(old=>({...old,[row.chatId]:{...old[row.chatId],notes:e.target.value}}))}/></label>
+ <div>{commercialPhases.map(([phase,label],i)=><button type="button" key={phase} disabled={!!busy||i!==commercialPhases.findIndex(([p])=>p===commercialData[row.chatId]?.phase)+1} onClick={()=>saveCommercial(row.chatId,phase)}>{label}</button>)}</div>
+ <small>Os registros não agendam reuniões no calendário nem enviam propostas. A negociação só começa após a apresentação da prévia.</small>
+ </section>}
  {row.decisionStatus!=="close_approved"&&<section className={s.aiResult}>
  <strong>Prévia personalizada — registro manual</strong>
  <p>Etapa: {previewData[row.chatId]?.status||"Não iniciada"}</p>

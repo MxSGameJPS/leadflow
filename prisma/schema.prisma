@@ -172,3 +172,17 @@ model RecoveryPreview {
  @@unique([sessionId,chatId])
  @@index([sessionId,status])
 }
+
+model RecoveryCommercial {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ phase String
+ meetingAt DateTime?
+ proposalAmount Int?
+ notes String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([sessionId,chatId])
+ @@index([sessionId,phase])
+}

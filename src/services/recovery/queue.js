@@ -16,6 +16,8 @@ export async function getRecoveryQueue(sessionId) {
  const snapshots=await prisma.recoveryFollowupSnapshot.findMany({where:{sessionId}});
  const aiReviews=await prisma.recoveryAiReview.findMany({where:{sessionId}});
  const previews=await prisma.recoveryPreview.findMany({where:{sessionId}});
+ const commercials=await prisma.recoveryCommercial.findMany({where:{sessionId}});
+ const commercialByChat=new Map(commercials.map(c=>[c.chatId,c]));
  const previewByChat=new Map(previews.map(p=>[p.chatId,p]));
  const aiByChat=new Map(aiReviews.map(item=>[item.chatId,item]));
  const snapshotByChat=new Map(snapshots.map(item=>[item.chatId,item]));
@@ -28,7 +30,7 @@ export async function getRecoveryQueue(sessionId) {
    }
    const ai=aiByChat.get(row.chatId)||null;
    const aiFresh=!!ai?.analyzedReplyAt && !!snapshot?.latestReplyAt && ai.analyzedReplyAt.getTime()===snapshot.latestReplyAt.getTime();
-   return {...row,preview:previewByChat.get(row.chatId)||null,aiReview:ai,aiFresh,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
+   return {...row,preview:previewByChat.get(row.chatId)||null,commercial:commercialByChat.get(row.chatId)||null,aiReview:ai,aiFresh,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
  });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
