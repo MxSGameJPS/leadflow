@@ -159,3 +159,16 @@ model RecoveryAiReview {
  analyzedReplyAt DateTime?
  @@unique([sessionId,chatId])
 }
+
+model RecoveryPreview {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ status String
+ previewUrl String @default("")
+ notes String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([sessionId,chatId])
+ @@index([sessionId,status])
+}
