@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "clean:next": "node scripts/clean-next.mjs",
-    "dev": "next dev",
+    "dev": "node scripts/dev-with-recovery.mjs",
     "recovery:monitor": "node scripts/recovery-monitor.mjs",
     "dev:fast": "next dev",
     "build": "next build",
