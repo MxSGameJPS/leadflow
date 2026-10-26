@@ -186,3 +186,15 @@ model RecoveryCommercial {
  @@unique([sessionId,chatId])
  @@index([sessionId,phase])
 }
+
+model RecoveryOutcome {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ result String
+ contractAmount Int?
+ reason String @default("")
+ createdAt DateTime @default(now())
+ @@unique([sessionId,chatId])
+ @@index([sessionId,result])
+}
