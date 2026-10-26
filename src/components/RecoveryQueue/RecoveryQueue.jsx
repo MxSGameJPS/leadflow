@@ -12,6 +12,25 @@ export default function RecoveryQueue({initial}){
  const [batchProgress,setBatchProgress]=useState("");
  const [batchErrors,setBatchErrors]=useState({});
  const [showOnlyPending,setShowOnlyPending]=useState(false);
+ const [acknowledged,setAcknowledged]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(row=>[row.chatId,row.followup?.reviewedReplyAt||null])));
+ function pendingReply(row){
+   const info=followups[row.chatId];
+   if(row.decisionStatus==="close_approved"||!info?.messages?.length)return false;
+   const last=info.latestReplyAt||new Date(Math.max(...info.messages.map(m=>m.timestamp))*1000).toISOString();
+   return !acknowledged[row.chatId]||new Date(last).getTime()>new Date(acknowledged[row.chatId]).getTime();
+ }
+ async function markReviewed(chatId){
+   const data=followups[chatId];
+   if(!data?.messages?.length)return;
+   const last=data.latestReplyAt||new Date(Math.max(...data.messages.map(m=>m.timestamp))*1000).toISOString();
+   setBusy(chatId);setError("");
+   try{
+     const response=await fetch("/api/recovery/followup/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,latestReplyAt:last})});
+     const result=await response.json();if(!response.ok)throw Error(result.error||"Falha ao marcar revisão.");
+     setAcknowledged(old=>({...old,[chatId]:result.reviewedReplyAt}));
+   }catch(e){setError(e.message)}finally{setBusy("")}
+ }
+
  async function checkAllReplies(){
   if(batchRunning)return;
   setBatchRunning(true);setBatchErrors({});setError("");
@@ -32,9 +51,9 @@ export default function RecoveryQueue({initial}){
   }finally{setBatchRunning(false)}
  }
  checkCallback.current=checkAllReplies;
- const pendingReplies=(queue.sentRows||[]).filter(row=>row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0);
+ const pendingReplies=(queue.sentRows||[]).filter(pendingReply);
  const pendingRefusals=pendingReplies.filter(row=>followups[row.chatId]?.status==="possible_refusal");
- const visibleSentRows=(queue.sentRows||[]).filter(row=>!showOnlyPending||(row.decisionStatus!=="close_approved"&&followups[row.chatId]?.messages?.length>0));
+ const visibleSentRows=(queue.sentRows||[]).filter(row=>!showOnlyPending||pendingReply(row));
  async function analyzeReply(chatId){
   setBusy(chatId);setError("");
   try{
@@ -111,6 +130,7 @@ export default function RecoveryQueue({initial}){
  <div><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
  {followups[row.chatId]&&<div role="status">
+ {pendingReply(row)?<button type="button" disabled={!!busy} onClick={()=>markReviewed(row.chatId)}>Marcar resposta como revisada</button>:followups[row.chatId].messages?.length>0?<p>Respostas já revisadas ou oportunidade encerrada.</p>:null}
  {followups[row.chatId].checkedAt&&<p><small>Última verificação: {new Date(followups[row.chatId].checkedAt).toLocaleString("pt-BR")}</small></p>}<p><strong>{followups[row.chatId].suggestion}</strong></p>
  {followups[row.chatId].messages.map((m,i)=><p key={i}>Recebida em {new Date(m.timestamp*1000).toLocaleString("pt-BR")}: {m.text}</p>)}
  <small>{followups[row.chatId].source}</small>
