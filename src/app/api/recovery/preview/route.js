@@ -13,7 +13,7 @@ export async function POST(request){
   if(dispatch?.status!=="sent"||!decision||decision.status==="close_approved")return NextResponse.json({error:"Contato sem envio confirmado ou encerrado."},{status:403});
   const existing=await prisma.recoveryPreview.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
   const order={interested:0,preparing:1,ready:2,presented:3};
-  if(existing&&order[status]<order[existing.status])return NextResponse.json({error:"Não é permitido retroceder a etapa já registrada."},{status:409});
+  if((!existing&&status!=="interested")||(existing&&order[status]>order[existing.status]+1)||(existing&&order[status]<order[existing.status]))return NextResponse.json({error:"Registre as etapas em ordem: interesse, preparação, pronta e apresentada."},{status:409});
   const safeUrl=String(previewUrl||existing?.previewUrl||"").trim();
   if(safeUrl.length>1000)return NextResponse.json({error:"URL muito longa."},{status:400});
   if(safeUrl){const parsed=new URL(safeUrl);if(!["https:","http:"].includes(parsed.protocol))return NextResponse.json({error:"URL inválida."},{status:400})}
