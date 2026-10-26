@@ -1,15 +1,15 @@
-export const RECOVERY_TZ="America/Sao_Paulo";
+// The LeadFlow worker runs on the Windows host. Node's local clock inherits
+// the operating system time zone; do not fix Sao Paulo time here.
 export const WORK_START=8*60;
 export const WORK_END=18*60;
 export const REST_MS=30*60*1000;
-function parts(now){
- const fields=new Intl.DateTimeFormat("en-US",{timeZone:RECOVERY_TZ,hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(now);
- const value=Object.fromEntries(fields.map(p=>[p.type,p.value]));
- return {day:`${value.year}-${value.month}-${value.day}`,minute:Number(value.hour)%24*60+Number(value.minute)};
+function localParts(now){
+ const yyyy=now.getFullYear(),mm=String(now.getMonth()+1).padStart(2,"0"),dd=String(now.getDate()).padStart(2,"0");
+ return {day:`${yyyy}-${mm}-${dd}`,minute:now.getHours()*60+now.getMinutes()};
 }
 export function getWorkWindow(now=new Date()){
- const local=parts(now),working=local.minute>=WORK_START&&local.minute<WORK_END;
- return {working,day:local.day,minuteOfDay:local.minute,timeZone:RECOVERY_TZ,start:"08:00",end:"18:00"};
+ const local=localParts(now);
+ return {working:local.minute>=WORK_START&&local.minute<WORK_END,day:local.day,minuteOfDay:local.minute,timeZone:"Windows local",start:"08:00",end:"18:00"};
 }
 export function getRecoveryRest({now=new Date(),lastSentAt=null,lastReplyAt=null}={}){
  const window=getWorkWindow(now);
