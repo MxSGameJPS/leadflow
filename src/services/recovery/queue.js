@@ -14,6 +14,8 @@ export async function getRecoveryQueue(sessionId) {
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const snapshots=await prisma.recoveryFollowupSnapshot.findMany({where:{sessionId}});
+ const aiReviews=await prisma.recoveryAiReview.findMany({where:{sessionId}});
+ const aiByChat=new Map(aiReviews.map(item=>[item.chatId,item]));
  const snapshotByChat=new Map(snapshots.map(item=>[item.chatId,item]));
  const sentRows=sent.map(row=>{
    const snapshot=snapshotByChat.get(row.chatId);
@@ -22,7 +24,7 @@ export async function getRecoveryQueue(sessionId) {
      let messages=[];try{messages=JSON.parse(snapshot.messagesJson)}catch{}
      followup={status:snapshot.status,suggestion:snapshot.suggestion,messages,nonTextCount:snapshot.nonTextCount,checkedAt:snapshot.checkedAt,source:"Última verificação salva no LeadFlow; atualize para consultar o WhatsApp novamente."};
    }
-   return {...row,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
+   return {...row,aiReview:aiByChat.get(row.chatId)||null,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
  });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
