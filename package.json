@@ -6,6 +6,7 @@
   "scripts": {
     "clean:next": "node scripts/clean-next.mjs",
     "dev": "next dev",
+    "recovery:monitor": "node scripts/recovery-monitor.mjs",
     "dev:fast": "next dev",
     "build": "next build",
     "start": "next start",
