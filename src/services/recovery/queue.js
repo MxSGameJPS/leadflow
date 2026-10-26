@@ -22,7 +22,7 @@ export async function getRecoveryQueue(sessionId) {
    let followup=null;
    if(snapshot){
      let messages=[];try{messages=JSON.parse(snapshot.messagesJson)}catch{}
-     followup={status:snapshot.status,suggestion:snapshot.suggestion,messages,nonTextCount:snapshot.nonTextCount,checkedAt:snapshot.checkedAt,source:"Última verificação salva no LeadFlow; atualize para consultar o WhatsApp novamente."};
+     followup={status:snapshot.status,suggestion:snapshot.suggestion,messages,nonTextCount:snapshot.nonTextCount,checkedAt:snapshot.checkedAt,latestReplyAt:snapshot.latestReplyAt,reviewedReplyAt:snapshot.reviewedReplyAt,reviewedAt:snapshot.reviewedAt,source:"Última verificação salva no LeadFlow; atualize para consultar o WhatsApp novamente."};
    }
    return {...row,aiReview:aiByChat.get(row.chatId)||null,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
  });
