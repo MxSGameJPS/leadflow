@@ -155,7 +155,7 @@ export default function RecoveryQueue({initial}){
    if(!refreshed.ok)throw Error(data.error);setQueue(data);
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
- return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a><h1>Fila de recuperação</h1><p>Mensagens previamente aprovadas por você. O LeadFlow não envia nenhuma mensagem nesta etapa.</p>
+ return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a> <a href="/recuperacao/indicadores">Ver indicadores de conversão →</a><h1>Fila de recuperação</h1><p>Mensagens previamente aprovadas por você. O LeadFlow não envia nenhuma mensagem nesta etapa.</p>
  <section className={s.metrics}><div><span>Limite diário</span><strong>{queue.dailyLimit}</strong></div><div><span>Vagas disponíveis hoje</span><strong>{queue.remaining}</strong></div><div><span>Mensagens aprovadas aguardando</span><strong>{queue.rows.length}</strong></div></section>
  {error&&<p role="alert">{error}</p>}
  <section className={s.list}><h2>Mensagens reservadas para revisão final</h2><p>O teste de envio único só funciona quando habilitado explicitamente no ambiente local. Nada é enviado ao reservar.</p>{(queue.reservations||[]).map(row=><article className={s.card} key={row.chatId}><div><strong>{row.chatId}</strong><p>{row.messageSnapshot}</p></div><button type="button" disabled={busy===row.chatId||queue.testUsed} onClick={()=>sendTest(row.chatId)}>{queue.testUsed?"Teste já utilizado":"Testar envio de 1 mensagem"}</button></article>)}</section>
