@@ -40,7 +40,7 @@ const nap=ms=>new Promise(resolve=>{
 });
 // Disabled unless explicitly opted in. This process never generates or approves messages.
 async function dispatchOne(){
- const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,"");
+ const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
  const key=process.env.OPENWA_API_KEY?.trim();
  if(!base||!key){console.error("[envio] OpenWA não configurado.");return}
  // Never proceed while an outcome is uncertain: an earlier HTTP timeout may have sent.
@@ -52,13 +52,18 @@ async function dispatchOne(){
  if(count>10){console.error("[envio] Limite diário ultrapassado.");return}
  const candidate=await prisma.recoveryDispatch.findFirst({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"}});
  if(!candidate)return;
+ if(candidate.dayKey!==day){console.error("[envio] Reserva de outro dia exige nova revisão:",candidate.id);return;}
  const decision=await prisma.recoveryDecision.findUnique({where:{id:candidate.decisionId}});
  if(!decision||decision.status!=="message_approved"||!decision.consentConfirmed||decision.sentAt||decision.messageText!==candidate.messageSnapshot){
   console.error("[envio] Reserva sem aprovação válida, ignorada:",candidate.id);return;
  }
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
- const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt:snapshot?.latestReplyAt});
+ let lastReplyAt=snapshot?.latestReplyAt;
+ if(latest?.sentAt&&(!lastReplyAt||new Date(lastReplyAt)<=latest.sentAt)){
+  try{lastReplyAt=await findLatestLiveReply(latest.chatId,latest.sentAt)}catch(e){console.error("[envio] Não foi possível confirmar resposta:",e.message);return}
+ }
+ const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt});
  if(!schedule.working||schedule.resting)return;
  // SQLite updateMany is our atomic claim; never retry sending/uncertain records.
  const claimed=await prisma.recoveryDispatch.updateMany({where:{id:candidate.id,status:"reserved"},data:{status:"sending"}});
@@ -86,11 +91,35 @@ async function dispatchOne(){
  }
 }
 
+async function findLatestLiveReply(chatId,sentAt){
+ const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
+ if(!base||!key)return null;
+ const url=new URL(`${base}/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(chatId)}/history`);
+ url.searchParams.set("limit","100");url.searchParams.set("includeMedia","false");
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+ try{
+  const res=await fetch(url,{headers:{"X-API-Key":key,Accept:"application/json"},signal:controller.signal,cache:"no-store"});
+  if(!res.ok)throw Error("OpenWA HTTP "+res.status);
+  const payload=await res.json(),rows=Array.isArray(payload)?payload:Array.isArray(payload?.messages)?payload.messages:[];
+  const replies=rows.filter(m=>m.chatId===chatId&&!m.isGroup&&m.fromMe===false&&Number.isFinite(m.timestamp)&&m.timestamp>sentAt.getTime()/1000);
+  if(!replies.length)return null;
+  return new Date(Math.max(...replies.map(m=>m.timestamp))*1000);
+ }finally{clearTimeout(timer)}
+}
 async function check(){
  if(!sessionId){console.log("[expediente] OPENWA_SESSION_ID ausente.");return;}
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{chatId:true,sentAt:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
- const state=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt:snapshot?.latestReplyAt});
+ let lastReplyAt=snapshot?.latestReplyAt;
+ if(latest?.sentAt&&(!lastReplyAt||new Date(lastReplyAt)<=latest.sentAt)){
+  try{
+   const live=await findLatestLiveReply(latest.chatId,latest.sentAt);
+   if(live){lastReplyAt=live;
+    await prisma.recoveryFollowupSnapshot.updateMany({where:{sessionId,chatId:latest.chatId},data:{latestReplyAt:live}}); 
+   }
+  }catch(e){console.error("[expediente] Consulta da resposta não confirmada:",e.message)}
+ }
+ const state=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt});
  const pending=await prisma.recoveryDispatch.count({where:{sessionId,status:"reserved"}});
  if(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"&&state.working&&!state.resting&&pending>0)await dispatchOne();
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
