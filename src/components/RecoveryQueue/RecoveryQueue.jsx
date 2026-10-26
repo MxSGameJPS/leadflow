@@ -12,6 +12,19 @@ export default function RecoveryQueue({initial}){
  const [previewForms,setPreviewForms]=useState({});
  const [commercialData,setCommercialData]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(r=>[r.chatId,r.commercial||null])));
  const [commercialForms,setCommercialForms]=useState({});
+ const [outcomes,setOutcomes]=useState(()=>Object.fromEntries((initial.sentRows||[]).map(r=>[r.chatId,r.outcome||null])));
+ const [outcomeForms,setOutcomeForms]=useState({});
+ async function saveOutcome(chatId,result){
+  if(!confirm(result==="won"?"Confirmar que o contrato foi efetivamente fechado?":"Confirmar que esta oportunidade comercial foi perdida?"))return;
+  const form=outcomeForms[chatId]||{};
+  setBusy(chatId);setError("");
+  try{
+   const res=await fetch("/api/recovery/outcome",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,result,contractAmount:Math.round(Number(form.amount||0)*100),reason:form.reason||""})});
+   const data=await res.json();if(!res.ok)throw Error(data.error||"Falha ao registrar resultado.");
+   setOutcomes(old=>({...old,[chatId]:data.outcome}));
+  }catch(e){setError(e.message)}finally{setBusy("")}
+ }
+
  const commercialPhases=[["negotiating","Iniciar negociação"],["meeting_scheduled","Reunião agendada"],["meeting_held","Reunião realizada"],["proposal_prepared","Proposta preparada"],["proposal_presented","Proposta apresentada"]];
  async function saveCommercial(chatId,phase){
   if(!confirm("Registrar a etapa comercial '"+phase+"' para este contato? Nenhuma mensagem será enviada."))return;
@@ -84,6 +97,8 @@ export default function RecoveryQueue({initial}){
  }
  function stage(row){
   if(row.decisionStatus==="close_approved")return "Encerrado";
+  if(outcomes[row.chatId]?.result==="won")return "Contrato fechado";
+  if(outcomes[row.chatId]?.result==="lost")return "Negócio perdido";
   const commercial=commercialData[row.chatId];
   if(commercial?.phase)return ({negotiating:"Em negociação",meeting_scheduled:"Reunião agendada",meeting_held:"Reunião realizada",proposal_prepared:"Proposta preparada",proposal_presented:"Proposta apresentada"})[commercial.phase]||"Em negociação";
   const preview=previewData[row.chatId];
@@ -180,6 +195,15 @@ export default function RecoveryQueue({initial}){
  {visibleSentRows.map(row=><article className={s.card} key={row.chatId}>
  <div><p><strong>Situação: {stage(row)}</strong></p><strong>{row.chatId} · {row.decisionStatus==="close_approved"?"Encerramento aprovado":row.decisionStatus==="close_rejected"?"Encerramento rejeitado":"Enviada"}</strong><p>{row.messageSnapshot}</p>
  {batchErrors[row.chatId]&&<p role="alert">Erro ao verificar: {batchErrors[row.chatId]}</p>}
+ {row.decisionStatus!=="close_approved"&&commercialData[row.chatId]?.phase==="proposal_presented"&&<section className={s.aiResult}>
+ <strong>Resultado final da negociação</strong>
+ {outcomes[row.chatId]?<p>{outcomes[row.chatId].result==="won"?"Contrato fechado":"Negócio perdido"} · {outcomes[row.chatId].result==="won"?(outcomes[row.chatId].contractAmount/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):outcomes[row.chatId].reason}</p>:<>
+ <label>Valor efetivamente contratado (R$) <input type="number" min="0" step="0.01" value={outcomeForms[row.chatId]?.amount??""} onChange={e=>setOutcomeForms(old=>({...old,[row.chatId]:{...old[row.chatId],amount:e.target.value}}))}/></label>
+ <label>Motivo da perda / observações <input value={outcomeForms[row.chatId]?.reason??""} onChange={e=>setOutcomeForms(old=>({...old,[row.chatId]:{...old[row.chatId],reason:e.target.value}}))}/></label>
+ <div><button type="button" disabled={!!busy} onClick={()=>saveOutcome(row.chatId,"won")}>Registrar contrato fechado</button>{" "}
+ <button type="button" disabled={!!busy} onClick={()=>saveOutcome(row.chatId,"lost")}>Registrar negócio perdido</button></div></>}
+ <small>Registro manual. Valor contratado não significa pagamento recebido. Nenhuma mensagem é enviada.</small>
+ </section>}
  {row.decisionStatus!=="close_approved"&&previewData[row.chatId]?.status==="presented"&&<section className={s.aiResult}>
  <strong>Negociação, reunião e proposta — controle manual</strong>
  <p>Etapa atual: {commercialPhases.find(p=>p[0]===commercialData[row.chatId]?.phase)?.[1]||"Ainda não iniciada"}</p>
