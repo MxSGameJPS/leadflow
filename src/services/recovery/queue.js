@@ -24,7 +24,9 @@ export async function getRecoveryQueue(sessionId) {
      let messages=[];try{messages=JSON.parse(snapshot.messagesJson)}catch{}
      followup={status:snapshot.status,suggestion:snapshot.suggestion,messages,nonTextCount:snapshot.nonTextCount,checkedAt:snapshot.checkedAt,latestReplyAt:snapshot.latestReplyAt,reviewedReplyAt:snapshot.reviewedReplyAt,reviewedAt:snapshot.reviewedAt,source:"Última verificação salva no LeadFlow; atualize para consultar o WhatsApp novamente."};
    }
-   return {...row,aiReview:aiByChat.get(row.chatId)||null,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
+   const ai=aiByChat.get(row.chatId)||null;
+   const aiFresh=!!ai?.analyzedReplyAt && !!snapshot?.latestReplyAt && ai.analyzedReplyAt.getTime()===snapshot.latestReplyAt.getTime();
+   return {...row,aiReview:ai,aiFresh,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
  });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));

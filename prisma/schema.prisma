@@ -156,5 +156,6 @@ model RecoveryAiReview {
  recommendedAction String
  draftReply String
  analyzedAt DateTime @default(now())
+ analyzedReplyAt DateTime?
  @@unique([sessionId,chatId])
 }
