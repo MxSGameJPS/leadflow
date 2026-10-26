@@ -126,7 +126,7 @@ async function check(){
  console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
- console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Envio automático: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADO por configuração local":"DESATIVADO")");
+ console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Envio automático: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADO por configuração local":"DESATIVADO"));
  while(running){try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
  await prisma.$disconnect();
