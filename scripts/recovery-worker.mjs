@@ -49,14 +49,18 @@ async function dispatchOne(){
  const today=new Date();
  const day=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
  const count=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["reserved","sending","sent","uncertain","externally_sent"]}}});
- if(count>10){console.error("[envio] Limite diário ultrapassado.");return}
- const candidate=await prisma.recoveryDispatch.findFirst({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"}});
- if(!candidate)return;
- if(candidate.dayKey!==day){console.error("[envio] Reserva de outro dia exige nova revisão:",candidate.id);return;}
- const decision=await prisma.recoveryDecision.findUnique({where:{id:candidate.decisionId}});
- if(!decision||decision.status!=="message_approved"||!decision.consentConfirmed||decision.sentAt||decision.messageText!==candidate.messageSnapshot){
-  console.error("[envio] Reserva sem aprovação válida, ignorada:",candidate.id);return;
+ if(count>=10){console.error("[envio] Limite diário de 10 atingido.");return}
+ const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"}});
+ let candidate=null;
+ for(const item of reservations){
+  const decision=await prisma.recoveryDecision.findUnique({where:{id:item.decisionId}});
+  if(decision?.status==="message_approved"&&decision.consentConfirmed&&!decision.sentAt&&decision.messageText===item.messageSnapshot){
+   candidate=item;break;
+  }
+  console.error("[envio] Reserva inválida ignorada, sem enviar:",item.id);
  }
+ if(!candidate){console.log("[envio] Nenhuma reserva elegível entre",reservations.length,"reservas.");return;}
+ if(candidate.dayKey!==day)console.log("[envio] Reserva antiga aprovada será contabilizada no dia do envio:",candidate.id);
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
  let lastReplyAt=snapshot?.latestReplyAt;
@@ -65,8 +69,9 @@ async function dispatchOne(){
  }
  const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt});
  if(!schedule.working||schedule.resting)return;
+ if(!getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt}).working)return;
  // SQLite updateMany is our atomic claim; never retry sending/uncertain records.
- const claimed=await prisma.recoveryDispatch.updateMany({where:{id:candidate.id,status:"reserved"},data:{status:"sending"}});
+ const claimed=await prisma.recoveryDispatch.updateMany({where:{id:candidate.id,status:"reserved"},data:{status:"sending",dayKey:day}});
  if(claimed.count!==1)return;
  console.log("[envio] Mensagem aprovada reservada, destino:",candidate.chatId);
  try{
@@ -123,6 +128,7 @@ async function check(){
  const pending=await prisma.recoveryDispatch.count({where:{sessionId,status:"reserved"}});
  if(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"&&state.working&&!state.resting&&pending>0)await dispatchOne();
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
+ if(state.working&&pending>0&&process.env.LEADFLOW_RECOVERY_AUTO_SEND!=="true")console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
  console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{

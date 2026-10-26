@@ -2,15 +2,15 @@ import { prisma } from "../../lib/prisma.js";
 import { canSend } from "./decisionEngine.js";
 import {getRecoveryRest} from "./workSchedule.js";
 const DAILY_LIMIT = 10;
-function saoPauloDate(value=new Date()) {
- return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(value);
+function windowsLocalDate(value=new Date()){
+ return value.getFullYear()+"-"+String(value.getMonth()+1).padStart(2,"0")+"-"+String(value.getDate()).padStart(2,"0");
 }
 export async function getRecoveryQueue(sessionId) {
  if(!sessionId)return {rows:[],dailyLimit:DAILY_LIMIT,remaining:DAILY_LIMIT};
  const decisions=await prisma.recoveryDecision.findMany({where:{sessionId},orderBy:[{createdAt:"asc"},{id:"asc"}]});
  const log=await prisma.recoveryDispatch.findMany({where:{sessionId},select:{chatId:true,status:true,dayKey:true}});
  const contacted=new Set(log.map(item=>item.chatId));
- const day=saoPauloDate();
+ const day=windowsLocalDate();
  const dailyCount=log.filter(item=>item.dayKey===day&&["reserved","sending","sent","uncertain","externally_sent"].includes(item.status)).length;
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
@@ -49,7 +49,7 @@ export async function reserveRecoveryForManualSend(sessionId,chatId) {
    if(existing)throw Error("Esta conversa já possui uma tentativa registrada; nenhuma segunda tentativa é permitida.");
    const decision=await tx.recoveryDecision.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
    if(!canSend(decision))throw Error("A mensagem deve estar aprovada e a permissão confirmada.");
-   const day=saoPauloDate();
+   const day=windowsLocalDate();
    const used=await tx.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["reserved","sending","sent","uncertain","externally_sent"]}}});
    if(used>=DAILY_LIMIT)throw Error("Limite diário de 10 tentativas atingido.");
    return tx.recoveryDispatch.create({data:{sessionId,chatId,decisionId:decision.id,dayKey:day,status:"reserved",messageSnapshot:decision.messageText}});
