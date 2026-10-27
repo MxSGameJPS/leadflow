@@ -68,7 +68,7 @@ async function captureOne(){
  if(!schedule.working||schedule.resting)return;
  const rows=await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30});
  for(const item of rows){
-  if(!/^55\\d{10,11}@c\\.us$/.test(item.chatId)||!item.messageText?.trim())continue;
+  if(!/^55\d{10,11}@c\.us$/.test(item.chatId)||!item.messageText?.trim())continue;
   const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId:item.chatId}});
   const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:item.chatId}});
   if(recovery||previouslySent){console.error("[captação] Contato consta na Recuperação, pulando:",item.leadId);continue}
@@ -191,7 +191,7 @@ async function check(){
  console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"envios hoje:",shared.count,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
- console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Envio automático: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADO por configuração local":"DESATIVADO"));
+ console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA")+"; Captação: "+(process.env.LEADFLOW_CAPTURE_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA"));
  while(running){try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
  await prisma.$disconnect();
