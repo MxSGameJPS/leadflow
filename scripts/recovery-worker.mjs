@@ -69,8 +69,10 @@ async function captureOne(){
  const rows=await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30});
  for(const item of rows){
   if(!/^55\d{10,11}@c\.us$/.test(item.chatId)||!item.messageText?.trim())continue;
-  const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId:item.chatId}});
-  const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:item.chatId}});
+  const linkedChats=await prisma.whatsAppLeadLink.findMany({where:{leadId:item.leadId},select:{chatId:true}});
+  const knownChatIds=[item.chatId,...linkedChats.map(link=>link.chatId)];
+  const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId:{in:knownChatIds}}});
+  const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:{in:knownChatIds}}});
   if(recovery||previouslySent){console.error("[captação] Contato consta na Recuperação, pulando:",item.leadId);continue}
   const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
   if(claimed.count!==1)continue;
@@ -114,6 +116,8 @@ async function dispatchOne(){
   console.error("[envio] Reserva inválida ignorada, sem enviar:",item.id);
  }
  if(!candidate){console.log("[envio] Nenhuma reserva elegível entre",reservations.length,"reservas.");return;}
+ const captureForChat=await prisma.captureApproval.findFirst({where:{sessionId,chatId:candidate.chatId,status:{in:["approved","sending","sent","uncertain"]}}});
+ if(captureForChat){console.error("[envio] Contato também está na Captação; revisão manual necessária:",candidate.chatId);return;}
  if(candidate.dayKey!==day)console.log("[envio] Reserva antiga aprovada será contabilizada no dia do envio:",candidate.id);
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
