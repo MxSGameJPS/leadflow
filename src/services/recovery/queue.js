@@ -40,7 +40,7 @@ export async function getRecoveryQueue(sessionId) {
  const latest=decisions.filter(d=>d.sentAt).sort((a,b)=>b.sentAt-a.sentAt)[0];
  const latestSnapshot=latest?snapshotByChat.get(latest.chatId):null;
  const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt:latestSnapshot?.latestReplyAt});
- return {schedule,rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
+ return {schedule,autoSendEnabled:process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true",rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
 }
 export async function reserveRecoveryForManualSend(sessionId,chatId) {
  if(!sessionId||!chatId)throw Error("Conversa inválida.");
