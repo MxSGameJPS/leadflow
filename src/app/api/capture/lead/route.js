@@ -1,6 +1,6 @@
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
-import {getLead} from "../../../../repositories/leadRepository.js";
+import {getLead,updateLead} from "../../../../repositories/leadRepository.js";
 export const runtime="nodejs";
 const invalid=error=>NextResponse.json({error},{status:400});
 function normalizeWhatsapp(phone){
@@ -19,11 +19,12 @@ export async function GET(request){
 export async function POST(request){
  if(process.env.NODE_ENV==="production")return NextResponse.json({error:"Somente ambiente local."},{status:403});
  try{
-  const {leadId,action,messageText,confirmed}=await request.json();
+  const {leadId,action,messageText,confirmed,whatsapp}=await request.json();
   const lead=await getLead(leadId);
   if(!lead)return invalid("Lead não encontrado.");
-  const phone=normalizeWhatsapp(lead.whatsapp);
-  if(!phone)return invalid("Cadastre um WhatsApp brasileiro válido na ficha do lead; não usamos telefone fixo ou identificador @lid como destino.");
+  const proposed=String(whatsapp??lead.whatsapp??"").trim();
+  const phone=normalizeWhatsapp(proposed);
+  if(!phone)return invalid("Informe um WhatsApp brasileiro válido. Telefone comercial não é automaticamente WhatsApp.");
   const sessionId=process.env.OPENWA_SESSION_ID?.trim();
   if(!sessionId)return invalid("Configure a sessão OpenWA.");
   const existing=await prisma.captureApproval.findUnique({where:{leadId}});
@@ -37,12 +38,34 @@ export async function POST(request){
   const other=await prisma.captureApproval.findFirst({where:{sessionId,chatId,leadId:{not:leadId}}});
   if(other)return NextResponse.json({error:"Este WhatsApp já está associado a outro lead na Captação."},{status:409});
   if(action==="approve"){
+   // Read-only history check; never assume a fresh contact when OpenWA is unreachable.
+   const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
+   const key=process.env.OPENWA_API_KEY?.trim();
+   if(!base||!key)return NextResponse.json({error:"OpenWA não configurado para consultar histórico."},{status:503});
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+   try{
+    const url=new URL(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/"+encodeURIComponent(chatId)+"/history");
+    url.searchParams.set("limit","20");url.searchParams.set("includeMedia","false");
+    const response=await fetch(url,{headers:{"X-API-Key":key,Accept:"application/json"},signal:controller.signal,cache:"no-store"});
+    if(!response.ok)return NextResponse.json({error:"Histórico OpenWA indisponível (HTTP "+response.status+"). Primeiro contato não aprovado."},{status:503});
+    const payload=await response.json();
+    const rows=Array.isArray(payload)?payload:Array.isArray(payload?.messages)?payload.messages:Array.isArray(payload?.data?.messages)?payload.data.messages:null;
+    if(!rows)return NextResponse.json({error:"Formato inesperado de histórico OpenWA; aprovação bloqueada."},{status:503});
+    if(rows.length)return NextResponse.json({error:"Já existe histórico com este WhatsApp no OpenWA. Não pode ser tratado como primeiro contato; revise manualmente."},{status:409});
+   }catch(e){return NextResponse.json({error:"Falha ao consultar histórico OpenWA: "+String(e.message||e)},{status:503})}
+   finally{clearTimeout(timer)}
    if(confirmed!==true)return invalid("Confirme a autorização para o primeiro contato.");
    const message=String(messageText||"").trim();
    if(message.length<20||message.length>2000)return invalid("Mensagem deve ter entre 20 e 2.000 caracteres.");
    if(existing&&existing.status!=="draft"&&existing.status!=="rejected")return NextResponse.json({error:"Esta autorização já foi registrada."},{status:409});
+   if(proposed!==String(lead.whatsapp||"").trim())await updateLead(leadId,{whatsapp:phone});
    const approval=await prisma.captureApproval.upsert({where:{leadId},create:{leadId,sessionId,chatId,status:"approved",messageText:message,approvedAt:new Date()},update:{status:"approved",messageText:message,approvedAt:new Date(),sessionId,chatId}});
    return NextResponse.json({approval,notice:"Primeiro contato aprovado e salvo. O despacho da Captação ainda não está ativado."});
+  }
+  if(action==="save_phone"){
+   if(existing?.status==="approved"||existing?.status==="sent"||existing?.status==="sending"||existing?.status==="uncertain")return NextResponse.json({error:"Destinatário já autorizado ou contatado; edição bloqueada."},{status:409});
+   const saved=await updateLead(leadId,{whatsapp:phone});
+   return NextResponse.json({whatsapp:saved.whatsapp,notice:"WhatsApp atualizado na ficha do lead. Nenhuma mensagem foi enviada."});
   }
   if(action==="reject"){
    if(existing&&existing.status!=="draft"&&existing.status!=="rejected")return NextResponse.json({error:"Autorização já registrada; não é possível rejeitar nesta etapa."},{status:409});
