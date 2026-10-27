@@ -38,6 +38,22 @@ export async function POST(request){
   const other=await prisma.captureApproval.findFirst({where:{sessionId,chatId,leadId:{not:leadId}}});
   if(other)return NextResponse.json({error:"Este WhatsApp já está associado a outro lead na Captação."},{status:409});
   if(action==="approve"){
+   // Read-only history check; never assume a fresh contact when OpenWA is unreachable.
+   const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,"");
+   const key=process.env.OPENWA_API_KEY?.trim();
+   if(!base||!key)return NextResponse.json({error:"OpenWA não configurado para consultar histórico."},{status:503});
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+   try{
+    const url=new URL(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/"+encodeURIComponent(chatId)+"/history");
+    url.searchParams.set("limit","20");url.searchParams.set("includeMedia","false");
+    const response=await fetch(url,{headers:{"X-API-Key":key,Accept:"application/json"},signal:controller.signal,cache:"no-store"});
+    if(!response.ok)return NextResponse.json({error:"Histórico OpenWA indisponível (HTTP "+response.status+"). Primeiro contato não aprovado."},{status:503});
+    const payload=await response.json();
+    const rows=Array.isArray(payload)?payload:Array.isArray(payload?.messages)?payload.messages:Array.isArray(payload?.data?.messages)?payload.data.messages:null;
+    if(!rows)return NextResponse.json({error:"Formato inesperado de histórico OpenWA; aprovação bloqueada."},{status:503});
+    if(rows.length)return NextResponse.json({error:"Já existe histórico com este WhatsApp no OpenWA. Não pode ser tratado como primeiro contato; revise manualmente."},{status:409});
+   }catch(e){return NextResponse.json({error:"Falha ao consultar histórico OpenWA: "+String(e.message||e)},{status:503})}
+   finally{clearTimeout(timer)}
    if(confirmed!==true)return invalid("Confirme a autorização para o primeiro contato.");
    const message=String(messageText||"").trim();
    if(message.length<20||message.length>2000)return invalid("Mensagem deve ter entre 20 e 2.000 caracteres.");
