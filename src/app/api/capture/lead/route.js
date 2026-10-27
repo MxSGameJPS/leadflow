@@ -39,7 +39,7 @@ export async function POST(request){
   if(other)return NextResponse.json({error:"Este WhatsApp já está associado a outro lead na Captação."},{status:409});
   if(action==="approve"){
    // Read-only history check; never assume a fresh contact when OpenWA is unreachable.
-   const base=process.env.OPENWA_URL?.trim().replace(/\\/+$/,"");
+   const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
    const key=process.env.OPENWA_API_KEY?.trim();
    if(!base||!key)return NextResponse.json({error:"OpenWA não configurado para consultar histórico."},{status:503});
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
