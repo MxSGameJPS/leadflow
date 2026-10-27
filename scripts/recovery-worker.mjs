@@ -48,8 +48,8 @@ async function dispatchOne(){
  if(uncertain){console.error("[envio] Bloqueado: há envio incerto ou em andamento.");return}
  const today=new Date();
  const day=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
- const count=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["reserved","sending","sent","uncertain","externally_sent"]}}});
- if(count>=10){console.error("[envio] Limite diário de 10 atingido.");return}
+ const count=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["sending","sent","uncertain","externally_sent"]}}});
+ if(count>=10){console.error("[envio] Limite diário de 10 envios atingido.");return}
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"}});
  let candidate=null;
  for(const item of reservations){
