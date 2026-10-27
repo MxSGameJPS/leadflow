@@ -198,3 +198,18 @@ model RecoveryOutcome {
  @@unique([sessionId,chatId])
  @@index([sessionId,result])
 }
+
+model CaptureApproval {
+ id String @id @default(cuid())
+ leadId String @unique
+ sessionId String
+ chatId String
+ status String @default("draft")
+ messageText String @default("")
+ approvedAt DateTime?
+ sentAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([sessionId,chatId])
+ @@index([status,createdAt])
+}

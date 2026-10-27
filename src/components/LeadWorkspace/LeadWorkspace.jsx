@@ -9,6 +9,7 @@ import * as LeadActions from "../../app/actions/leads.js";
 import * as AIActions from "../../app/actions/ai.js";
 import { saveLeadWorkspaceAction } from "../../app/actions/workspaces.js";
 import LeadStrategyMap from "../LeadStrategyMap/LeadStrategyMap.jsx";
+import CaptureApproval from "../CaptureApproval/CaptureApproval.jsx";
 import s from "./LeadWorkspace.module.css";
 
 const TABS = [
@@ -21,6 +22,7 @@ const TABS = [
   ["sale", "Venda"],
   ["schedule", "Agendar"],
   ["arena", "Prompt Arena"],
+  ["capture", "Agente de Captação"],
 ];
 
 const UNIVERSAL_OBJECTIONS = [
@@ -707,7 +709,7 @@ export default function LeadWorkspace({ initialLead, initialWorkspace, initialPr
         : tab === "site" ? renderSite()
           : tab === "sale" ? renderSale()
             : tab === "schedule" ? renderSchedule()
-              : renderArena();
+              : tab === "capture" ? <CaptureApproval lead={lead} initialMessage={whatsappMessage} /> : renderArena();
 
   return <main className={s.page}>
     <div className={s.breadcrumb}><a href="/crm">← CRM</a><span>/</span><strong>{lead.name}</strong></div>
