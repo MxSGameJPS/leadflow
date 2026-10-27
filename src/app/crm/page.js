@@ -4,6 +4,7 @@ import { resolveCommercialTrack, trackIncludes } from "../../services/leads/comm
 import { leadInactivity, pipelineStage, weightedPipelineValue } from "../../services/leads/pipelineIntelligence.js";
 import { operationalRisk } from "../../services/leads/operationalRisk.js";
 import CRMBoard from "../../components/CRMBoard/CRMBoard.jsx";
+import CaptureControl from "../../components/CaptureControl/CaptureControl.jsx";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +27,5 @@ export default async function CRMPage() {
       operationalRisk: operationalRisk(lead, workspaces[index]),
     }))
     .filter(lead => trackIncludes(lead.commercialTrack, "projects"));
-  return <CRMBoard initialLeads={projectLeads} />;
+  return <><CaptureControl/><CRMBoard initialLeads={projectLeads} /></>;
 }

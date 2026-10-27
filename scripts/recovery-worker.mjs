@@ -3,6 +3,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
+import {captureRunning} from "../src/services/capture/dispatchControl.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 for(const name of [".env",".env.local"]){
@@ -56,7 +57,7 @@ async function globalState(){
  return {count:recoveryCount+captureCount,latest,lastReplyAt,latestFromRecovery};
 }
 async function captureOne(){
- if(process.env.LEADFLOW_CAPTURE_AUTO_SEND!=="true")return;
+ if(!captureRunning())return;
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
  if(!sessionId||!base||!key)return;
  const conflict=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
@@ -74,8 +75,10 @@ async function captureOne(){
   const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId:{in:knownChatIds}}});
   const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:{in:knownChatIds}}});
   if(recovery||previouslySent){console.error("[captação] Contato consta na Recuperação, pulando:",item.leadId);continue}
+  if(!captureRunning())return;
   const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
   if(claimed.count!==1)continue;
+  if(!captureRunning()){await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"approved"}});return;}
   console.log("[captação] Enviando contato autorizado:",item.leadId);
   try{
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
@@ -195,7 +198,7 @@ async function check(){
  console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"envios hoje:",shared.count,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
- console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA")+"; Captação: "+(process.env.LEADFLOW_CAPTURE_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA"));
+ console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA")+"; Captação: "+(captureRunning()?"ATIVADA":"DESATIVADA"));
  while(running){try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
  await prisma.$disconnect();
