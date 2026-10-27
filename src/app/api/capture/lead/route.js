@@ -47,7 +47,17 @@ export async function POST(request){
     const url=new URL(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/"+encodeURIComponent(chatId)+"/history");
     url.searchParams.set("limit","20");url.searchParams.set("includeMedia","false");
     const response=await fetch(url,{headers:{"X-API-Key":key,Accept:"application/json"},signal:controller.signal,cache:"no-store"});
-    if(!response.ok)return NextResponse.json({error:"Histórico OpenWA indisponível (HTTP "+response.status+"). Primeiro contato não aprovado."},{status:503});
+    if(!response.ok){
+     let detail="";
+     try{
+      const body=await response.json();
+      const message=body?.message||body?.error||body?.pageError?.message||"";
+      detail=Array.isArray(message)?message.join("; "):String(message);
+     }catch{}
+     const safeDetail=detail.replace(/[\r\n\t]+/g," ").slice(0,240);
+     console.error("[captação] Consulta OpenWA falhou:",{status:response.status,code:response.status===500?"upstream_error":"request_failed",reason:safeDetail});
+     return NextResponse.json({error:"Histórico OpenWA indisponível (HTTP "+response.status+")"+(safeDetail?": "+safeDetail:"")+". A aprovação permanece bloqueada; confira os registros do OpenWA."},{status:503});
+    }
     const payload=await response.json();
     const rows=Array.isArray(payload)?payload:Array.isArray(payload?.messages)?payload.messages:Array.isArray(payload?.data?.messages)?payload.data.messages:null;
     if(!rows)return NextResponse.json({error:"Formato inesperado de histórico OpenWA; aprovação bloqueada."},{status:503});
