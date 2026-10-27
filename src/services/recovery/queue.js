@@ -11,7 +11,7 @@ export async function getRecoveryQueue(sessionId) {
  const log=await prisma.recoveryDispatch.findMany({where:{sessionId},select:{chatId:true,status:true,dayKey:true}});
  const contacted=new Set(log.map(item=>item.chatId));
  const day=windowsLocalDate();
- const dailyCount=log.filter(item=>item.dayKey===day&&["reserved","sending","sent","uncertain","externally_sent"].includes(item.status)).length;
+ const dailyCount=log.filter(item=>item.dayKey===day&&["sending","sent","uncertain","externally_sent"].includes(item.status)).length;
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const snapshots=await prisma.recoveryFollowupSnapshot.findMany({where:{sessionId}});
@@ -50,8 +50,8 @@ export async function reserveRecoveryForManualSend(sessionId,chatId) {
    const decision=await tx.recoveryDecision.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
    if(!canSend(decision))throw Error("A mensagem deve estar aprovada e a permissão confirmada.");
    const day=windowsLocalDate();
-   const used=await tx.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["reserved","sending","sent","uncertain","externally_sent"]}}});
-   if(used>=DAILY_LIMIT)throw Error("Limite diário de 10 tentativas atingido.");
+   const used=await tx.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["sending","sent","uncertain","externally_sent"]}}});
+   // Reservas são pendências, não tentativas realizadas. O limite é aplicado na hora do envio.
    return tx.recoveryDispatch.create({data:{sessionId,chatId,decisionId:decision.id,dayKey:day,status:"reserved",messageSnapshot:decision.messageText}});
  });
 }
