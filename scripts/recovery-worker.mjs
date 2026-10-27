@@ -38,18 +38,74 @@ const nap=ms=>new Promise(resolve=>{
  const timer=setTimeout(resolve,ms);
  abortSleep=()=>{clearTimeout(timer);resolve();};
 });
+// Um único worker opera os dois canais e aplica a mesma janela de trabalho.
+function dayKey(now=new Date()){return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")}
+async function globalState(){
+ const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ const recoveryCount=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain","externally_sent"]}}});
+ const captureCount=await prisma.captureApproval.count({where:{sessionId,status:{in:["sending","sent","uncertain"]},updatedAt:{gte:start}}});
+ const recoveryLatest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const captureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const latest=(!captureLatest?.sentAt||recoveryLatest?.sentAt>captureLatest.sentAt)?recoveryLatest:captureLatest;
+ const latestFromRecovery=latest===recoveryLatest;
+ let lastReplyAt=null;
+ if(latestFromRecovery&&latest?.chatId){
+  const snapshot=await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}});
+  lastReplyAt=snapshot?.latestReplyAt||null;
+ }
+ return {count:recoveryCount+captureCount,latest,lastReplyAt,latestFromRecovery};
+}
+async function captureOne(){
+ if(process.env.LEADFLOW_CAPTURE_AUTO_SEND!=="true")return;
+ const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
+ if(!sessionId||!base||!key)return;
+ const conflict=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
+ const captureConflict=await prisma.captureApproval.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
+ if(conflict||captureConflict){console.error("[captação] Há envio em andamento/incerto; despacho bloqueado.");return}
+ const state=await globalState();
+ if(state.count>=10)return;
+ const schedule=getRecoveryRest({lastSentAt:state.latest?.sentAt,lastReplyAt:state.lastReplyAt});
+ if(!schedule.working||schedule.resting)return;
+ const rows=await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30});
+ for(const item of rows){
+  if(!/^55\d{10,11}@c\.us$/.test(item.chatId)||!item.messageText?.trim())continue;
+  const linkedChats=await prisma.whatsAppLeadLink.findMany({where:{leadId:item.leadId},select:{chatId:true}});
+  const knownChatIds=[item.chatId,...linkedChats.map(link=>link.chatId)];
+  const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId:{in:knownChatIds}}});
+  const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:{in:knownChatIds}}});
+  if(recovery||previouslySent){console.error("[captação] Contato consta na Recuperação, pulando:",item.leadId);continue}
+  const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
+  if(claimed.count!==1)continue;
+  console.log("[captação] Enviando contato autorizado:",item.leadId);
+  try{
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+   let response;
+   try{response=await fetch(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/send-text",{
+    method:"POST",headers:{"X-API-Key":key,"Idempotency-Key":"capture-"+item.id,"Content-Type":"application/json"},
+    body:JSON.stringify({chatId:item.chatId,text:item.messageText,linkPreview:false}),signal:controller.signal,cache:"no-store"
+   });}finally{clearTimeout(timer)}
+   if(!response.ok)throw Error("OpenWA HTTP "+response.status);
+   await prisma.captureApproval.update({where:{id:item.id},data:{status:"sent",sentAt:new Date()}});
+   console.log("[captação] Confirmado:",item.leadId);
+  }catch(e){
+   await prisma.captureApproval.update({where:{id:item.id},data:{status:"uncertain"}}).catch(()=>{});
+   console.error("[captação] Resultado incerto; envio suspenso até revisão:",e.message);
+  }
+  return;
+ }
+}
 // Disabled unless explicitly opted in. This process never generates or approves messages.
 async function dispatchOne(){
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
  const key=process.env.OPENWA_API_KEY?.trim();
  if(!base||!key){console.error("[envio] OpenWA não configurado.");return}
  // Never proceed while an outcome is uncertain: an earlier HTTP timeout may have sent.
- const uncertain=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["uncertain","sending"]}}});
+ const uncertain=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["uncertain","sending"]}}})+await prisma.captureApproval.count({where:{sessionId,status:{in:["uncertain","sending"]}}});
  if(uncertain){console.error("[envio] Bloqueado: há envio incerto ou em andamento.");return}
  const today=new Date();
  const day=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
  const count=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:day,status:{in:["sending","sent","uncertain","externally_sent"]}}});
- if(count>=10){console.error("[envio] Limite diário de 10 envios atingido.");return}
+ if((await globalState()).count>=10){console.error("[envio] Limite compartilhado de 10 envios atingido.");return}
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"}});
  let candidate=null;
  for(const item of reservations){
@@ -60,6 +116,8 @@ async function dispatchOne(){
   console.error("[envio] Reserva inválida ignorada, sem enviar:",item.id);
  }
  if(!candidate){console.log("[envio] Nenhuma reserva elegível entre",reservations.length,"reservas.");return;}
+ const captureForChat=await prisma.captureApproval.findFirst({where:{sessionId,chatId:candidate.chatId,status:{in:["approved","sending","sent","uncertain"]}}});
+ if(captureForChat){console.error("[envio] Contato também está na Captação; revisão manual necessária:",candidate.chatId);return;}
  if(candidate.dayKey!==day)console.log("[envio] Reserva antiga aprovada será contabilizada no dia do envio:",candidate.id);
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
@@ -67,9 +125,10 @@ async function dispatchOne(){
  if(latest?.sentAt&&(!lastReplyAt||new Date(lastReplyAt)<=latest.sentAt)){
   try{lastReplyAt=await findLatestLiveReply(latest.chatId,latest.sentAt)}catch(e){console.error("[envio] Não foi possível confirmar resposta:",e.message);return}
  }
- const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt});
+ const shared=await globalState();
+ const schedule=getRecoveryRest({lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.latestFromRecovery?lastReplyAt:null});
  if(!schedule.working||schedule.resting)return;
- if(!getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt}).working)return;
+ if(!getRecoveryRest({lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.latestFromRecovery?lastReplyAt:null}).working)return;
  // SQLite updateMany is our atomic claim; never retry sending/uncertain records.
  const claimed=await prisma.recoveryDispatch.updateMany({where:{id:candidate.id,status:"reserved"},data:{status:"sending",dayKey:day}});
  if(claimed.count!==1)return;
@@ -124,15 +183,19 @@ async function check(){
    }
   }catch(e){console.error("[expediente] Consulta da resposta não confirmada:",e.message)}
  }
- const state=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt});
+ const shared=await globalState();
+ const state=getRecoveryRest({lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.latestFromRecovery?lastReplyAt:null});
  const pending=await prisma.recoveryDispatch.count({where:{sessionId,status:"reserved"}});
- if(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"&&state.working&&!state.resting&&pending>0)await dispatchOne();
+ if(state.working&&!state.resting&&shared.count<10){
+  if(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"&&pending>0)await dispatchOne();
+  else await captureOne();
+ }
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
  if(state.working&&pending>0&&process.env.LEADFLOW_RECOVERY_AUTO_SEND!=="true")console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
- console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
+ console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"envios hoje:",shared.count,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
- console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Envio automático: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADO por configuração local":"DESATIVADO"));
+ console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA")+"; Captação: "+(process.env.LEADFLOW_CAPTURE_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA"));
  while(running){try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
  await prisma.$disconnect();

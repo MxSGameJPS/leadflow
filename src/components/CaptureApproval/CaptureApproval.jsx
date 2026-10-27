@@ -33,11 +33,11 @@ export default function CaptureApproval({lead,initialMessage}){
  <p>Não copiamos automaticamente o telefone do Google: confirme que o número pertence à empresa e recebe WhatsApp.</p>
  <button type="button" disabled={busy||!loaded||["approved","sending","sent","uncertain"].includes(approval?.status)} onClick={()=>act("save_phone")}>Salvar WhatsApp na ficha</button>
  <button type="button" disabled={busy} onClick={load}>Consultar situação</button>
- {loaded&&<p role="status">Situação: <strong>{({approved:"Aprovada, aguardando integração do despachante",rejected:"Rejeitada",draft:"Rascunho",sending:"Enviando",sent:"Enviada",uncertain:"Envio incerto"})[approval?.status]||"Não avaliada"}</strong></p>}
+ {loaded&&<p role="status">Situação: <strong>{({approved:"Aprovada — aguardando despacho (Captação exige ativação específica)",rejected:"Rejeitada",draft:"Rascunho",sending:"Enviando",sent:"Enviada",uncertain:"Envio incerto"})[approval?.status]||"Não avaliada"}</strong></p>}
  <label>Mensagem de primeiro contato <textarea rows={7} disabled={busy||!loaded||["approved","sending","sent","uncertain"].includes(approval?.status)} value={message} onChange={e=>setMessage(e.target.value)}/></label>
  <label className={s.check}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> Confirmo que revisei o destinatário, a mensagem e a base apropriada para este contato.</label>
  <div className={s.actions}><button type="button" disabled={busy||!loaded||!confirmed||["approved","sending","sent","uncertain"].includes(approval?.status)} onClick={()=>act("approve")}>Aprovar primeiro contato</button><button type="button" disabled={busy||approval?.status==="approved"||approval?.status==="sent"} onClick={()=>act("reject")}>Rejeitar</button></div>
  {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
- <small>Esta primeira etapa registra aprovações no SQLite. Nenhuma mensagem é enviada automaticamente até a integração e homologação do despachante de Captação.</small>
+ <small>As mensagens aprovadas são processadas pelo worker somente quando LEADFLOW_CAPTURE_AUTO_SEND=true. O padrão é desligado. O expediente, a pausa e a cota são compartilhados com Recuperação.</small>
  </section>;
 }

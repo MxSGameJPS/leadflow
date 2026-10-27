@@ -46,7 +46,7 @@ export async function POST(request){
    if(existing&&existing.status!=="draft"&&existing.status!=="rejected")return NextResponse.json({error:"Esta autorização já foi registrada."},{status:409});
    if(proposed!==String(lead.whatsapp||"").trim())await updateLead(leadId,{whatsapp:phone});
    const approval=await prisma.captureApproval.upsert({where:{leadId},create:{leadId,sessionId,chatId,status:"approved",messageText:message,approvedAt:new Date()},update:{status:"approved",messageText:message,approvedAt:new Date(),sessionId,chatId}});
-   return NextResponse.json({approval,notice:"Primeiro contato aprovado e salvo. Histórico remoto não foi verificado: confirme que é um contato inédito. O despacho da Captação ainda não está ativado."});
+   return NextResponse.json({approval,notice:"Primeiro contato aprovado e salvo. Histórico remoto não foi verificado: confirme que é um contato inédito. O despacho da Captação requer LEADFLOW_CAPTURE_AUTO_SEND=true no ambiente local."});
   }
   if(action==="save_phone"){
    if(existing?.status==="approved"||existing?.status==="sent"||existing?.status==="sending"||existing?.status==="uncertain")return NextResponse.json({error:"Destinatário já autorizado ou contatado; edição bloqueada."},{status:409});
