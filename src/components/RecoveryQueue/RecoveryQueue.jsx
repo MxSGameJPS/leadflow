@@ -148,20 +148,8 @@ export default function RecoveryQueue({initial}){
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
 
- async function sendTest(chatId){
-  if(!confirm("ATENÇÃO: esta ação enviará UMA mensagem real pelo WhatsApp ao destinatário selecionado. Confirma?"))return;
-  const confirmation=prompt('Para autorizar este único envio, digite exatamente: ENVIAR UMA MENSAGEM');
-  if(confirmation!=="ENVIAR UMA MENSAGEM")return;
-  setBusy(chatId);setError("");
-  try {
-   const r=await fetch("/api/recovery/send-test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId,confirmation})});
-   const d=await r.json();if(!r.ok)throw Error(d.error||"Falha no envio.");
-   alert("O OpenWA confirmou o envio. Confira também a conversa no WhatsApp.");
-   const refreshed=await fetch("/api/recovery/queue",{cache:"no-store"});setQueue(await refreshed.json());
-  }catch(e){setError(e.message)}finally{setBusy("")}
- }
  async function reserve(chatId){
-  if(!confirm("Reservar esta conversa para envio manual? Nenhuma mensagem será transmitida pelo sistema."))return;
+  if(!confirm("Colocar esta mensagem aprovada na fila do agente? Se o modo automático estiver habilitado, ela poderá ser enviada dentro do expediente."))return;
   setBusy(chatId);setError("");
   try{
    const response=await fetch("/api/recovery/queue",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chatId})});
@@ -170,11 +158,11 @@ export default function RecoveryQueue({initial}){
    if(!refreshed.ok)throw Error(data.error);setQueue(data);
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
- return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a> <a href="/recuperacao/indicadores">Ver indicadores de conversão →</a><h1>Fila de recuperação</h1><p>Mensagens previamente aprovadas por você. O LeadFlow não envia nenhuma mensagem nesta etapa.</p>
+ return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a> <a href="/recuperacao/indicadores">Ver indicadores de conversão →</a><h1>Fila de recuperação</h1><p>Mensagens aprovadas e agendadas para o agente. Se o despacho automático estiver habilitado no servidor, as reservas podem ser enviadas durante o expediente, respeitando o descanso e o limite diário.</p>
  <p role="status"><strong>Horário do Windows:</strong> atendimento das 08:00 às 18:00. {queue.schedule?.working?(queue.schedule?.resting?"Agente em descanso até "+new Date(queue.schedule.restUntil).toLocaleTimeString("pt-BR"):"Dentro do expediente."):"Fora do expediente — novos envios bloqueados."} {queue.schedule?.reason==="reply_woke_agent"?"A resposta do último contato encerrou o descanso.":""}</p>
  <section className={s.metrics}><div><span>Limite diário</span><strong>{queue.dailyLimit}</strong></div><div><span>Vagas disponíveis hoje</span><strong>{queue.remaining}</strong></div><div><span>Mensagens aprovadas aguardando</span><strong>{queue.rows.length}</strong></div></section>
  {error&&<p role="alert">{error}</p>}
- <section className={s.list}><h2>Mensagens reservadas para revisão final</h2><p>O teste de envio único só funciona quando habilitado explicitamente no ambiente local. Nada é enviado ao reservar.</p>{(queue.reservations||[]).map(row=><article className={s.card} key={row.chatId}><div><strong>{row.chatId}</strong><p>{row.messageSnapshot}</p></div><button type="button" disabled={busy===row.chatId||queue.testUsed} onClick={()=>sendTest(row.chatId)}>{queue.testUsed?"Teste já utilizado":"Testar envio de 1 mensagem"}</button></article>)}</section>
+ <section className={s.list}><h2>Mensagens aguardando despacho</h2><p role="status"><strong>Despacho automático: {queue.autoSendEnabled?"ATIVADO":"DESATIVADO"}.</strong> {queue.autoSendEnabled?"O agente poderá enviar mensagens aprovadas no expediente.":"Nenhuma reserva será enviada automaticamente enquanto esta configuração estiver desativada."}</p><p>{(queue.reservations||[]).length} mensagem(ns) já aprovada(s) e reservada(s). O teste de envio único não é mais usado nesta fila. O envio automático depende da configuração do servidor.</p>{(queue.reservations||[]).length===0?<p>Nenhuma mensagem reservada no momento.</p>:(queue.reservations||[]).map(row=><article className={s.card} key={row.chatId}><div><strong>{row.chatId}</strong><p>{row.messageSnapshot}</p><small>Aguardando despacho pelo agente — nenhum novo clique necessário.</small></div></article>)}</section>
  <section className={s.list}><h2>Situação comercial dos contatos enviados</h2>
  <div className={s.metrics}>{Object.entries(stages).map(([name,count])=><div key={name}><span>{name}</span><strong>{count}</strong></div>)}</div>
  <p>Os estágios são indicativos; não alteram decisões ou encerramentos. Análises antigas não são consideradas após uma nova resposta.</p></section>
