@@ -15,6 +15,16 @@ export async function decideRecovery({sessionId,chatId,action,messageText,reason
   const data={status,reason:String(reason||"").slice(0,500),messageText:text,consentConfirmed:action==="message_approved"};
   const decision=await tx.recoveryDecision.upsert({where:key,create:{sessionId,chatId,...data},update:data});
   await tx.recoveryDecisionAudit.create({data:{decisionId:decision.id,action,previousStatus:existing?.status||"pending",reason:data.reason,messageSnapshot:action==="message_approved"?text:null}});
+  // A aprovação explícita autoriza uma única tentativa futura. Nunca rearmar
+  // um chat que já tenha tentativa (enviada, incerta ou reservada).
+  if(action==="message_approved"){
+   const attempt=await tx.recoveryDispatch.findUnique({where:key});
+   if(!attempt){
+    const now=new Date();
+    const day=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    await tx.recoveryDispatch.create({data:{sessionId,chatId,decisionId:decision.id,dayKey:day,status:"reserved",messageSnapshot:text}});
+   }
+  }
   return decision;
  });
 }
