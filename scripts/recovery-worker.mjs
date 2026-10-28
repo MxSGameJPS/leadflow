@@ -44,7 +44,7 @@ function dayKey(now=new Date()){return now.getFullYear()+"-"+String(now.getMonth
 async function globalState(){
  const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
  const recoveryCount=await prisma.recoveryDispatch.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain","externally_sent"]}}});
- const captureCount=await prisma.captureApproval.count({where:{sessionId,status:{in:["sending","sent","uncertain"]},updatedAt:{gte:start}}});
+ const captureCount=await prisma.captureApproval.count({where:{sessionId,OR:[{status:"sent",sentAt:{gte:start}},{status:{in:["sending","uncertain"]},updatedAt:{gte:start}}]}});
  const recoveryLatest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const captureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const latest=(!captureLatest?.sentAt||recoveryLatest?.sentAt>captureLatest.sentAt)?recoveryLatest:captureLatest;
