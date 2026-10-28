@@ -21,7 +21,7 @@ export default function CaptureOperations({items=[]}){
  <div className={s.summary}>{groups.slice(1).map(([key,label])=><div key={key}><span>{label}</span><strong>{counts[key]}</strong></div>)}</div>
  <div className={s.filters}>{groups.map(([key,label])=><button key={key} type="button" className={filter===key?s.active:""} onClick={()=>setFilter(key)}>{label} ({counts[key]})</button>)}</div>
  <input className={s.search} type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresa, número ou mensagem"/>
- <p className={s.note}>Enviado = confirmação de envio pelo OpenWA, não confirmação de leitura ou resposta. Selecione um lead para continuar o atendimento no CRM.</p>
+ <p className={s.note}>Limite: 10 envios diários da Captação, independente dos 10 da Recuperação. Enviado = confirmação de envio pelo OpenWA, não confirmação de leitura ou resposta. Selecione um lead para continuar o atendimento no CRM.</p>
  {error&&<p role="alert">{error}</p>}
  <div className={s.list}>{visible.length===0?<p>Nenhum atendimento nesta situação.</p>:visible.map(item=><article className={s.card} key={item.id}>
  <div className={s.top}><strong>{item.name}</strong><span>{labels[item.status]||item.status}</span></div>

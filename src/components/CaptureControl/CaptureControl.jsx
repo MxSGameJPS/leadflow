@@ -25,7 +25,7 @@ export default function CaptureControl(){
  }
  return <section className={s.panel}>
   <div><strong>Agente de Captação</strong><p>{state?.running?"Ativo — aguardando o próximo ciclo permitido pelo worker.":"Pausado — nenhum novo envio de Captação será iniciado."}</p>
-  <small>Somente leads autorizados individualmente · 08h–18h · 30 min de descanso · até 10 envios/dia somando Recuperação e Captação</small>
+  <small>Somente leads autorizados individualmente · 08h–18h · 30 min de descanso · até 10 envios/dia para Captação e outros 10 para Recuperação</small>
   {state&&<p>{state.approved} aprovado(s) aguardando · {state.sent} enviado(s) · {state.uncertain} em andamento/incerto(s)</p>}
   {state?.blocked&&<p role="alert" className={s.error}>Despacho bloqueado: {state.uncertain} tentativa(s) incerta(s)/em andamento na Captação e {state.recoveryBlock} na Recuperação. Confira os contatos na lista abaixo antes de liberar novos envios.</p>}
   {error&&<p role="alert" className={s.error}>{error}</p>}</div>
