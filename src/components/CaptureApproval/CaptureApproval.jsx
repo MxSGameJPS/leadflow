@@ -38,6 +38,6 @@ export default function CaptureApproval({lead,initialMessage}){
  <label className={s.check}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> Confirmo que revisei o destinatário, a mensagem e a base apropriada para este contato.</label>
  <div className={s.actions}><button type="button" disabled={busy||!loaded||!confirmed||["approved","sending","sent","uncertain"].includes(approval?.status)} onClick={()=>act("approve")}>Aprovar primeiro contato</button><button type="button" disabled={busy||approval?.status==="approved"||approval?.status==="sent"} onClick={()=>act("reject")}>Rejeitar</button></div>
  {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
- <small>As mensagens aprovadas são processadas pelo worker somente quando LEADFLOW_CAPTURE_AUTO_SEND=true. O padrão é desligado. O expediente, a pausa e a cota são compartilhados com Recuperação.</small>
+ <p><a href="/captacao">Acompanhar este atendimento na Central de Captação →</a></p><small>As mensagens aprovadas são processadas pelo worker somente quando LEADFLOW_CAPTURE_AUTO_SEND=true. O padrão é desligado. O expediente, a pausa e a cota são compartilhados com Recuperação.</small>
  </section>;
 }
