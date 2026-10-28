@@ -82,13 +82,13 @@ export default async function DashboardPage() {
           <article className={styles.agentCard}>
             <div className={styles.agentCardTop}><div><span>01 · Novos contatos</span><h3>Agente de Captação</h3></div><a href="/captacao">Acompanhar →</a></div>
             <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.captureToday}<em>/10</em></strong></div><div><small>Total confirmado</small><strong>{operations.captureSent}</strong></div></div>
-            <div className={styles.agentTrack}><span className={styles.captureFill} style={{width:`${Math.min(100,operations.captureToday*10)}%`}} /></div>
+            <progress className={styles.captureProgress} max={10} value={operations.captureToday} aria-label="Cota diária da Captação" />
             <div className={styles.agentFoot}><span><b>{operations.capturePending}</b> aguardando</span><span><b>{operations.captureBlocked}</b> em envio/incertas</span></div>
           </article>
           <article className={styles.agentCard}>
             <div className={styles.agentCardTop}><div><span>02 · Contatos antigos</span><h3>Agente de Recuperação</h3></div><a href="/recuperacao/central">Acompanhar →</a></div>
             <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.recoveryToday}<em>/10</em></strong></div><div><small>Total confirmado</small><strong>{operations.recoverySent}</strong></div></div>
-            <div className={styles.agentTrack}><span className={styles.recoveryFill} style={{width:`${Math.min(100,operations.recoveryToday*10)}%`}} /></div>
+            <progress className={styles.recoveryProgress} max={10} value={operations.recoveryToday} aria-label="Cota diária da Recuperação" />
             <div className={styles.agentFoot}><span><b>{operations.recoveryPending}</b> reservadas</span><span><b>{operations.recoveryBlocked}</b> em envio/incertas</span></div>
           </article>
         </div>
