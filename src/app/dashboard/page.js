@@ -1,4 +1,5 @@
 import { listLeads, stats as getStats } from "../../repositories/leadRepository.js";
+import { prisma } from "../../lib/prisma.js";
 import { BRL } from "../../services/leads/format.js";
 import { isPossibleWhatsApp } from "../../services/places/googlePlaces.js";
 import styles from "./dashboard.module.css";
@@ -12,9 +13,30 @@ function hasWhatsappAvailable(lead) {
 }
 
 export default async function DashboardPage() {
-  let s = null, leads = [], err = null;
+  let s = null, leads = [], err = null, operations = null;
   try {
-    [s, leads] = await Promise.all([getStats(), listLeads()]);
+    const sessionId=process.env.OPENWA_SESSION_ID?.trim()||"";
+    const now=new Date();
+    const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+    const dayKey=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    [s,leads,operations]=await Promise.all([
+      getStats(),listLeads(),
+      (async()=>{
+        const where={sessionId};
+        const [captureSent,captureToday,capturePending,captureBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked]=await Promise.all([
+          prisma.captureApproval.count({where:{...where,status:"sent"}}),
+          prisma.captureApproval.count({where:{...where,status:"sent",sentAt:{gte:today,lt:tomorrow}}}),
+          prisma.captureApproval.count({where:{...where,status:"approved"}}),
+          prisma.captureApproval.count({where:{...where,status:{in:["sending","uncertain"]}}}),
+          prisma.recoveryDispatch.count({where:{...where,status:"sent"}}),
+          prisma.recoveryDispatch.count({where:{...where,status:"sent",dayKey}}),
+          prisma.recoveryDispatch.count({where:{...where,status:"reserved"}}),
+          prisma.recoveryDispatch.count({where:{...where,status:{in:["sending","uncertain"]}}})
+        ]);
+        return {captureSent,captureToday,capturePending,captureBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked,dayKey};
+      })()
+    ]);
   } catch (e) {
     err = e.message;
   }
@@ -53,6 +75,25 @@ export default async function DashboardPage() {
         <div><h1>Dashboard</h1><p>Visão geral da sua operação</p></div>
         <div className={styles.headerActions}><a href="/leads">Importar leads</a><a className={styles.primary} href="/crm">Abrir CRM</a></div>
       </header>
+
+      <section className={styles.agentSection} aria-label="Operação dos agentes">
+        <div className={styles.sectionHead}><div><h2>Mensagens dos agentes</h2><p>Envios confirmados pelo LeadFlow · {operations.dayKey.split("-").reverse().join("/")}</p></div><span className={styles.agentHint}>Cotas independentes de 10/dia</span></div>
+        <div className={styles.agentGrid}>
+          <article className={styles.agentCard}>
+            <div className={styles.agentCardTop}><div><span>01 · Novos contatos</span><h3>Agente de Captação</h3></div><a href="/captacao">Acompanhar →</a></div>
+            <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.captureToday}<em>/10</em></strong></div><div><small>Total confirmado</small><strong>{operations.captureSent}</strong></div></div>
+            <div className={styles.agentTrack}><span className={styles.captureFill} style={{width:`${Math.min(100,operations.captureToday*10)}%`}} /></div>
+            <div className={styles.agentFoot}><span><b>{operations.capturePending}</b> aguardando</span><span><b>{operations.captureBlocked}</b> em envio/incertas</span></div>
+          </article>
+          <article className={styles.agentCard}>
+            <div className={styles.agentCardTop}><div><span>02 · Contatos antigos</span><h3>Agente de Recuperação</h3></div><a href="/recuperacao/central">Acompanhar →</a></div>
+            <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.recoveryToday}<em>/10</em></strong></div><div><small>Total confirmado</small><strong>{operations.recoverySent}</strong></div></div>
+            <div className={styles.agentTrack}><span className={styles.recoveryFill} style={{width:`${Math.min(100,operations.recoveryToday*10)}%`}} /></div>
+            <div className={styles.agentFoot}><span><b>{operations.recoveryPending}</b> reservadas</span><span><b>{operations.recoveryBlocked}</b> em envio/incertas</span></div>
+          </article>
+        </div>
+        <div className={styles.agentSummary}><div><span>Mensagens confirmadas hoje</span><strong>{operations.captureToday+operations.recoveryToday}</strong></div><div><span>Mensagens confirmadas no histórico</span><strong>{operations.captureSent+operations.recoverySent}</strong></div><p>Não inclui tentativas incertas, envios externos nem confirmações de leitura. Os horários e bloqueios de segurança continuam sob controle do worker.</p></div>
+      </section>
 
       <section className={styles.panel}>
         <div className={styles.panelTitle}>Funil de conversão</div>
