@@ -158,7 +158,7 @@ export default function RecoveryQueue({initial}){
    if(!refreshed.ok)throw Error(data.error);setQueue(data);
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
- return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a> <a href="/recuperacao/indicadores">Ver indicadores de conversão →</a><h1>Fila de recuperação</h1><p>Mensagens aprovadas e agendadas para o agente. Se o despacho automático estiver habilitado no servidor, as reservas podem ser enviadas durante o expediente, respeitando o descanso e o limite diário.</p>
+ return <main className={s.main}><a href="/recuperacao/conversas">← Voltar para conversas</a> <a href="/recuperacao/indicadores">Ver indicadores de conversão →</a><h1>Fila de recuperação</h1><p>Mensagens aprovadas e agendadas para o agente. Se o despacho automático estiver habilitado no servidor, as reservas podem ser enviadas durante o expediente, respeitando o descanso e o limite diário próprio de 10 mensagens.</p>
  <p role="status"><strong>Horário do Windows:</strong> atendimento das 08:00 às 18:00. {queue.schedule?.working?(queue.schedule?.resting?"Agente em descanso até "+new Date(queue.schedule.restUntil).toLocaleTimeString("pt-BR"):"Dentro do expediente."):"Fora do expediente — novos envios bloqueados."} {queue.schedule?.reason==="reply_woke_agent"?"A resposta do último contato encerrou o descanso.":""}</p>
  <section className={s.metrics}><div><span>Limite diário</span><strong>{queue.dailyLimit}</strong></div><div><span>Vagas disponíveis hoje</span><strong>{queue.remaining}</strong></div><div><span>Mensagens aprovadas aguardando</span><strong>{queue.rows.length}</strong></div></section>
  {error&&<p role="alert">{error}</p>}
