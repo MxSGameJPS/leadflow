@@ -85,13 +85,29 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
     if(!item?.proposedMessage)return;
     setReviewChat(chat.id);setReviewText(item.proposedMessage);setReviewReason(item.reasoning||"");setConsent(false);
   }
+  function recoveryCategory(chat){
+    const status=chat.recovery?.status||"pending",dispatch=chat.dispatchStatus;
+    if(status==="close_approved"||status==="ineligible")return "excluded";
+    if(status==="sent"||dispatch==="sent"||dispatch==="externally_sent")return "sent";
+    if(dispatch==="uncertain"||dispatch==="sending")return "attention";
+    if(dispatch==="reserved")return "reserved";
+    if(status==="message_approved")return "approved";
+    if(status==="eligible")return "eligible";
+    if(status==="message_rejected"||status==="close_rejected"||status==="pending")return "pending";
+    return "pending";
+  }
+  const statusOptions=[["all","Todas"],["pending","Pendente de revisão"],["eligible","Elegível / aguardando mensagem"],["approved","Mensagem aprovada"],["reserved","Reservada para envio"],["sent","Enviada"],["excluded","Exclusão aprovada"],["attention","Verificar envio"]];
+  const statusLabels=Object.fromEntries(statusOptions);
+  const statusCounts=Object.fromEntries(statusOptions.map(([value])=>[value,value==="all"?inbox.chats.length:inbox.chats.filter(chat=>recoveryCategory(chat)===value).length]));
+  const [statusFilter,setStatusFilter]=useState("pending");
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const chats = useMemo(() => inbox.chats.filter(chat => {
+    if (statusFilter !== "all" && recoveryCategory(chat)!==statusFilter) return false;
     if (mode === "matched" && !chat.leadId) return false;
     if (mode === "unmatched" && chat.leadId) return false;
     return [chat.name, chat.id, chat.leadName].some(value => String(value || "").toLowerCase().includes(query.toLowerCase()));
-  }), [inbox.chats, mode, query]);
+  }), [inbox.chats, mode, query, statusFilter]);
   const matched = inbox.chats.filter(chat => chat.leadId).length;
   return <main className={s.main}>
     <a href="/recuperacao" className={s.back}>← Voltar para Recuperação</a> <a href="/recuperacao/fila" className={s.back}>Ver fila de recuperação →</a>
@@ -105,8 +121,9 @@ export default function WhatsAppInbox({ inbox, leads = [] }) {
       <button type="button" onClick={auditNextBatch} disabled={auditRunning}>{auditRunning?"Consultando históricos...":"Auditar próximos 10"}</button>
       {auditProgress&&<p role="status">{auditProgress}</p>}
     </section>
+    <div className={s.statusFilters} role="group" aria-label="Etapas da recuperação">{statusOptions.map(([value,label])=><button key={value} type="button" className={statusFilter===value?s.statusActive:""} onClick={()=>setStatusFilter(value)}>{label} ({statusCounts[value]})</button>)}</div>
     <div className={s.controls}><input type="search" placeholder="Buscar nome ou telefone" aria-label="Buscar conversas" value={query} onChange={e=>setQuery(e.target.value)}/><select value={mode} onChange={e=>setMode(e.target.value)} aria-label="Filtrar conversas"><option value="all">Todas as conversas</option><option value="matched">Vinculadas</option><option value="unmatched">Sem vínculo</option></select></div>
-    <div className={s.list}>{error && <p role="alert" className={s.warning}>{error}</p>}{chats.length===0?<p>Nenhuma conversa para este filtro.</p>:chats.map(chat=><article key={chat.id} className={s.chat}><div><strong>{chat.leadName || chat.name}</strong><small>{chat.id}</small></div><div className={s.side}>{chat.leadId?<span className={s.linked}>Lead vinculado · {chat.leadStage || "novo"}</span>:<span className={s.pending}>Ainda não vinculado</span>}{chat.unreadCount>0&&<small>{chat.unreadCount} não lida(s)</small>}<button type="button" className={s.refresh} onClick={() => { setSelectedChat(chat.id); setSelectedLead(""); setLeadSearch(""); setError(""); }}> {chat.manuallyLinked ? "Alterar vínculo" : "Vincular manualmente"} </button></div>
+    <div className={s.list}>{error && <p role="alert" className={s.warning}>{error}</p>}{chats.length===0?<p>Nenhuma conversa para este filtro.</p>:chats.map(chat=><article key={chat.id} className={s.chat}><div><strong>{chat.leadName || chat.name}</strong><small>{chat.id}</small></div><div className={s.side}>{chat.leadId?<span className={s.linked}>Lead vinculado · {chat.leadStage || "novo"}</span>:<span className={s.pending}>Ainda não vinculado</span>}<small className={s.stateLabel}>Recuperação: {statusLabels[recoveryCategory(chat)]}</small>{chat.unreadCount>0&&<small>{chat.unreadCount} não lida(s)</small>}<button type="button" className={s.refresh} onClick={() => { setSelectedChat(chat.id); setSelectedLead(""); setLeadSearch(""); setError(""); }}> {chat.manuallyLinked ? "Alterar vínculo" : "Vincular manualmente"} </button></div>
     {selectedChat === chat.id && <div className={s.linkForm}>
       <label>Buscar lead existente<input type="search" value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} placeholder="Nome, cidade ou telefone" /></label>
       <label>Selecionar lead<select value={selectedLead} onChange={e=>setSelectedLead(e.target.value)}><option value="">Escolha um lead</option>{availableLeads.map(lead=><option key={lead.id} value={lead.id}>{lead.name} — {lead.phone || lead.city || "Sem telefone"}</option>)}</select></label>

@@ -36,11 +36,12 @@ export async function getRecoveryQueue(sessionId) {
    return {...row,preview:previewByChat.get(row.chatId)||null,commercial:commercialByChat.get(row.chatId)||null,outcome:outcomeByChat.get(row.chatId)||null,aiReview:ai,aiFresh,decisionStatus:decisions.find(d=>d.chatId===row.chatId)?.status||"sent",followup};
  });
  const testUsed=log.some(item=>["sending","sent","uncertain"].includes(item.status));
+ const reviewRows=decisions.filter(item=>["pending","eligible","message_rejected","close_rejected"].includes(item.status)).map(item=>({chatId:item.chatId,status:item.status,reason:item.reason||""}));
  const rows=decisions.filter(item=>canSend(item)&&!contacted.has(item.chatId)).map(item=>({chatId:item.chatId,decisionId:item.id,messageText:item.messageText,approvedAt:item.updatedAt}));
  const latest=decisions.filter(d=>d.sentAt).sort((a,b)=>b.sentAt-a.sentAt)[0];
  const latestSnapshot=latest?snapshotByChat.get(latest.chatId):null;
  const schedule=getRecoveryRest({lastSentAt:latest?.sentAt,lastReplyAt:latestSnapshot?.latestReplyAt});
- return {schedule,autoSendEnabled:process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true",rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
+ return {schedule,reviewRows,autoSendEnabled:process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true",rows,reservations,sentRows,testUsed,dailyLimit:DAILY_LIMIT,remaining:Math.max(0,DAILY_LIMIT-dailyCount),day,dailyCount};
 }
 export async function reserveRecoveryForManualSend(sessionId,chatId) {
  if(!sessionId||!chatId)throw Error("Conversa inválida.");

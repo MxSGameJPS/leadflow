@@ -41,3 +41,5 @@
 .queueToolbar button:disabled{opacity:.5;cursor:not-allowed}
 
 .suggestionFeedback{background:#24344b;color:#fff;border:1px solid #8199b9;border-radius:8px;padding:12px;line-height:1.5;overflow-wrap:anywhere}
+
+.statusFilters{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.statusFilters button{background:#243348;color:#eef4ff;border:1px solid #74849c;border-radius:9px;padding:9px 12px;cursor:pointer}.statusFilters button:hover{background:#314461}.statusFilters .statusActive{background:#476184;border-color:#c0d0e5;font-weight:700}.stateLabel{color:#e2bf79!important;font-weight:600}
