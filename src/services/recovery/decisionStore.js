@@ -9,6 +9,10 @@ export async function decideRecovery({sessionId,chatId,action,messageText,reason
   const key={sessionId_chatId:{sessionId,chatId}};
   const existing=await tx.recoveryDecision.findUnique({where:key});
   const status=nextDecision(existing,action);
+  if(action==="approve_and_queue"){
+   const previousAttempt=await tx.recoveryDispatch.findUnique({where:key});
+   if(previousAttempt)throw new Error("Este contato já possui uma reserva ou tentativa registrada. Revise a fila antes de aprovar novamente.");
+  }
   const text=String(messageText||existing?.messageText||"").trim();
   if(["message_approved","approve_and_queue"].includes(action) && (!text||text.length>2000))throw new Error("Digite uma mensagem válida com até 2.000 caracteres.");
   if(action==="message_approved" && consentConfirmed!==true)throw new Error("Confirme uma base adequada de permissão para esta mensagem antes de aprová-la.");
