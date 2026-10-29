@@ -35,6 +35,7 @@ export async function pollOutreachReplies({sessionId,limit=8}={}){
  const report={checked:0,replyFound:0,failed:0,total:targets.length};
  for(const target of targets.slice(0,Math.max(1,Math.min(limit,20)))){
   const where={sessionId_channel_chatId:{sessionId,channel:target.channel,chatId:target.chatId}};
+  const previous=await prisma.outreachObservation.findUnique({where});
   const baseData={sessionId,channel:target.channel,chatId:target.chatId,leadId:target.leadId||null,messageText:target.messageText||""};
   let data;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
@@ -49,12 +50,12 @@ export async function pollOutreachReplies({sessionId,limit=8}={}){
    const incoming=messages.filter(m=>m.chatId===target.chatId&&!m.isGroup&&m.fromMe===false&&Number.isFinite(Number(m.timestamp))&&Number(m.timestamp)*1000>=target.sentAt.getTime()-10000).sort((a,b)=>Number(a.timestamp)-Number(b.timestamp));
    const latest=incoming.at(-1);
    const text=incoming.filter(m=>String(m.body||"").trim()).at(-1);
-   data={...baseData,status:incoming.length?"replied":"no_reply_observed",category:text?classifyReply(text.body):incoming.length?"non_text_reply":"unclassified",evidence:text?String(text.body).slice(0,500):"",replyAt:latest?new Date(Number(latest.timestamp)*1000):null,checkedAt:new Date(),lastError:""};
+   const keepPrior=(!incoming.length&&previous?.status==="replied");
+   data={...baseData,status:keepPrior?"replied":incoming.length?"replied":"no_reply_observed",category:keepPrior?previous.category:text?classifyReply(text.body):incoming.length?"non_text_reply":"unclassified",evidence:keepPrior?previous.evidence:text?String(text.body).slice(0,500):"",replyAt:keepPrior?previous.replyAt:latest?new Date(Number(latest.timestamp)*1000):null,checkedAt:new Date(),lastError:""};
    report.checked++;if(incoming.length)report.replyFound++;
   }catch(e){
    report.failed++;
    // Falha de consulta NÃO apaga uma resposta já registrada nem vira "sem resposta".
-   const previous=await prisma.outreachObservation.findUnique({where});
    data={...baseData,status:previous?.status||"unverified",category:previous?.category||"unclassified",evidence:previous?.evidence||"",replyAt:previous?.replyAt||null,checkedAt:new Date(),lastError:String(e.message||e).slice(0,250)};
   }finally{clearTimeout(timer)}
   await prisma.outreachObservation.upsert({where,create:data,update:data});
