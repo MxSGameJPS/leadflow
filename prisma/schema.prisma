@@ -213,3 +213,22 @@ model CaptureApproval {
  @@index([sessionId,chatId])
  @@index([status,createdAt])
 }
+
+model OutreachObservation {
+  id String @id @default(cuid())
+  sessionId String
+  channel String
+  chatId String
+  leadId String?
+  messageText String @default("")
+  status String @default("unverified")
+  category String @default("unclassified")
+  evidence String @default("")
+  replyAt DateTime?
+  checkedAt DateTime?
+  lastError String @default("")
+  updatedAt DateTime @updatedAt
+  @@unique([sessionId,channel,chatId])
+  @@index([sessionId,channel,status])
+  @@index([sessionId,replyAt])
+}
