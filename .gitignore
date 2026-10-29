@@ -18,7 +18,9 @@ data/published-sites/
 data/uploads/
 generated-sites/
 .env.local
-.env
 .env.*
+.env
 
 .leadflow-app-audit/
+
+scripts
