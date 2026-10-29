@@ -73,7 +73,7 @@ export default async function DashboardPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div><h1>Dashboard</h1><p>Visão geral da sua operação</p></div>
-        <div className={styles.headerActions}><a href="/leads">Importar leads</a><a className={styles.primary} href="/crm">Abrir CRM</a></div>
+        <div className={styles.headerActions}><a href="/inteligencia-comercial">Inteligência Comercial</a><a href="/leads">Importar leads</a><a className={styles.primary} href="/crm">Abrir CRM</a></div>
       </header>
 
       <section className={styles.agentSection} aria-label="Operação dos agentes">
