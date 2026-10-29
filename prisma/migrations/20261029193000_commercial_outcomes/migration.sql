@@ -1,0 +1,3 @@
+CREATE TABLE "CommercialOutcome" ("id" TEXT NOT NULL PRIMARY KEY, "sessionId" TEXT NOT NULL, "channel" TEXT NOT NULL, "chatId" TEXT NOT NULL, "stage" TEXT NOT NULL DEFAULT 'contacted', "meetingAt" DATETIME, "proposalAmount" INTEGER, "contractAmount" INTEGER, "lossReason" TEXT NOT NULL DEFAULT '', "notes" TEXT NOT NULL DEFAULT '', "updatedAt" DATETIME NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE UNIQUE INDEX "CommercialOutcome_sessionId_channel_chatId_key" ON "CommercialOutcome"("sessionId","channel","chatId");
+CREATE INDEX "CommercialOutcome_sessionId_channel_stage_idx" ON "CommercialOutcome"("sessionId","channel","stage");
