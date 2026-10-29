@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import {pollOutreachReplies} from "../src/services/intelligence/outreach.js";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
@@ -173,7 +174,13 @@ async function findLatestLiveReply(chatId,sentAt){
   return new Date(Math.max(...replies.map(m=>m.timestamp))*1000);
  }finally{clearTimeout(timer)}
 }
+let lastOutreachScan=0;
 async function check(){
+ if(sessionId&&Date.now()-lastOutreachScan>5*60*1000){
+  lastOutreachScan=Date.now();
+  try{const result=await pollOutreachReplies({sessionId,limit:5});console.log("[inteligência] Monitoramento de respostas:",JSON.stringify(result));}
+  catch(e){console.error("[inteligência] Monitoramento indisponível:",e.message)}
+ }
  if(!sessionId){console.log("[expediente] OPENWA_SESSION_ID ausente.");return;}
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{chatId:true,sentAt:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
