@@ -224,6 +224,10 @@ model OutreachObservation {
   status String @default("unverified")
   category String @default("unclassified")
   evidence String @default("")
+  aiCategory String @default("")
+  aiReasoning String @default("")
+  aiRecommendation String @default("")
+  aiAnalyzedReplyAt DateTime?
   replyAt DateTime?
   checkedAt DateTime?
   lastError String @default("")
