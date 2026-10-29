@@ -21,11 +21,13 @@ export async function pollOutreachReplies({sessionId,limit=8}={}){
  if(!base||!key)throw Error("Credenciais OpenWA não configuradas.");
  const [capture,recovery]=await Promise.all([
   prisma.captureApproval.findMany({where:{sessionId,status:"sent",sentAt:{not:null}},select:{leadId:true,chatId:true,messageText:true,sentAt:true}}),
-  prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},select:{chatId:true,messageSnapshot:true,decision:{select:{sentAt:true}}}})
+  prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},select:{chatId:true,messageSnapshot:true,decisionId:true}})
  ]);
+ const decisions=await prisma.recoveryDecision.findMany({where:{id:{in:recovery.map(x=>x.decisionId)}},select:{id:true,sentAt:true}});
+ const recoveryDates=new Map(decisions.map(x=>[x.id,x.sentAt]));
  const targets=[
   ...capture.map(x=>({channel:"capture",leadId:x.leadId,chatId:x.chatId,messageText:x.messageText,sentAt:x.sentAt})),
-  ...recovery.filter(x=>x.decision?.sentAt).map(x=>({channel:"recovery",chatId:x.chatId,messageText:x.messageSnapshot,sentAt:x.decision.sentAt}))
+  ...recovery.filter(x=>recoveryDates.get(x.decisionId)).map(x=>({channel:"recovery",chatId:x.chatId,messageText:x.messageSnapshot,sentAt:recoveryDates.get(x.decisionId)}))
  ].filter(x=>validChat(x.chatId));
  const existing=await prisma.outreachObservation.findMany({where:{sessionId},select:{channel:true,chatId:true,checkedAt:true}});
  const last=new Map(existing.map(x=>[x.channel+":"+x.chatId,x.checkedAt?.getTime()||0]));
