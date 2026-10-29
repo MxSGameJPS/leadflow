@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/captacao", icon: "✉", label: "Agente de captação" },
   { href: "/recuperacao/fila", icon: "☷", label: "Fila de recuperação" },
   { href: "/intencao", icon: "⌁", label: "Intenção" },
+  { href: "/inteligencia-comercial", icon: "◈", label: "Inteligência Comercial" },
   { href: "/crm", icon: "▤", label: "CRM" },
   { href: "/consultoria", icon: "✦", label: "Consultorias" },
   { href: "/agendamentos", icon: "□", label: "Agendamentos" },
