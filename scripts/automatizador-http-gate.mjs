@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { drainRequested, publishRuntime, readControl } from './automatizador-runtime.mjs';
+import { publishRuntime, readControl } from './automatizador-runtime.mjs';
 
 // Loaded before Next.js creates its HTTP server. Every admitted API request is counted.
 const root = process.cwd();
@@ -12,10 +12,12 @@ http.Server.prototype.emit = function(name, ...args) {
   if (name === 'request') {
     const [req, res] = args;
     const control = readControl(root);
-    const hour = Number(new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
     const pathname = req.url.split('?')[0];
     const inspectionPage = control.action === 'maintenance' && ['GET', 'HEAD'].includes(req.method) && !pathname.startsWith('/api/');
-    const closed = fault || (!inspectionPage && (drainRequested(root) || (control.managed && hour < 7 && !['GET', 'HEAD', 'OPTIONS'].includes(req.method))));
+    // The commercial agents enforce their own working hours. Never block operator edits or scheduling based on the clock.
+    // Explicit shutdown/maintenance drains still prevent new work for safe process termination.
+    const draining = control.action === 'drain' || control.action === 'maintenance';
+    const closed = fault || (!inspectionPage && draining);
     if (closed) {
       res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '60' });
       res.end(JSON.stringify({ error: 'LeadFlow em pausa para encerramento ou fora da janela de operacao.' }));
@@ -26,7 +28,7 @@ http.Server.prototype.emit = function(name, ...args) {
     res.once('finish', () => { if (finished) return; finished = true; active--; report(); });
     res.once('close', () => { if (!finished) { if(inspectionPage){finished=true;active--}else{aborted++} report(); } });
     // An aborted response is not proof that its handler stopped: keep active until intervention.
-  } else if (name === 'upgrade' && drainRequested(root)) { args[1]?.destroy(); return true; }
+  } else if (name === 'upgrade' && ['drain', 'maintenance'].includes(readControl(root).action)) { args[1]?.destroy(); return true; }
   return originalEmit.call(this, name, ...args);
 };
 report();
