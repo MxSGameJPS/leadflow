@@ -23,7 +23,7 @@ export function validateSocialPost(post){
  if(!Array.isArray(media)||!Array.isArray(platforms)||!platforms.length)throw Error("Selecione ao menos uma rede social.");
  if(!["image","carousel","video","text"].includes(post.mediaType))throw Error("Tipo de mídia inválido.");
  if(media.length>10)throw Error("O limite é de 10 mídias por publicação.");
- if(media.some(u=>!urlOk(u)))throw Error("MÍDIA_LOCAL: Há imagens ou vídeos acessíveis somente no seu computador. Configure SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e um bucket público para hospedar os criativos, ou substitua as URLs por links HTTPS públicos antes de agendar.");
+ if(media.some(u=>!urlOk(u)))throw Error("MÍDIA_LOCAL: Há imagens ou vídeos acessíveis somente no seu computador. Configure R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET e R2_PUBLIC_URL para hospedar os criativos, ou substitua as URLs por links HTTPS públicos antes de agendar.");
  if(post.mediaType==="image"&&media.length!==1||post.mediaType==="video"&&media.length!==1||post.mediaType==="carousel"&&(media.length<2||media.length>10))throw Error("Quantidade de mídias incompatível com a publicação.");
  if(platforms.includes("instagram")&&post.mediaType==="text")throw Error("Instagram exige imagem ou vídeo.");
  if(platforms.includes("instagram")&&post.mediaType!=="video"&&media.some(u=>/\.png(?:\?|$)/i.test(u)))throw Error("Para Instagram, converta imagens PNG para JPEG antes de agendar.");
