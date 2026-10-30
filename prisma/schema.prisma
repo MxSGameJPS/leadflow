@@ -253,3 +253,23 @@ model CommercialOutcome {
  @@unique([sessionId,channel,chatId])
  @@index([sessionId,channel,stage])
 }
+
+model SocialPost {
+ id String @id @default(cuid())
+ title String
+ caption String @default("")
+ mediaType String @default("image")
+ mediaJson String @default("[]")
+ platformsJson String @default("[]")
+ status String @default("draft")
+ scheduledAt DateTime?
+ approvedAt DateTime?
+ facebookStatus String @default("pending")
+ instagramStatus String @default("pending")
+ facebookPostId String?
+ instagramPostId String?
+ lastError String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([status,scheduledAt])
+}
