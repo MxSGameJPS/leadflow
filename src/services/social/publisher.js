@@ -25,6 +25,7 @@ export function validateSocialPost(post){
  if(media.length>10||media.some(u=>!urlOk(u)))throw Error("As mídias precisam de URLs HTTPS públicas válidas (até 10). Arquivos locais devem ser hospedados antes de publicar.");
  if(post.mediaType==="image"&&media.length!==1||post.mediaType==="video"&&media.length!==1||post.mediaType==="carousel"&&(media.length<2||media.length>10))throw Error("Quantidade de mídias incompatível com a publicação.");
  if(platforms.includes("instagram")&&post.mediaType==="text")throw Error("Instagram exige imagem ou vídeo.");
+ if(platforms.includes("instagram")&&post.mediaType!=="video"&&media.some(u=>/\\.png(?:\\?|$)/i.test(u)))throw Error("Para Instagram, converta imagens PNG para JPEG antes de agendar.");
  if(post.mediaType!=="text"&&!media.length)throw Error("Mídia obrigatória.");
  return {media,platforms};
 }
@@ -46,10 +47,18 @@ async function createInstagramContainer(cfg,post,media){
  for(const url of media){const isVideo=/\.(mp4|mov)(\?|$)/i.test(url);const opts=isVideo?{video_url:url,media_type:"VIDEO",is_carousel_item:"true"}:{image_url:url,is_carousel_item:"true"};ids.push((await call(cfg,cfg.ig+"/media",opts)).id)}
  return (await call(cfg,cfg.ig+"/media",{media_type:"CAROUSEL",children:ids.join(","),caption:post.caption})).id;
 }
+async function awaitInstagramReady(cfg,id){
+ for(let attempt=0;attempt<8;attempt++){
+  const result=await call(cfg,id,{fields:"status_code"},"GET");
+  if(result.status_code==="FINISHED")return;
+  if(["ERROR","EXPIRED"].includes(result.status_code))throw Error("Processamento Meta falhou: "+result.status_code);
+  if(attempt<7)await new Promise(resolve=>setTimeout(resolve,15000));
+ }
+ throw Error("Processamento de vídeo ainda não finalizado. Confira no Instagram antes de tentar outra publicação.");
+}
 async function publishInstagram(cfg,post,media){
  const id=await createInstagramContainer(cfg,post,media);
- const result=await call(cfg,id,{fields:"status_code"},"GET");
- if(result.status_code!=="FINISHED")throw Error("Contêiner Instagram ainda não confirmado como FINISHED ("+(result.status_code||"desconhecido")+"). Verificar manualmente; não reenviar.");
+ await awaitInstagramReady(cfg,id);
  return (await call(cfg,cfg.ig+"/media_publish",{creation_id:id})).id;
 }
 export async function publishScheduledSocialPosts(){
