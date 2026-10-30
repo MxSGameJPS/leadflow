@@ -11,8 +11,8 @@ async function snapshot(){
   prisma.captureApproval.count({where:{sessionId,status:"sent"}}),
   prisma.captureApproval.count({where:{sessionId,status:{in:["sending","uncertain"]}}})
  ]):[0,0,0];
- const recoveryBlock=sessionId?await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["uncertain","sending"]}}}):0;
- return {running:captureRunning(),approved,sent,uncertain,recoveryBlock,blocked:uncertain>0||recoveryBlock>0,sessionConfigured:!!sessionId};
+ const [recoverySending,captureSending]=sessionId?await Promise.all([prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}}),prisma.captureApproval.count({where:{sessionId,status:"sending"}})]):[0,0];
+ return {running:captureRunning(),approved,sent,uncertain,recoveryBlock:recoverySending,blocked:recoverySending>0||captureSending>0,sessionConfigured:!!sessionId};
 }
 export async function GET(){
  if(process.env.NODE_ENV==="production")return reject();
