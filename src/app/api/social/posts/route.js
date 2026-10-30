@@ -18,9 +18,10 @@ export async function POST(request){
  const platforms=Array.isArray(body.platforms)?body.platforms.filter(x=>["facebook","instagram"].includes(x)):[];
  const media=Array.isArray(body.media)?body.media.map(x=>String(x).trim()).filter(Boolean):[];
  if(!title||!caption||!platforms.length)return reject("Informe título, legenda e pelo menos uma plataforma.");
- const candidate={mediaType,mediaJson:JSON.stringify(media),platformsJson:JSON.stringify([...new Set(platforms)]),caption};
+ const candidate={mediaType,mediaJson:JSON.stringify(media),platformsJson:JSON.stringify([...new Set(platforms)]),caption,script:String(body.script||"").slice(0,5000)};
  if(!["image","video","carousel","text"].includes(mediaType)||media.length>10||!media.every(u=>u.startsWith("/api/social/media/")||u.startsWith("https://")))return reject("Mídia inválida. Utilize arquivo local ou URL HTTPS.");
- if(mediaType==="carousel"&&media.length<2||mediaType==="image"&&media.length!==1||mediaType==="video"&&media.length!==1||mediaType==="text"&&media.length!==0)return reject("Quantidade de mídias incompatível com o formato.");
+ if(media.length>0&&(mediaType==="carousel"&&media.length<2||mediaType==="image"&&media.length!==1||mediaType==="video"&&media.length!==1||mediaType==="text"))return reject("Quantidade de mídias incompatível com o formato.");
+ if(mediaType==="text"&&platforms.includes("instagram"))return reject("Publicação apenas textual não é aceita no Instagram.");
  const post=await prisma.socialPost.create({data:{title,...candidate,status:"draft"}});
  return NextResponse.json({post},{status:201});
  }catch(e){return reject(e.message)}
