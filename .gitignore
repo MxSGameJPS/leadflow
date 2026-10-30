@@ -24,3 +24,6 @@ generated-sites/
 .leadflow-app-audit/
 
 scripts
+
+.recovery-worker.lock
+*.lock
