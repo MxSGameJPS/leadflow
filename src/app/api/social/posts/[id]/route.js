@@ -10,7 +10,7 @@ export async function PATCH(request,{params}){
  try{
  const input=await request.json(),post=await prisma.socialPost.findUnique({where:{id}});
  if(!post)return reject("Publicação não encontrada.",404);
- if(!["draft","scheduled"].includes(post.status))return reject("Publicação iniciada ou encerrada; não pode ser alterada.",409);
+ if(!["draft","scheduled","needs_review"].includes(post.status))return reject("Publicação em processamento ou encerrada; não pode ser alterada.",409);
  if(input.action==="prepare"){
   if(post.status!=="draft")return reject("Apenas rascunhos podem ser editados.",409);
   const media=Array.isArray(input.media)?input.media.map(x=>String(x).trim()).filter(Boolean):JSON.parse(post.mediaJson);
@@ -23,10 +23,19 @@ export async function PATCH(request,{params}){
  const changed=await prisma.socialPost.updateMany({where:{id,status:{in:["draft","scheduled"]}},data:{status:"cancelled"}});
  return changed.count?NextResponse.json({ok:true}):reject("A publicação mudou de estado.",409);
  }
- if(input.action!=="schedule")return reject("Ação inválida.");
- const at=new Date(input.scheduledAt);
- if(!Number.isFinite(at.getTime())||at<=new Date())return reject("Escolha uma data e hora futuras.");
- const selected=JSON.parse(post.platformsJson);
+ if(!["schedule","publish_now"].includes(input.action))return reject("Ação inválida.");
+ const immediate=input.action==="publish_now";
+ const at=immediate?new Date():new Date(input.scheduledAt);
+ if(!immediate&&(!Number.isFinite(at.getTime())||at<=new Date()))return reject("Escolha uma data e hora futuras.");
+ const platforms=JSON.parse(post.platformsJson);
+ const fields={facebook:"facebookStatus",instagram:"instagramStatus"};
+ const uncertain=platforms.filter(name=>post[fields[name]]==="uncertain"||post[fields[name]]==="sending");
+ const explicit=Array.isArray(input.retryPlatforms)?input.retryPlatforms:[];
+ if(uncertain.some(name=>!explicit.includes(name)))return reject("Antes de reagendar, confira as redes e confirme quais resultados incertos NÃO foram publicados: "+uncertain.join(", ")+".");
+ if(explicit.some(name=>!uncertain.includes(name)))return reject("Seleção de repetição inválida.");
+ if(platforms.every(name=>post[fields[name]]==="sent"))return reject("Esta publicação já está confirmada em todas as redes.",409);
+ if(platforms.some(name=>post[fields[name]]==="sending"&&post.status!=="needs_review"))return reject("Publicação ainda em processamento; aguarde para evitar duplicidade.",409);
+ const selected=platforms;
  const original=JSON.parse(post.mediaJson);
  if(original.some(x=>x.startsWith("/api/social/media/"))&&!r2Settings().ready)return reject("Cloudflare R2 não configurado. Verifique as cinco variáveis R2_* no .env e reinicie o LeadFlow.");
  let hosted=original;
@@ -35,7 +44,11 @@ export async function PATCH(request,{params}){
   for(const url of original)hosted.push(await ensurePublicMedia(url,{forInstagram:selected.includes("instagram")}));
   validateSocialPost({...post,mediaJson:JSON.stringify(hosted)});
  }catch(error){return reject("Falha ao preparar mídia para publicação: "+String(error.message||error),400)}
- const changed=await prisma.socialPost.updateMany({where:{id,status:{in:["draft","scheduled"]}},data:{scheduledAt:at,approvedAt:new Date(),status:"scheduled",mediaJson:JSON.stringify(hosted),facebookStatus:"pending",instagramStatus:"pending",lastError:""}});
+ const reset={};
+ for(const name of platforms){
+  if(uncertain.includes(name)&&explicit.includes(name))reset[fields[name]]="pending";
+ }
+ const changed=await prisma.socialPost.updateMany({where:{id,status:post.status,facebookStatus:post.facebookStatus,instagramStatus:post.instagramStatus},data:{scheduledAt:at,approvedAt:new Date(),status:"scheduled",mediaJson:JSON.stringify(hosted),...reset,lastError:""}});
  return changed.count?NextResponse.json({ok:true}):reject("A publicação mudou de estado.",409);
  }catch(e){return reject(e.message)}
 }
