@@ -1,0 +1,1 @@
+ALTER TABLE "SocialPost" ADD COLUMN "script" TEXT NOT NULL DEFAULT '';
