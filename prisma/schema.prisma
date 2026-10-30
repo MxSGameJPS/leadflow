@@ -256,6 +256,7 @@ model CommercialOutcome {
 
 model SocialPost {
  id String @id @default(cuid())
+ script String @default("")
  title String
  caption String @default("")
  mediaType String @default("image")
