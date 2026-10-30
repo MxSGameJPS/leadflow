@@ -4,8 +4,9 @@ import styles from "./SocialStudio.module.css";
 const date=v=>v?new Date(v).toLocaleString("pt-BR"):"—";
 const states={draft:"Rascunho",scheduled:"Agendado",publishing:"Publicando",published:"Publicado",needs_review:"Verificar publicação",cancelled:"Cancelado"};
 export default function SocialStudio({initialPosts=[]}){
- const [posts,setPosts]=useState(initialPosts),[title,setTitle]=useState(""),[topic,setTopic]=useState(""),[caption,setCaption]=useState(""),[mediaType,setMediaType]=useState("image"),[platforms,setPlatforms]=useState(["instagram","facebook"]),[media,setMedia]=useState([]),[scheduledAt,setScheduledAt]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[uploaded,setUploaded]=useState([]);
+ const [posts,setPosts]=useState(initialPosts),[postErrors,setPostErrors]=useState({}),[workingPost,setWorkingPost]=useState(""),[title,setTitle]=useState(""),[topic,setTopic]=useState(""),[caption,setCaption]=useState(""),[mediaType,setMediaType]=useState("image"),[platforms,setPlatforms]=useState(["instagram","facebook"]),[media,setMedia]=useState([]),[scheduledAt,setScheduledAt]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[uploaded,setUploaded]=useState([]);
  useEffect(()=>{setPosts(initialPosts)},[initialPosts]);
+ useEffect(()=>{const interval=setInterval(()=>{if(!document.hidden)refresh().catch(()=>{});},15000);return ()=>clearInterval(interval)},[]);
  async function refresh(){const response=await fetch("/api/social/posts",{cache:"no-store"});const data=await response.json();if(!response.ok)throw Error(data.error);setPosts(data.posts)}
  async function upload(event){
   const files=[...event.target.files||[]];if(!files.length)return;setBusy(true);setError("");
@@ -19,8 +20,8 @@ export default function SocialStudio({initialPosts=[]}){
  async function act(post,action){
   if(action==="schedule"&&!scheduledAt){setError("Selecione uma data e hora futuras.");return}
   if(action==="schedule"&&!confirm("Autorizar a publicação automática deste conteúdo nas redes escolhidas, na data indicada?"))return;
-  setBusy(true);setError("");setNotice("");
-  try{const r=await fetch("/api/social/posts/"+post.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,scheduledAt:action==="schedule"?new Date(scheduledAt).toISOString():null})});const data=await r.json();if(!r.ok)throw Error(data.error);await refresh();setNotice(action==="schedule"?"Agendamento aprovado.":"Publicação cancelada.")}catch(e){setError(e.message)}finally{setBusy(false)}
+  setBusy(true);setWorkingPost(post.id);setError("");setPostErrors(current=>({...current,[post.id]:""}));setNotice("");
+  try{const r=await fetch("/api/social/posts/"+post.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,scheduledAt:action==="schedule"?new Date(scheduledAt).toISOString():null})});const data=await r.json();if(!r.ok)throw Error(data.error);await refresh();setNotice(action==="schedule"?"Agendamento aprovado.":"Publicação cancelada.")}catch(e){setError(e.message);setPostErrors(current=>({...current,[post.id]:e.message}))}finally{setBusy(false);setWorkingPost("")}
  }
  return <div className={styles.layout}>
  <section className={styles.panel}><h2>Estúdio de publicações</h2><p>Envie mídias, prepare legendas com OmniRoute e revise antes de colocar na agenda.</p>
@@ -33,13 +34,13 @@ export default function SocialStudio({initialPosts=[]}){
  <label>Legenda<textarea rows={7} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Sua legenda, CTA e hashtags"/></label>
  <button type="button" className={styles.primary} disabled={busy||!title.trim()||!caption.trim()} onClick={create}>{busy?"Processando...":"Salvar rascunho"}</button>
  </section>
- <section className={styles.panel}><h2>Calendário editorial</h2><p>Revisão humana obrigatória. Publicações agendadas são executadas pelo worker quando o LeadFlow estiver ligado.</p>
+ <section className={styles.panel}><h2>Calendário editorial</h2><p>Atualização automática a cada 15 segundos enquanto a página estiver aberta. Agendamentos exigem aprovação; o worker publica quando estiver executando.</p>
  <label>Data e hora de publicação<input type="datetime-local" value={scheduledAt} onChange={e=>setScheduledAt(e.target.value)}/></label>
  <div className={styles.stats}><div><strong>{posts.filter(x=>x.status==="draft").length}</strong><span>Rascunhos</span></div><div><strong>{posts.filter(x=>x.status==="scheduled").length}</strong><span>Agendados</span></div><div><strong>{posts.filter(x=>x.status==="published").length}</strong><span>Publicados</span></div></div>
- <div className={styles.posts}>{posts.length===0?<p>Nenhum conteúdo cadastrado.</p>:posts.map(post=><article key={post.id} className={styles.post}>
- <div className={styles.postHeader}><strong>{post.title}</strong><span>{states[post.status]||post.status}</span></div><small>{JSON.parse(post.platformsJson).join(" + ")} · {post.mediaType} · {date(post.scheduledAt)}</small><p>{post.caption}</p>
- <small>Facebook: {post.facebookStatus} · Instagram: {post.instagramStatus}</small>{post.lastError&&<small className={styles.error}>{post.lastError}</small>}
- {["draft","scheduled"].includes(post.status)&&<div className={styles.actions}><button type="button" disabled={busy} onClick={()=>act(post,"schedule")}>{post.status==="draft"?"Aprovar e agendar":"Reagendar"}</button><button type="button" disabled={busy} onClick={()=>act(post,"cancel")}>Cancelar</button></div>}
+ <div role="status" className={styles.statusNotice}>Atenção: arquivos em /api/social/media são locais e não podem ser publicados pela Meta. Se o agendamento falhar, o motivo aparecerá no próprio cartão.</div><div className={styles.posts}>{posts.length===0?<p>Nenhum conteúdo cadastrado.</p>:posts.map(post=><article key={post.id} className={styles.post}>
+ <div className={styles.postHeader}><strong>{post.title}</strong><span className={styles.status}>{workingPost===post.id?"Processando solicitação...":states[post.status]||post.status}</span></div><small>{JSON.parse(post.platformsJson).join(" + ")} · {post.mediaType} · {date(post.scheduledAt)}</small><p>{post.caption}</p>
+ <small>Facebook: {post.facebookStatus} · Instagram: {post.instagramStatus}</small>{post.lastError&&<small className={styles.error}>Erro de publicação: {post.lastError}</small>}{postErrors[post.id]&&<div role="alert" className={styles.error}>Agendamento recusado: {postErrors[post.id]}</div>}{post.status==="draft"&&JSON.parse(post.mediaJson).some(url=>url.startsWith("/api/"))&&<small className={styles.error}>Criativos armazenados apenas localmente. A Meta precisa de URL HTTPS pública; hospede as mídias antes de agendar.</small>}
+ {["draft","scheduled"].includes(post.status)&&<div className={styles.actions}><button type="button" disabled={busy} onClick={()=>act(post,"schedule")}>{workingPost===post.id?"Validando...":post.status==="draft"?"Aprovar e agendar":"Reagendar"}</button><button type="button" disabled={busy} onClick={()=>act(post,"cancel")}>Cancelar</button></div>}
  </article>)}</div>
  </section>
  {(error||notice)&&<div className={styles.feedback} role="status">{error||notice}</div>}
