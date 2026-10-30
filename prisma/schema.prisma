@@ -256,6 +256,8 @@ model CommercialOutcome {
 
 model SocialPost {
  id String @id @default(cuid())
+ r2CleanedAt DateTime?
+ r2CleanupError String @default("")
  script String @default("")
  title String
  caption String @default("")
