@@ -61,9 +61,11 @@ async function captureOne(){
  if(!captureRunning())return;
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
  if(!sessionId||!base||!key)return;
- const conflict=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
- const captureConflict=await prisma.captureApproval.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
- if(conflict||captureConflict){console.error("[captação] Há envio em andamento/incerto; despacho bloqueado.");return}
+ const conflict=await prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}});
+ const captureConflict=await prisma.captureApproval.count({where:{sessionId,status:"sending"}});
+ // Tentativas incertas ficam isoladas por lead e nunca voltam a "approved" automaticamente.
+ // Somente um envio efetivamente em andamento bloqueia novo despacho.
+ if(conflict||captureConflict){console.error("[captação] Há envio em andamento; aguardando conclusão antes do próximo lead.");return}
  const state=await globalState();
  if(state.captureCount>=10){console.log("[captação] Limite diário próprio de 10 envios atingido.");return;}
  const schedule=getRecoveryRest({lastSentAt:state.latest?.sentAt,lastReplyAt:state.lastReplyAt});
@@ -93,7 +95,7 @@ async function captureOne(){
    console.log("[captação] Confirmado:",item.leadId);
   }catch(e){
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"uncertain"}}).catch(()=>{});
-   console.error("[captação] Resultado incerto; envio suspenso até revisão:",e.message);
+   console.error("[captação] Resultado incerto neste lead; próximo contato aprovado poderá seguir após as regras de expediente:",e.message);
   }
   return;
  }
