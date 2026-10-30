@@ -5,6 +5,7 @@ const date=v=>v?new Date(v).toLocaleString("pt-BR"):"—";
 const states={draft:"Rascunho",scheduled:"Agendado",publishing:"Publicando",published:"Publicado",needs_review:"Verificar publicação",cancelled:"Cancelado"};
 export default function SocialStudio({initialPosts=[]}){
  const [posts,setPosts]=useState(initialPosts),[title,setTitle]=useState(""),[topic,setTopic]=useState(""),[caption,setCaption]=useState(""),[mediaType,setMediaType]=useState("image"),[platforms,setPlatforms]=useState(["instagram","facebook"]),[media,setMedia]=useState([]),[scheduledAt,setScheduledAt]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[uploaded,setUploaded]=useState([]);
+ useEffect(()=>{setPosts(initialPosts)},[initialPosts]);
  async function refresh(){const response=await fetch("/api/social/posts",{cache:"no-store"});const data=await response.json();if(!response.ok)throw Error(data.error);setPosts(data.posts)}
  async function upload(event){
   const files=[...event.target.files||[]];if(!files.length)return;setBusy(true);setError("");
