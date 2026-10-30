@@ -47,3 +47,20 @@ npm run dev
 - Ainda não traz métricas/insights de alcance e engajamento, replies de comentários/DMs, calendário sugerido automaticamente com cadência semanal, nem integração de desempenho com o CRM.
 - Reagendamento cancela/substitui apenas posts ainda não iniciados. Publicações com resultado incerto exigem conferência manual; não existe botão para reenviar.
 - O worker precisa estar executando na hora agendada; se o PC estiver desligado, o post é publicado no próximo ciclo após religar. Não existe agendamento hospedado na Meta para a versão Instagram.
+
+## Cloudflare R2 (fluxo atual)
+Configure no `.env`, somente no computador:
+```env
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=leadflow-social-media
+R2_PUBLIC_URL=https://pub-xxxxxxxx.r2.dev
+```
+- No R2, use token S3 de Object Read & Write restrito ao bucket. Não cole credenciais no chat.
+- O upload inicial fica apenas em `data/social-media/`. Na aprovação do agendamento, a API envia as mídias do rascunho para o R2 e substitui as URLs locais pelas públicas. Rascunhos antigos são preparados automaticamente: não é necessário reenviar as imagens.
+- Carrosséis para Instagram com PNG são convertidos para JPEG com `sharp`, preservando cópias locais originais. Se o pacote não estiver instalado e a conversão falhar, execute `npm install sharp` e reinicie a aplicação.
+- Somente postagens com status **published** e com todos os canais confirmados são candidatas à exclusão; a limpeza só começa 24 horas depois da confirmação, e evita apagar arquivos usados em outras publicações pendentes ou recentes.
+- Status `needs_review`, `publishing`, `uncertain` e agendamentos pendentes **nunca autorizam a limpeza**. Sem retorno de sucesso da Meta o arquivo permanece no bucket.
+- O worker faz a limpeza de forma periódica enquanto o LeadFlow estiver ligado. Os originais locais permanecem preservados; a API de status `/api/social/storage` informa configuração e contadores, sem expor chaves.
+- Use `.r2.dev` para testes; URLs de desenvolvimento têm limites e podem não atender produção de alto tráfego. Para uso regular prefira um domínio personalizado.
