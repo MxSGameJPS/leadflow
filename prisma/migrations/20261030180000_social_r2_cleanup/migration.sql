@@ -1,0 +1,2 @@
+ALTER TABLE "SocialPost" ADD COLUMN "r2CleanedAt" DATETIME;
+ALTER TABLE "SocialPost" ADD COLUMN "r2CleanupError" TEXT NOT NULL DEFAULT '';

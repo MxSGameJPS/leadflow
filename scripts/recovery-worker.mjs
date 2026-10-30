@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import {pollOutreachReplies} from "../src/services/intelligence/outreach.js";
 import {publishScheduledSocialPosts} from "../src/services/social/publisher.js";
+import {cleanupPublishedSocialMedia} from "../src/services/social/r2Cleanup.js";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
@@ -182,7 +183,7 @@ let lastSocialCycle=0;
 async function check(){
  if(Date.now()-lastSocialCycle>=60000){
   lastSocialCycle=Date.now();
-  try{await publishScheduledSocialPosts()}catch(e){console.error("[social] Agenda indisponível:",e.message)}
+  try{await publishScheduledSocialPosts();await cleanupPublishedSocialMedia()}catch(e){console.error("[social] Agenda ou limpeza R2 indisponível:",e.message)}
  }
  if(sessionId&&Date.now()-lastOutreachScan>5*60*1000){
   lastOutreachScan=Date.now();

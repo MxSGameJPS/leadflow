@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../../lib/prisma.js";
 import {validateSocialPost} from "../../../../../services/social/publisher.js";
+import {ensurePublicMedia,r2Settings} from "../../../../../services/social/r2Storage.js";
 export const runtime="nodejs";
 const reject=(error,status=400)=>NextResponse.json({error},{status});
 export async function PATCH(request,{params}){
@@ -25,8 +26,16 @@ export async function PATCH(request,{params}){
  if(input.action!=="schedule")return reject("Ação inválida.");
  const at=new Date(input.scheduledAt);
  if(!Number.isFinite(at.getTime())||at<=new Date())return reject("Escolha uma data e hora futuras.");
- validateSocialPost(post);
- const changed=await prisma.socialPost.updateMany({where:{id,status:{in:["draft","scheduled"]}},data:{scheduledAt:at,approvedAt:new Date(),status:"scheduled",facebookStatus:"pending",instagramStatus:"pending"}});
+ const selected=JSON.parse(post.platformsJson);
+ const original=JSON.parse(post.mediaJson);
+ if(original.some(x=>x.startsWith("/api/social/media/"))&&!r2Settings().ready)return reject("Cloudflare R2 não configurado. Verifique as cinco variáveis R2_* no .env e reinicie o LeadFlow.");
+ let hosted=original;
+ try{
+  hosted=[];
+  for(const url of original)hosted.push(await ensurePublicMedia(url,{forInstagram:selected.includes("instagram")}));
+  validateSocialPost({...post,mediaJson:JSON.stringify(hosted)});
+ }catch(error){return reject("Falha ao preparar mídia para publicação: "+String(error.message||error),400)}
+ const changed=await prisma.socialPost.updateMany({where:{id,status:{in:["draft","scheduled"]}},data:{scheduledAt:at,approvedAt:new Date(),status:"scheduled",mediaJson:JSON.stringify(hosted),facebookStatus:"pending",instagramStatus:"pending",lastError:""}});
  return changed.count?NextResponse.json({ok:true}):reject("A publicação mudou de estado.",409);
  }catch(e){return reject(e.message)}
 }
