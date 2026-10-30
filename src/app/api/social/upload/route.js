@@ -18,3 +18,8 @@ export async function POST(request){
   const bytes=Buffer.from(await file.arrayBuffer());
   await fs.writeFile(path.join(directory,name),bytes,{flag:"wx"});
   uploaded.push({name,localUrl:"/api/social/media/"+name,publicUrl:null,size:file.size,type:file.type,storageError:""});
+
+ }
+ return NextResponse.json({files:uploaded});
+ }catch(e){return NextResponse.json({error:String(e.message||e)},{status:500})}
+}
