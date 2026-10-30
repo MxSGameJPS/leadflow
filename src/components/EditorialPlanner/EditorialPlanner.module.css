@@ -7,3 +7,5 @@
 .lightboxHeader{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .lightboxHeader button{background:var(--surface-2);color:var(--text)}
 .largePreview{display:block;max-width:100%;max-height:calc(96vh - 115px);width:auto;height:auto;object-fit:contain;align-self:center;border-radius:8px}
+
+.modeSelector{display:flex;flex-wrap:wrap;gap:8px}.modeSelector .modeActive{background:var(--accent);color:#fff}.modeSelector .modeInactive{background:var(--surface-2);color:var(--text)}.singleForm{display:grid;gap:12px;max-width:700px}.platformChoices{display:flex;flex-wrap:wrap;gap:18px}.platformChoices label{display:flex;align-items:center;gap:8px}.platformChoices input{width:auto;min-width:auto}
