@@ -24,9 +24,20 @@ export default function SocialStudio({initialPosts=[]}){
  }
  async function act(post,action){
   if(action==="schedule"&&!scheduledAt){setError("Selecione uma data e hora futuras.");return}
-  if(action==="schedule"&&!confirm("Autorizar a publicação automática deste conteúdo nas redes escolhidas, na data indicada?"))return;
+  const selected=JSON.parse(post.platformsJson);
+  const fields={facebook:"facebookStatus",instagram:"instagramStatus"};
+  const uncertain=selected.filter(p=>["uncertain","sending"].includes(post[fields[p]]));
+  let retryPlatforms=[];
+  if(["schedule","publish_now"].includes(action)){
+   if(uncertain.length){
+    const question="Confira manualmente Instagram e Facebook antes de continuar. As seguintes redes ficaram com resultado incerto: "+uncertain.join(", ")+". Confirma que NÃO houve publicação nelas e autoriza uma nova tentativa? Uma resposta incorreta pode duplicar o conteúdo.";
+    if(!confirm(question))return;
+    retryPlatforms=uncertain;
+   }
+   if(!confirm(action==="publish_now"?"Publicar agora nas redes ainda não confirmadas? O envio ocorrerá quando o agente estiver em execução.":"Autorizar o agendamento nas redes ainda não confirmadas?"))return;
+  }
   setBusy(true);setWorkingPost(post.id);setError("");setPostErrors(current=>({...current,[post.id]:""}));setNotice("");
-  try{const r=await fetch("/api/social/posts/"+post.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,scheduledAt:action==="schedule"?new Date(scheduledAt).toISOString():null})});const data=await r.json();if(!r.ok)throw Error(data.error);await refresh();setNotice(action==="schedule"?"Agendamento aprovado.":"Publicação cancelada.")}catch(e){setError(e.message);setPostErrors(current=>({...current,[post.id]:e.message}))}finally{setBusy(false);setWorkingPost("")}
+  try{const r=await fetch("/api/social/posts/"+post.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,scheduledAt:action==="schedule"?new Date(scheduledAt).toISOString():null,retryPlatforms})});const data=await r.json();if(!r.ok)throw Error(data.error);await refresh();setNotice(action==="publish_now"?"Publicação autorizada para envio imediato pelo agente.":action==="schedule"?"Agendamento aprovado.":"Publicação cancelada.")}catch(e){setError(e.message);setPostErrors(current=>({...current,[post.id]:e.message}))}finally{setBusy(false);setWorkingPost("")}
  }
  return <div className={styles.layout}>
  <section className={styles.panel}><h2>Estúdio de publicações</h2><p>Envie mídias, prepare legendas com OmniRoute e revise antes de colocar na agenda.</p>
@@ -45,7 +56,7 @@ export default function SocialStudio({initialPosts=[]}){
  <div role="status" className={styles.statusNotice}>Ao aprovar o agendamento, as mídias locais são transferidas ao R2. O agendamento só será aceito após hospedagem e validação.</div><div className={styles.posts}>{posts.length===0?<p>Nenhum conteúdo cadastrado.</p>:posts.map(post=><article key={post.id} className={styles.post}>
  <div className={styles.postHeader}><strong>{post.title}</strong><span className={styles.status}>{workingPost===post.id?"Processando solicitação...":states[post.status]||post.status}</span></div><small>{JSON.parse(post.platformsJson).join(" + ")} · {post.mediaType} · {date(post.scheduledAt)}</small><p>{post.caption}</p>
  <small>Facebook: {post.facebookStatus} · Instagram: {post.instagramStatus}</small>{post.lastError&&<small className={styles.error}>Erro de publicação: {post.lastError}</small>}{postErrors[post.id]&&<div role="alert" className={styles.error}>Agendamento recusado: {postErrors[post.id]}</div>}{post.status==="draft"&&JSON.parse(post.mediaJson).some(url=>url.startsWith("/api/"))&&<small className={styles.error}>Criativos locais: serão hospedados automaticamente no R2 durante a aprovação do agendamento.</small>}
- {["draft","scheduled"].includes(post.status)&&<div className={styles.actions}><button type="button" disabled={busy} onClick={()=>act(post,"schedule")}>{workingPost===post.id?"Validando...":post.status==="draft"?"Aprovar e agendar":"Reagendar"}</button><button type="button" disabled={busy} onClick={()=>act(post,"cancel")}>Cancelar</button></div>}
+ {["draft","scheduled","needs_review"].includes(post.status)&&<div className={styles.actions}><button type="button" disabled={busy} onClick={()=>act(post,"schedule")}>{workingPost===post.id?"Validando...":post.status==="draft"?"Aprovar e agendar":"Reagendar"}</button><button type="button" disabled={busy} onClick={()=>act(post,"publish_now")}>Publicar agora</button>{["draft","scheduled"].includes(post.status)&&<button type="button" disabled={busy} onClick={()=>act(post,"cancel")}>Cancelar</button>}</div>}
  </article>)}</div>
  </section>
  {(error||notice)&&<div className={styles.feedback} role="status">{error||notice}</div>}
