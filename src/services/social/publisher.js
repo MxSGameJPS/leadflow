@@ -32,6 +32,8 @@ export function validateSocialPost(post){
 }
 async function publishFacebook(cfg,post,media){
  if(!cfg.page)throw Error("META_PAGE_ID não configurado.");
+ const identity=await call(cfg,"me",{fields:"id,name"},"GET");
+ if(String(identity.id)!==String(cfg.page))throw Error("O META_PAGE_ACCESS_TOKEN não pertence à Página configurada. No Graph API Explorer, obtenha o token da Página (não o token de usuário), confira META_PAGE_ID e reinicie o LeadFlow. Identidade retornada: "+String(identity.name||identity.id).slice(0,80));
  if(post.mediaType==="text")return (await call(cfg,cfg.page+"/feed",{message:post.caption})).id;
  if(post.mediaType==="image")return (await call(cfg,cfg.page+"/photos",{url:media[0],caption:post.caption})).post_id;
  if(post.mediaType==="video")return (await call(cfg,cfg.page+"/videos",{file_url:media[0],description:post.caption})).id;
