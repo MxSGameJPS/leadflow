@@ -16,11 +16,13 @@ http.Server.prototype.emit = function(name, ...args) {
     const inspectionPage = control.action === 'maintenance' && ['GET', 'HEAD'].includes(req.method) && !pathname.startsWith('/api/');
     // The commercial agents enforce their own working hours. Never block operator edits or scheduling based on the clock.
     // Explicit shutdown/maintenance drains still prevent new work for safe process termination.
-    const draining = control.action === 'drain' || control.action === 'maintenance';
+    const automatedSession = Boolean(process.env.AUTOMATIZADOR_SESSION?.trim());
+    const draining = automatedSession && (control.action === 'drain' || control.action === 'maintenance');
+    // Without an automatizador session, this is the operator's local server: do not inherit stale shutdown flags.
     const closed = fault || (!inspectionPage && draining);
     if (closed) {
       res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '60' });
-      res.end(JSON.stringify({ error: 'LeadFlow em pausa para encerramento ou fora da janela de operacao.' }));
+      res.end(JSON.stringify({ error: 'LeadFlow em encerramento controlado pelo automatizador.' }));
       return true;
     }
     active++; admitted = true; report();
@@ -28,7 +30,7 @@ http.Server.prototype.emit = function(name, ...args) {
     res.once('finish', () => { if (finished) return; finished = true; active--; report(); });
     res.once('close', () => { if (!finished) { if(inspectionPage){finished=true;active--}else{aborted++} report(); } });
     // An aborted response is not proof that its handler stopped: keep active until intervention.
-  } else if (name === 'upgrade' && ['drain', 'maintenance'].includes(readControl(root).action)) { args[1]?.destroy(); return true; }
+  } else if (name === 'upgrade' && process.env.AUTOMATIZADOR_SESSION?.trim() && ['drain', 'maintenance'].includes(readControl(root).action)) { args[1]?.destroy(); return true; }
   return originalEmit.call(this, name, ...args);
 };
 report();
