@@ -10,6 +10,8 @@ export function readControl(root = process.cwd()) {
   } catch (error) { return error.code === 'ENOENT' ? { managed: false, action: 'run' } : { managed: true, action: 'drain' }; }
 }
 export function drainRequested(root = process.cwd(), now = new Date()) {
+  // Local manual sessions stay usable even if an automated shutdown control file remains from last night.
+  if (!process.env.AUTOMATIZADOR_SESSION?.trim()) return false;
   const control = readControl(root);
   if (['drain', 'maintenance'].includes(control.action)) return true;
   if (!control.managed) return false;
