@@ -14,3 +14,4 @@ export default function SocialEngagement(){
  {errors.length>0&&<p role="status">Alguns comentários não puderam ser carregados: {errors.slice(0,2).map(e=>e.post+": "+e.error).join("; ")}</p>}
  {notice&&<p role="status">{notice}</p>}{error&&<p role="alert" className={s.error}>{error}</p>}
  </section>;
+}
