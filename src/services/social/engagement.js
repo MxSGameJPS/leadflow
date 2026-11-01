@@ -19,7 +19,7 @@ export const socialId=value=>typeof value==="string"&&/^[0-9_]+$/.test(value)&&v
 export async function socialComments(cfg,platform,postId){
  if(!socialId(postId))return [];
  const endpoint=platform==="instagram"?postId+"/comments":postId+"/comments";
- const result=await socialGraph(cfg,endpoint,{fields:"id,text,from,username,timestamp,created_time,message",limit:"30"});
+ const result=await socialGraph(cfg,endpoint,{fields:platform==="instagram"?"id,text,username,timestamp":"id,message,from,created_time",limit:"30"});
  return (result.data||[]).map(row=>({id:row.id,platform,postId,author:row.username||row.from?.name||"Usuário",text:row.text||row.message||"",createdAt:row.timestamp||row.created_time||null}));
 }
 export async function socialConversations(cfg,platform){
