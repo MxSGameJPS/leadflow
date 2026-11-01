@@ -44,6 +44,7 @@ export async function POST(request){
   const latest=incoming[0];
   if(!latest)return reject("Nenhuma mensagem recebida nas últimas 24 horas. Envio bloqueado para respeitar a janela da Meta.",409);
   const recipient=latest.from.id;
+  if(!cfg.page||!socialId(cfg.page))return reject("META_PAGE_ID não configurado.",400);
   const result=await socialGraph(cfg,cfg.page+"/messages",{recipient:JSON.stringify({id:recipient}),message:JSON.stringify({text:message}),messaging_type:"RESPONSE"},"POST");
   return NextResponse.json({ok:true,messageId:result.message_id||null});
  }catch(error){return reject(String(error.message||error).slice(0,320),502)}
