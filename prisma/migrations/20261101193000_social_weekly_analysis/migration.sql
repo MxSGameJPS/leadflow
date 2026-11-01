@@ -1,0 +1,2 @@
+CREATE TABLE "SocialWeeklyAnalysis" ("id" TEXT NOT NULL PRIMARY KEY, "weekStart" TEXT NOT NULL, "reportJson" TEXT NOT NULL, "analysis" TEXT NOT NULL DEFAULT '', "status" TEXT NOT NULL DEFAULT 'ready', "error" TEXT NOT NULL DEFAULT '', "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL);
+CREATE UNIQUE INDEX "SocialWeeklyAnalysis_weekStart_key" ON "SocialWeeklyAnalysis"("weekStart");

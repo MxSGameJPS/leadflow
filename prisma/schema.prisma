@@ -277,3 +277,14 @@ model SocialPost {
  updatedAt DateTime @updatedAt
  @@index([status,scheduledAt])
 }
+
+model SocialWeeklyAnalysis {
+ id String @id @default(cuid())
+ weekStart String @unique
+ reportJson String
+ analysis String @default("")
+ status String @default("ready")
+ error String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+}
