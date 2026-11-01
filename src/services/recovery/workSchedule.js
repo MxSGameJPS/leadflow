@@ -9,7 +9,7 @@ function localParts(now){
 }
 export function getWorkWindow(now=new Date()){
  const local=localParts(now);
- return {working:local.minute>=WORK_START&&local.minute<WORK_END,day:local.day,minuteOfDay:local.minute,timeZone:"Windows local",start:"08:00",end:"18:00"};
+ return {working:now.getDay()!==0&&local.minute>=WORK_START&&local.minute<WORK_END,day:local.day,minuteOfDay:local.minute,timeZone:"Windows local",start:"08:00",end:"18:00",sundayBlocked:now.getDay()===0};
 }
 export function getRecoveryRest({now=new Date(),lastSentAt=null,lastReplyAt=null}={}){
  const window=getWorkWindow(now);

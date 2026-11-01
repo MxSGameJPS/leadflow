@@ -9,13 +9,14 @@ export default function CaptureControl(){
   setState(data);
  }
  useEffect(()=>{refresh().catch(e=>setError(e.message));const timer=setInterval(()=>refresh().catch(e=>setError(e.message)),30000);return ()=>clearInterval(timer)},[]);
- async function toggle(){
-  const action=state.running?"pause":"start";
-  const question=action==="start"
-   ?"Iniciar o Agente de Captação? Leads aprovados poderão receber WhatsApp automaticamente durante o expediente, respeitando descanso e cota compartilhados.":"Pausar novos envios da Captação? Um envio já iniciado pode terminar.";
+ async function toggle(agent="capture"){
+  const recovery=agent==="recovery";
+  const action=recovery?(state.recoveryRunning?"pause_recovery":"start_recovery"):(state.running?"pause":"start");
+  const question=action.startsWith("start")
+   ?"Ativar "+(recovery?"Recuperação":"Captação")+"? Envios aprovados acontecerão somente no expediente (08h–18h), nunca aos domingos, respeitando limites e intervalos.": "Pausar novos envios da "+(recovery?"Recuperação":"Captação")+"? Um envio já iniciado pode terminar.";
   if(!confirm(question))return;
   let confirmation="";
-  if(action==="start"){confirmation=prompt("Para iniciar os envios reais, digite exatamente: INICIAR CAPTAÇÃO")||"";if(confirmation!=="INICIAR CAPTAÇÃO")return}
+  if(action.startsWith("start")){const phrase=recovery?"INICIAR RECUPERAÇÃO":"INICIAR CAPTAÇÃO";confirmation=prompt("Para habilitar envios reais, digite exatamente: "+phrase)||"";if(confirmation!==phrase)return}
   setBusy(true);setError("");
   try{
    const response=await fetch("/api/capture/control",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,confirmation})});
@@ -25,11 +26,15 @@ export default function CaptureControl(){
  }
  return <section className={s.panel}>
   <div><strong>Agente de Captação</strong><p>{state?.running?"Ativo — aguardando o próximo ciclo permitido pelo worker.":"Pausado — nenhum novo envio de Captação será iniciado."}</p>
-  <small>Somente leads autorizados individualmente · 08h–18h · 30 min de descanso · até 10 envios/dia para Captação e outros 10 para Recuperação</small>
+  <small>Captação: {state?.running?"ligada":"desligada"} · Recuperação: {state?.recoveryRunning?"ligada":"desligada"} · 08h–18h, segunda a sábado · domingo sem envio automático · até 10 mensagens/dia por agente · intervalo de 30 min</small>
+  {state?.sundayBlocked&&<p role="status">Hoje é domingo: ambos os agentes ficam impedidos de enviar, mesmo se a chave estiver ligada. O painel continua disponível.</p>}
   {state&&<p>{state.approved} aprovado(s) aguardando · {state.sent} enviado(s) · {state.uncertain} em andamento/incerto(s)</p>}
   {state?.blocked&&<p role="status" className={s.error}>Há um envio em andamento. O agente aguardará sua conclusão antes de abordar o próximo lead.</p>}
   {state&&state.uncertain>0&&<p role="status">{state.uncertain} tentativa(s) em andamento/incerta(s) para conferência. Resultados incertos não bloqueiam os próximos leads; não serão reenviados automaticamente.</p>}
   {error&&<p role="alert" className={s.error}>{error}</p>}</div>
-  <button type="button" onClick={toggle} disabled={busy||!state}>{busy?"Atualizando...":state?.running?"Pausar Captação":"Iniciar Captação"}</button>
+  <div className={s.controls}>
+   <button type="button" onClick={()=>toggle("capture")} disabled={busy||!state}>{busy?"Atualizando...":state?.running?"Pausar Captação":"Iniciar Captação"}</button>
+   <button type="button" onClick={()=>toggle("recovery")} disabled={busy||!state}>{busy?"Atualizando...":state?.recoveryRunning?"Pausar Recuperação":"Iniciar Recuperação"}</button>
+  </div>
  </section>;
 }
