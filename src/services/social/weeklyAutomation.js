@@ -33,8 +33,8 @@ export async function generateAndStoreSocialWeeklyAnalysis({weekStart,force=fals
 }
 
 export async function checkScheduledSocialWeeklyAnalysis(now=new Date()){
- // Monday from 09:00 (Windows local). Only one completed week is processed per cycle.
- if(now.getDay()!==1||now.getHours()<9)return {skipped:"outside_window"};
+ // From Monday 09:00 onward, catch up when the Windows computer was powered off on Monday.
+ if(now.getDay()===1&&now.getHours()<9)return {skipped:"outside_window"};
  const previous=monday(now);previous.setDate(previous.getDate()-7);
  return generateAndStoreSocialWeeklyAnalysis({weekStart:dateKey(previous)});
 }
