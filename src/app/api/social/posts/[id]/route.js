@@ -11,6 +11,14 @@ export async function PATCH(request,{params}){
  const input=await request.json(),post=await prisma.socialPost.findUnique({where:{id}});
  if(!post)return reject("Publicação não encontrada.",404);
  if(!["draft","scheduled","needs_review"].includes(post.status))return reject("Publicação em processamento ou encerrada; não pode ser alterada.",409);
+ if(input.action==="move_calendar"){
+  if(!["draft","scheduled"].includes(post.status))return reject("Somente rascunhos e publicações agendadas podem mudar de dia.",409);
+  const at=new Date(String(input.scheduledAt||""));
+  if(!Number.isFinite(at.getTime()))return reject("Data inválida.",400);
+  if(post.status==="scheduled"&&at<=new Date())return reject("Publicações aprovadas precisam permanecer em uma data futura.",400);
+  const changed=await prisma.socialPost.updateMany({where:{id,status:post.status,scheduledAt:post.scheduledAt},data:{scheduledAt:at}});
+  return changed.count?NextResponse.json({ok:true,scheduledAt:at.toISOString()}):reject("O agendamento mudou. Atualize o calendário.",409);
+ }
  if(input.action==="prepare"){
   if(post.status!=="draft")return reject("Apenas rascunhos podem ser editados.",409);
   const media=Array.isArray(input.media)?input.media.map(x=>String(x).trim()).filter(Boolean):JSON.parse(post.mediaJson);
