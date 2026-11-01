@@ -4,6 +4,7 @@ import fs from "node:fs";
 import {pollOutreachReplies} from "../src/services/intelligence/outreach.js";
 import {publishScheduledSocialPosts} from "../src/services/social/publisher.js";
 import {cleanupPublishedSocialMedia} from "../src/services/social/r2Cleanup.js";
+import {checkScheduledSocialWeeklyAnalysis} from "../src/services/social/weeklyAutomation.js";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
@@ -189,11 +190,16 @@ async function findLatestLiveReply(chatId,sentAt){
 }
 let lastOutreachScan=0;
 let lastSocialCycle=0;
+let lastWeeklyCheck=0;
 async function check(){
  if(drainRequested(root)){running=false;return;}
  if(Date.now()-lastSocialCycle>=60000){
   lastSocialCycle=Date.now();
   try{await publishScheduledSocialPosts();await cleanupPublishedSocialMedia()}catch(e){console.error("[social] Agenda ou limpeza R2 indisponível:",e.message)}
+ }
+ if(Date.now()-lastWeeklyCheck>=15*60*1000){
+  lastWeeklyCheck=Date.now();
+  try{await checkScheduledSocialWeeklyAnalysis()}catch(e){console.error("[social] Relatório semanal não gerado; nova tentativa mais tarde:",e.message)}
  }
  if(sessionId&&Date.now()-lastOutreachScan>5*60*1000){
   lastOutreachScan=Date.now();
