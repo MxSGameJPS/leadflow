@@ -2,16 +2,30 @@
 import {useState} from "react";
 import s from "./SocialEngagement.module.css";
 export default function SocialEngagement(){
+ const [leadBusy,setLeadBusy]=useState(false);const [leadNotice,setLeadNotice]=useState("");
  const [platform,setPlatform]=useState("instagram"),[kind,setKind]=useState("comments"),[items,setItems]=useState([]),[errors,setErrors]=useState([]),[selected,setSelected]=useState(null),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[notice,setNotice]=useState(""),[error,setError]=useState("");
  async function load(){setBusy(true);setError("");setNotice("");setSelected(null);setMessage("");try{const result=await fetch("/api/social/engagement?kind="+kind+"&platform="+platform,{cache:"no-store"});const json=await result.json();if(!result.ok)throw Error(json.error||"Consulta indisponível.");setItems(json.items||[]);setErrors(json.errors||[]);}catch(e){setError(e.message)}finally{setBusy(false)}}
  function choose(item){setSelected(item);setMessage("")}
  async function suggest(){if(!selected)return;setBusy(true);setError("");try{const response=await fetch("/api/social/reply-suggest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:kind==="dm"?selected.latest:selected.text,platform,kind:kind==="dm"?"dm":"comment"})});const json=await response.json();if(!response.ok)throw Error(json.error);setMessage(json.message)}catch(e){setError(e.message)}finally{setBusy(false)}}
  async function send(){if(!selected||!message.trim())return;if(!confirm("Enviar esta resposta como sua Página/conta profissional? Confira o conteúdo e a pessoa antes de confirmar."))return;setBusy(true);setError("");try{const response=await fetch("/api/social/engagement",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform,kind:kind==="dm"?"dm":"comment",id:selected.id,message,confirmation:"RESPONDER"})});const json=await response.json();if(!response.ok)throw Error(json.error);setNotice("Resposta enviada pela API Meta. Confira a conversa na rede.");setSelected(null);setMessage("");}catch(e){setError(e.message)}finally{setBusy(false)}}
+ async function addToCrm(){
+  if(!selected||leadBusy)return;
+  const name=(kind==="dm"?selected.participants?.map(p=>p.name).filter(Boolean).join(", "):selected.author)||"";
+  const confirmedName=window.prompt("Nome do contato para registrar no CRM:",name);
+  if(!confirmedName?.trim())return;
+  if(!window.confirm("Registrar esta interação como oportunidade no CRM? A identificação de interesse comercial deverá ser confirmada por você."))return;
+  setLeadBusy(true);setLeadNotice("");setError("");
+  try{
+   const response=await fetch("/api/social/opportunities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform,kind:kind==="dm"?"dm":"comment",interactionId:selected.id,name:confirmedName.trim(),text:kind==="dm"?selected.latest:selected.text,confirmation:"CRIAR_LEAD"})});
+   const data=await response.json();if(!response.ok)throw Error(data.error||"Não foi possível criar oportunidade.");
+   setLeadNotice(data.created?"Oportunidade criada no CRM.":"Esta interação já estava cadastrada no CRM.");
+  }catch(e){setError(e.message)}finally{setLeadBusy(false)}
+ }
  return <section className={s.panel}><h2>Central de interações — Facebook e Instagram</h2><p>Consulte comentários e conversas privadas da sua conta. A IA prepara respostas comerciais contextualizadas; você confirma antes de cada envio. DMs só podem ser respondidas dentro da janela permitida pela Meta.</p>
  <div className={s.toolbar}><label>Rede<select value={platform} onChange={e=>{setPlatform(e.target.value);setItems([]);setSelected(null)}}><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select></label><label>Interações<select value={kind} onChange={e=>{setKind(e.target.value);setItems([]);setSelected(null)}}><option value="comments">Comentários</option><option value="dm">Mensagens privadas</option></select></label><button type="button" onClick={load} disabled={busy}>{busy?"Consultando...":"Atualizar interações"}</button></div>
  <div className={s.content}><div className={s.list}>{!items.length?<p>Nenhuma interação carregada. Clique em Atualizar interações.</p>:items.map(item=><button type="button" key={item.id} className={s.item} onClick={()=>choose(item)} aria-pressed={selected?.id===item.id}><strong>{kind==="dm"?item.participants?.map(p=>p.name).filter(Boolean).join(", ")||"Conversa":item.author}</strong><small>{kind==="dm"?item.updatedAt:item.title}</small><span>{kind==="dm"?item.latest:item.text}</span></button>)}</div>
- <div className={s.reply}>{selected?<><strong>Preparar resposta</strong><p>{kind==="dm"?selected.latest:selected.text}</p><button type="button" disabled={busy} onClick={suggest}>Sugerir resposta com IA</button><textarea rows={5} value={message} onChange={e=>setMessage(e.target.value)} maxLength={900} placeholder="Revise ou escreva sua resposta"/><button type="button" disabled={busy||message.trim().length<2} onClick={send}>Confirmar e responder</button></>:<p>Selecione uma interação para responder.</p>}</div></div>
+ <div className={s.reply}>{selected?<><strong>Preparar resposta</strong><p>{kind==="dm"?selected.latest:selected.text}</p><button type="button" disabled={busy} onClick={suggest}>Sugerir resposta com IA</button><button type="button" disabled={busy||leadBusy} onClick={addToCrm}>{leadBusy?"Registrando...":"Registrar oportunidade no CRM"}</button><textarea rows={5} value={message} onChange={e=>setMessage(e.target.value)} maxLength={900} placeholder="Revise ou escreva sua resposta"/><button type="button" disabled={busy||message.trim().length<2} onClick={send}>Confirmar e responder</button></>:<p>Selecione uma interação para responder.</p>}</div></div>
  {errors.length>0&&<p role="status">Alguns comentários não puderam ser carregados: {errors.slice(0,2).map(e=>e.post+": "+e.error).join("; ")}</p>}
- {notice&&<p role="status">{notice}</p>}{error&&<p role="alert" className={s.error}>{error}</p>}
+ {notice&&<p role="status">{notice}</p>}{leadNotice&&<p role="status">{leadNotice}</p>}{error&&<p role="alert" className={s.error}>{error}</p>}
  </section>;
 }
