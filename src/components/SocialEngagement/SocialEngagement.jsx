@@ -13,10 +13,14 @@ export default function SocialEngagement(){
   const name=(kind==="dm"?selected.participants?.map(p=>p.name).filter(Boolean).join(", "):selected.author)||"";
   const confirmedName=window.prompt("Nome do contato para registrar no CRM:",name);
   if(!confirmedName?.trim())return;
+  const campaignInput=window.prompt("Campanha UTM associada (opcional, somente se conhecida):","");if(campaignInput===null)return;
+  const campaign=campaignInput.trim().toLowerCase();if(campaign&&!/^[a-z0-9_-]{1,90}$/.test(campaign)){setError("Use apenas letras minúsculas, números, hífen ou _ para campanha.");return;}
+  const contentInput=window.prompt("Identificador do post (utm_content, opcional):","");if(contentInput===null)return;
+  const contentId=contentInput.trim().toLowerCase();if(contentId&&!/^[a-z0-9_-]{1,90}$/.test(contentId)){setError("Identificador de post inválido.");return;}
   if(!window.confirm("Registrar esta interação como oportunidade no CRM? A identificação de interesse comercial deverá ser confirmada por você."))return;
   setLeadBusy(true);setLeadNotice("");setError("");
   try{
-   const response=await fetch("/api/social/opportunities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform,kind:kind==="dm"?"dm":"comment",interactionId:selected.id,name:confirmedName.trim(),text:kind==="dm"?selected.latest:selected.text,confirmation:"CRIAR_LEAD"})});
+   const response=await fetch("/api/social/opportunities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform,kind:kind==="dm"?"dm":"comment",interactionId:selected.id,name:confirmedName.trim(),campaign,contentId,text:kind==="dm"?selected.latest:selected.text,confirmation:"CRIAR_LEAD"})});
    const data=await response.json();if(!response.ok)throw Error(data.error||"Não foi possível criar oportunidade.");
    setLeadNotice(data.created?"Oportunidade criada no CRM.":"Esta interação já estava cadastrada no CRM.");
   }catch(e){setError(e.message)}finally{setLeadBusy(false)}
