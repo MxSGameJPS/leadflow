@@ -92,7 +92,7 @@ async function captureOne(){
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
    let response;
    try{response=await fetch(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/send-text",{
-    method:"POST",headers:{"X-API-Key":key,"Idempotency-Key":"capture-"+item.id,"Content-Type":"application/json"},
+    method:"POST",headers:{"X-API-Key":key,"Idempotency-Key":"capture-"+item.id+"-"+new Date(item.approvedAt).getTime(),"Content-Type":"application/json"},
     body:JSON.stringify({chatId:item.chatId,text:item.messageText,linkPreview:false}),signal:controller.signal,cache:"no-store"
    });}finally{clearTimeout(timer)}
    if(!response.ok)throw Error("OpenWA HTTP "+response.status);

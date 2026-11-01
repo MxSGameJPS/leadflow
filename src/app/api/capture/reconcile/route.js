@@ -6,7 +6,7 @@ const err=(message,status=400)=>NextResponse.json({error:message},{status});
 export async function POST(request){
  if(process.env.NODE_ENV==="production")return err("Apenas ambiente local.",403);
  try{
-  const {id,action,confirmation}=await request.json();
+  const {id,action,confirmation,secondConfirmation}=await request.json();
   if(typeof id!=="string"||id.length>128)return err("Registro inválido.");
   if(!["confirmed_sent","confirmed_not_sent"].includes(action))return err("Ação inválida.");
   if(confirmation!=="CONFERI NO WHATSAPP")return err("Confirme a conferência no WhatsApp.");
@@ -14,7 +14,12 @@ export async function POST(request){
   if(!sessionId)return err("Sessão não configurada.");
   const attempt=await prisma.captureApproval.findFirst({where:{id,sessionId,status:"uncertain"}});
   if(!attempt)return err("Nenhuma tentativa incerta encontrada.",409);
-  if(action==="confirmed_not_sent")return err("Não é seguro liberar novo envio automaticamente com base na ausência de mensagem visível. Mantenha a tentativa bloqueada e faça análise manual.",409);
+  if(action==="confirmed_not_sent"){
+   if(secondConfirmation!=="CONFIRMO QUE NAO FOI ENVIADA")return err("É necessário confirmar explicitamente que o histórico do WhatsApp foi conferido e a mensagem não foi enviada.");
+   const changed=await prisma.captureApproval.updateMany({where:{id,sessionId,status:"uncertain"},data:{status:"rejected",approvedAt:null}});
+   if(changed.count!==1)return err("O estado foi alterado. Atualize a tela.",409);
+   return NextResponse.json({ok:true,notice:"Tentativa encerrada após revisão manual. Corrija o número e aprove novamente na ficha do lead; nenhuma mensagem foi disparada."});
+  }
   const changed=await prisma.captureApproval.updateMany({where:{id,sessionId,status:"uncertain"},data:{status:"sent",sentAt:attempt.sentAt||attempt.updatedAt}});
   if(changed.count!==1)return err("O estado mudou; atualize a tela.",409);
   try{const lead=await getLead(attempt.leadId);if(lead?.stage==="novo")await moveStage(attempt.leadId,"contatado");}
