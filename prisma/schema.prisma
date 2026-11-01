@@ -200,6 +200,7 @@ model RecoveryOutcome {
 }
 
 model CaptureApproval {
+ approachVariant String @default("legacy")
  id String @id @default(cuid())
  leadId String @unique
  sessionId String
