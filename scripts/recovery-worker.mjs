@@ -9,6 +9,7 @@ import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning} from "../src/services/capture/dispatchControl.js";
+import {getLead,moveStage} from "../src/repositories/leadRepository.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 for(const name of [".env",".env.local"]){
@@ -96,6 +97,9 @@ async function captureOne(){
    });}finally{clearTimeout(timer)}
    if(!response.ok)throw Error("OpenWA HTTP "+response.status);
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"sent",sentAt:new Date()}});
+   // The dispatch is already confirmed. A CRM sync failure must never mark it uncertain or retry the message.
+   try{const lead=await getLead(item.leadId);if(lead?.stage==="novo")await moveStage(item.leadId,"contatado");}
+   catch(stageError){console.error("[captação] Mensagem confirmada, mas atualização do CRM falhou:",item.leadId,stageError.message)}
    console.log("[captação] Confirmado:",item.leadId);
   }catch(e){
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"uncertain"}}).catch(()=>{});

@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
 import {getLead,updateLead} from "../../../../repositories/leadRepository.js";
+import {CAPTURE_APPROACHES,captureApproachForLead} from "../../../../services/capture/approaches.js";
 export const runtime="nodejs";
 const invalid=error=>NextResponse.json({error},{status:400});
 function normalizeWhatsapp(phone){
@@ -19,12 +20,12 @@ export async function GET(request){
 export async function POST(request){
  if(process.env.NODE_ENV==="production")return NextResponse.json({error:"Somente ambiente local."},{status:403});
  try{
-  const {leadId,action,messageText,confirmed,whatsapp}=await request.json();
+  const {leadId,action,messageText,confirmed,whatsapp,approachVariant}=await request.json();
   const lead=await getLead(leadId);
   if(!lead)return invalid("Lead não encontrado.");
-  const proposed=String(whatsapp??lead.whatsapp??"").trim();
+  const proposed=String(whatsapp||lead.whatsapp||lead.phone||"").trim();
   const phone=normalizeWhatsapp(proposed);
-  if(!phone)return invalid("Informe um WhatsApp brasileiro válido. Telefone comercial não é automaticamente WhatsApp.");
+  if(!phone)return invalid("Não encontrei telefone brasileiro válido para o lead. Informe ou corrija o WhatsApp antes de aprovar.");
   const sessionId=process.env.OPENWA_SESSION_ID?.trim();
   if(!sessionId)return invalid("Configure a sessão OpenWA.");
   const existing=await prisma.captureApproval.findUnique({where:{leadId}});
@@ -44,9 +45,11 @@ export async function POST(request){
    const message=String(messageText||"").trim();
    if(message.length<20||message.length>2000)return invalid("Mensagem deve ter entre 20 e 2.000 caracteres.");
    if(existing&&existing.status!=="draft"&&existing.status!=="rejected")return NextResponse.json({error:"Esta autorização já foi registrada."},{status:409});
-   if(proposed!==String(lead.whatsapp||"").trim())await updateLead(leadId,{whatsapp:phone});
-   const approval=await prisma.captureApproval.upsert({where:{leadId},create:{leadId,sessionId,chatId,status:"approved",messageText:message,approvedAt:new Date()},update:{status:"approved",messageText:message,approvedAt:new Date(),sessionId,chatId}});
-   return NextResponse.json({approval,notice:"Primeiro contato aprovado e salvo. Histórico remoto não foi verificado: confirme que é um contato inédito. O despacho da Captação requer LEADFLOW_CAPTURE_AUTO_SEND=true no ambiente local."});
+   const variant=CAPTURE_APPROACHES.some(v=>v.id===approachVariant)?approachVariant:captureApproachForLead(lead);
+   // Preserve source phone; explicit approval authorizes this validated destination for first contact.
+   if(phone!==normalizeWhatsapp(lead.whatsapp))await updateLead(leadId,{whatsapp:phone});
+   const approval=await prisma.captureApproval.upsert({where:{leadId},create:{leadId,sessionId,chatId,status:"approved",messageText:message,approachVariant:variant,approvedAt:new Date()},update:{status:"approved",messageText:message,approachVariant:variant,approvedAt:new Date(),sessionId,chatId}});
+   return NextResponse.json({approval,notice:"Primeiro contato aprovado para o telefone cadastrado. O envio seguirá a fila e o expediente da Captação. Confirme previamente que é um contato comercial inédito."});
   }
   if(action==="save_phone"){
    if(existing?.status==="approved"||existing?.status==="sent"||existing?.status==="sending"||existing?.status==="uncertain")return NextResponse.json({error:"Destinatário já autorizado ou contatado; edição bloqueada."},{status:409});
