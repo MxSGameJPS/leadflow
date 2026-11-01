@@ -10,9 +10,10 @@ export async function GET(request){
  try{
   const week=new URL(request.url).searchParams.get("week")||undefined;
   if(week&&!/^\d{4}-\d{2}-\d{2}$/.test(week))return NextResponse.json({error:"Data inválida."},{status:400});
-  const report=await socialWeeklyReport({startDate:week});
-  const saved=await prisma.socialWeeklyAnalysis.findUnique({where:{weekStart:report.start}});
-  return NextResponse.json({...report,analysis:saved?.analysis||"",savedAt:saved?.updatedAt?.toISOString()||null});
+  const saved=week?await prisma.socialWeeklyAnalysis.findUnique({where:{weekStart:week}}):null;
+  const report=saved?JSON.parse(saved.reportJson):await socialWeeklyReport({startDate:week});
+  const history=await prisma.socialWeeklyAnalysis.findMany({where:{status:"ready"},orderBy:{weekStart:"desc"},take:20,select:{weekStart:true,updatedAt:true}});
+  return NextResponse.json({...report,analysis:saved?.analysis||"",savedAt:saved?.updatedAt?.toISOString()||null,history:history.map(h=>({week:h.weekStart,savedAt:h.updatedAt.toISOString()}))});
  }catch(e){return NextResponse.json({error:String(e.message||e).slice(0,300)},{status:502})}
 }
 export async function POST(request){
