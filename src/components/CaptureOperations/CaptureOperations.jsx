@@ -16,6 +16,15 @@ export default function CaptureOperations({items=[]}){
   setBusy(item.id);setError("");
   try{const r=await fetch("/api/capture/reconcile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:item.id,action:"confirmed_sent",confirmation})});const json=await r.json();if(!r.ok)throw Error(json.error||"Falha na conferência");router.refresh();}catch(e){setError(e.message)}finally{setBusy("")}
  }
+ async function confirmNotSent(item){
+  if(!confirm("Você conferiu o histórico completo e verificou que a mensagem NÃO foi entregue? Uma confirmação incorreta pode gerar contato duplicado."))return;
+  const confirmation=prompt("Digite CONFERI NO WHATSAPP")||"";
+  if(confirmation!=="CONFERI NO WHATSAPP")return;
+  const secondConfirmation=prompt("Digite CONFIRMO QUE NAO FOI ENVIADA")||"";
+  if(secondConfirmation!=="CONFIRMO QUE NAO FOI ENVIADA")return;
+  setBusy(item.id);setError("");
+  try{const r=await fetch("/api/capture/reconcile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:item.id,action:"confirmed_not_sent",confirmation,secondConfirmation})});const json=await r.json();if(!r.ok)throw Error(json.error||"Falha na conferência");router.refresh();}catch(e){setError(e.message)}finally{setBusy("")}
+ }
  const counts=Object.fromEntries(groups.map(([key])=>[key,key==="all"?items.length:items.filter(x=>x.status===key).length]));
  const variants=CAPTURE_APPROACHES.map(v=>{const rows=items.filter(i=>i.approachVariant===v.id);const sent=rows.filter(i=>i.status==="sent");const replied=sent.filter(i=>i.replyStatus==="replied");const positive=replied.filter(i=>i.replyCategory==="positive_intent");const meetings=sent.filter(i=>i.meetingAt);const contracts=sent.filter(i=>["won","ganho","closed_won"].includes(i.outcome)||i.contractAmount>0);return {...v,approved:rows.length,sent:sent.length,replied:replied.length,positive:positive.length,meetings:meetings.length,contracts:contracts.length}});
  const visible=useMemo(()=>items.filter(item=>(filter==="all"||item.status===filter)&&[item.name,item.phone,item.message].some(x=>String(x||"").toLowerCase().includes(query.toLowerCase()))),[items,filter,query]);
@@ -30,7 +39,7 @@ export default function CaptureOperations({items=[]}){
  <div className={s.top}><strong>{item.name}</strong><span>{labels[item.status]||item.status}</span></div>
  <small>{item.phone} · Abordagem: {CAPTURE_APPROACHES.find(v=>v.id===item.approachVariant)?.label||"Anterior"} · Etapa CRM: {item.leadStage||"Não definida"}</small>
  <p>{item.message}</p><small>Resposta: {item.replyStatus==="replied"?"Detectada ("+item.replyCategory+")":"Não confirmada"} · Resultado comercial: {item.outcome||"Não registrado"}</small><small>Aprovado: {date(item.approvedAt)} · Enviado: {date(item.sentAt)}</small>
- {item.status==="uncertain"&&<div><p>Resultado incerto: confira no aplicativo WhatsApp antes de liberar o agente. Não será realizado reenvio.</p><button className={s.action} type="button" disabled={busy===item.id} onClick={()=>confirmSent(item)}>{busy===item.id?"Conferindo...":"Confirmar que foi enviado"}</button></div>}
+ {item.status==="uncertain"&&<div><p>Resultado incerto: confira no aplicativo WhatsApp antes de liberar o agente. Não será realizado reenvio.</p><button className={s.action} type="button" disabled={busy===item.id} onClick={()=>confirmSent(item)}>{busy===item.id?"Conferindo...":"Confirmar que foi enviado"}</button><button className={s.action} type="button" disabled={busy===item.id} onClick={()=>confirmNotSent(item)}>Conferi: não foi enviado (corrigir número)</button></div>}
  {item.status==="sending"&&<p>Envio em andamento ou interrompido. Não confirme antes de verificar o processo no terminal.</p>}
  <a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir ficha do lead →</a>
  </article>)}</div></section>;
