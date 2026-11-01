@@ -1,5 +1,6 @@
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
+import {readSocialPermissions} from "../../../../services/social/permissionsStore.js";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const deny=()=>process.env.NODE_ENV==="production";
@@ -14,6 +15,7 @@ export async function GET(){
 }
 export async function POST(request){
  if(deny())return fail("Acesso disponível somente no ambiente local.",403);
+ const permissions=await readSocialPermissions();if(!permissions.crmRegistration)return fail("Registro de oportunidades desativado nas permissões do agente.",403);
  let input;try{input=await request.json()}catch{return fail("JSON inválido.");}
  const platform=safe(input.platform,20),kind=safe(input.kind,20),interactionId=safe(input.interactionId,120);
  if(!["instagram","facebook"].includes(platform)||!["comment","dm"].includes(kind)||!/^[A-Za-z0-9_:-]{1,120}$/.test(interactionId))return fail("Origem da interação inválida.");
