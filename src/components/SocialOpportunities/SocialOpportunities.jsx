@@ -13,6 +13,7 @@ export default function SocialOpportunities(){
  {error&&<p role="alert">{error}</p>}
  <div className={styles.cards}><div><strong>{data?data.total:"—"}</strong><span>Oportunidades exibidas</span></div><div><strong>{data?data.counts.instagram:"—"}</strong><span>Instagram</span></div><div><strong>{data?data.counts.facebook:"—"}</strong><span>Facebook</span></div></div>
  {data?.note&&<p>{data.note}</p>}
+ {data?.campaigns?.length>0&&<div><h3>Oportunidades por campanha informada</h3><p>Associação manual, não equivale a uma conversão verificada pelo analytics.</p><div className={styles.list}>{data.campaigns.slice(0,10).map(c=><div key={c.name} className={styles.lead}><strong>{c.name}</strong><span>{c.count} oportunidade(s)</span></div>)}</div></div>}
  {data?.leads?.length>0?<div className={styles.list}>{data.leads.slice(0,10).map(lead=><div className={styles.lead} key={lead.id}><div><strong>{lead.name}</strong><span>{lead.source==="social_instagram"?"Instagram":"Facebook"} · {lead.stage} · {new Date(lead.createdAt).toLocaleDateString("pt-BR")}</span></div><a href={"/crm/"+encodeURIComponent(lead.id)}>Abrir lead</a></div>)}</div>:<p>Nenhuma oportunidade registrada pelas redes ainda. Selecione um comentário ou DM na Central de Interações e escolha “Registrar oportunidade no CRM”.</p>}
  </section>;
 }
