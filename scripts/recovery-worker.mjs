@@ -9,6 +9,7 @@ import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning} from "../src/services/capture/dispatchControl.js";
+import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
 import {getLead,moveStage} from "../src/repositories/leadRepository.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
@@ -63,6 +64,7 @@ async function globalState(){
  return {recoveryCount,captureCount,latest,lastReplyAt,latestFromRecovery};
 }
 async function captureOne(){
+ if(new Date().getDay()===0)return;
  if(!captureRunning())return;
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
  if(!sessionId||!base||!key)return;
@@ -110,6 +112,7 @@ async function captureOne(){
 }
 // Disabled unless explicitly opted in. This process never generates or approves messages.
 async function dispatchOne(){
+ if(!recoveryRunning()||new Date().getDay()===0)return;
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,"");
  const key=process.env.OPENWA_API_KEY?.trim();
  if(!base||!key){console.error("[envio] OpenWA não configurado.");return}
@@ -213,15 +216,15 @@ async function check(){
  const state=getRecoveryRest({lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.latestFromRecovery?lastReplyAt:null});
  const pending=await prisma.recoveryDispatch.count({where:{sessionId,status:"reserved"}});
  if(state.working&&!state.resting){
-  if(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"&&pending>0&&shared.recoveryCount<10)await dispatchOne();
-  else if(shared.captureCount<10)await captureOne();
+  if(recoveryRunning()&&pending>0&&shared.recoveryCount<10)await dispatchOne();
+  if(shared.captureCount<10)await captureOne();
  }
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
- if(state.working&&pending>0&&process.env.LEADFLOW_RECOVERY_AUTO_SEND!=="true")console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
+ if(state.working&&pending>0&&!recoveryRunning())console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
  console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"recuperação hoje:",shared.recoveryCount+"/10","captação hoje:",shared.captureCount+"/10",state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
- console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(process.env.LEADFLOW_RECOVERY_AUTO_SEND==="true"?"ATIVADA":"DESATIVADA")+"; Captação: "+(captureRunning()?"ATIVADA":"DESATIVADA"));
+ console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(recoveryRunning()?"ATIVADA":"DESATIVADA")+"; Captação: "+(captureRunning()?"ATIVADA":"DESATIVADA"));
  const controlTimer=setInterval(()=>{if(drainRequested(root))stop()},500);controlTimer.unref();
  while(running){publishRuntime(root,"worker",{state:"running"});try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
