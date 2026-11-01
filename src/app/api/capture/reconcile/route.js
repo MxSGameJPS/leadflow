@@ -1,5 +1,6 @@
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
+import {getLead,moveStage} from "../../../../repositories/leadRepository.js";
 export const runtime="nodejs";
 const err=(message,status=400)=>NextResponse.json({error:message},{status});
 export async function POST(request){
@@ -16,6 +17,8 @@ export async function POST(request){
   if(action==="confirmed_not_sent")return err("Não é seguro liberar novo envio automaticamente com base na ausência de mensagem visível. Mantenha a tentativa bloqueada e faça análise manual.",409);
   const changed=await prisma.captureApproval.updateMany({where:{id,sessionId,status:"uncertain"},data:{status:"sent",sentAt:attempt.sentAt||attempt.updatedAt}});
   if(changed.count!==1)return err("O estado mudou; atualize a tela.",409);
+  try{const lead=await getLead(attempt.leadId);if(lead?.stage==="novo")await moveStage(attempt.leadId,"contatado");}
+  catch(error){console.error("[captação] Reconciliação confirmada, mas etapa CRM não atualizada:",error.message)}
   console.log("[captação] Resultado confirmado manualmente no WhatsApp; sem novo envio:",attempt.leadId);
   return NextResponse.json({ok:true,notice:"Envio marcado como confirmado manualmente. Nenhuma mensagem foi reenviada."});
  }catch(e){return err(String(e.message||e),500)}
