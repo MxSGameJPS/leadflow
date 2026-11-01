@@ -9,3 +9,5 @@
 .largePreview{display:block;max-width:100%;max-height:calc(96vh - 115px);width:auto;height:auto;object-fit:contain;align-self:center;border-radius:8px}
 
 .modeSelector{display:flex;flex-wrap:wrap;gap:8px}.modeSelector .modeActive{background:var(--accent);color:#fff}.modeSelector .modeInactive{background:var(--surface-2);color:var(--text)}.singleForm{display:grid;gap:12px;max-width:700px}.platformChoices{display:flex;flex-wrap:wrap;gap:18px}.platformChoices label{display:flex;align-items:center;gap:8px}.platformChoices input{width:auto;min-width:auto}
+
+.autoOption{display:flex!important;align-items:center;gap:8px;font-weight:600}.autoOption input{width:auto!important;min-width:auto!important}
