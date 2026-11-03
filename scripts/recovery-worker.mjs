@@ -225,6 +225,7 @@ async function check(){
  if(state.working&&!state.resting){
   if(recoveryRunning()&&pending>0&&shared.recoveryCount<10)await dispatchOne();
   if(shared.captureCount<10)await captureOne();
+  if(recoveryRunning()&&pending===0&&shared.recoveryCount<10)await dispatchSecondAttempt({sessionId,lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.lastReplyAt});
  }
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
  if(state.working&&pending>0&&!recoveryRunning())console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
