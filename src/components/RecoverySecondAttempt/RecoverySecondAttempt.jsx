@@ -1,7 +1,7 @@
 "use client";
 import {useState} from "react";
 import styles from "./RecoverySecondAttempt.module.css";
-export default function RecoverySecondAttempt({rows:initial=[]}){
+export default function RecoverySecondAttempt({rows:initial=[],candidates=[]}){
  const [rows,setRows]=useState(initial);
  const [drafts,setDrafts]=useState({});
  const [error,setError]=useState("");
