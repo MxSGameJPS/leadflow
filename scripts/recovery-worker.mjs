@@ -12,6 +12,7 @@ import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning} from "../src/services/capture/dispatchControl.js";
 import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
 import {dispatchSecondAttempt} from "../src/services/recovery/secondDispatch.js";
+import {scanRecoverySecondAttempts} from "../src/services/recovery/secondScanner.js";
 import {getLead,moveStage} from "../src/repositories/leadRepository.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
