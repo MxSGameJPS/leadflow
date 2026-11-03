@@ -120,7 +120,8 @@ async function dispatchOne(){
  const key=process.env.OPENWA_API_KEY?.trim();
  if(!base||!key){console.error("[envio] OpenWA não configurado.");return}
  // Never proceed while an outcome is uncertain: an earlier HTTP timeout may have sent.
- const uncertain=await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["uncertain","sending"]}}})+await prisma.captureApproval.count({where:{sessionId,status:{in:["uncertain","sending"]}}});
+ const pendingSecond=await prisma.recoverySecondAttempt.count({where:{sessionId,status:"uncertain"}});
+ const uncertain=pendingSecond+await prisma.recoveryDispatch.count({where:{sessionId,status:{in:["uncertain","sending"]}}})+await prisma.captureApproval.count({where:{sessionId,status:{in:["uncertain","sending"]}}});
  if(uncertain){console.error("[envio] Bloqueado: há envio incerto ou em andamento.");return}
  const today=new Date();
  const day=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
