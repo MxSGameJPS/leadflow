@@ -1,5 +1,3 @@
-// AUTOMATIZADOR_COOPERATIVE_V1
-import {drainRequested,publishRuntime,readControl} from './automatizador-runtime.mjs';
 import fs from "node:fs";
 import {pollOutreachReplies} from "../src/services/intelligence/outreach.js";
 import {publishScheduledSocialPosts} from "../src/services/social/publisher.js";
@@ -199,7 +197,6 @@ let lastSocialCycle=0;
 let lastWeeklyCheck=0;
 let lastSecondScan=0;
 async function check(){
- if(drainRequested(root)){running=false;return;}
  if(Date.now()-lastSocialCycle>=60000){
   lastSocialCycle=Date.now();
   try{await publishScheduledSocialPosts();await cleanupPublishedSocialMedia()}catch(e){console.error("[social] Agenda ou limpeza R2 indisponível:",e.message)}
@@ -240,10 +237,8 @@ async function check(){
 }
 try{
  console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(recoveryRunning()?"ATIVADA":"DESATIVADA")+"; Captação: "+(captureRunning()?"ATIVADA":"DESATIVADA"));
- const controlTimer=setInterval(()=>{if(drainRequested(root))stop()},500);controlTimer.unref();
- while(running){publishRuntime(root,"worker",{state:"running"});try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
+ while(running){try{await check()}catch(e){console.error("[expediente]",e.message)}if(running)await nap(60000)}
 }finally{
  await prisma.$disconnect();
- publishRuntime(root,"worker",{state:"drained",requestId:readControl(root).requestId||null});
  try{fs.closeSync(lockFd);fs.unlinkSync(lock)}catch{}
 }
