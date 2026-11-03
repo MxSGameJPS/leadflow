@@ -4,7 +4,11 @@ import {getRecoveryRest} from "./workSchedule.js";
 import {recoveryRunning} from "./dispatchControl.js";
 export async function dispatchSecondAttempt({sessionId,lastSentAt,lastReplyAt}){
  if(!sessionId||!recoveryRunning()||new Date().getDay()===0)return false;
- const schedule=getRecoveryRest({lastSentAt,lastReplyAt});
+ const recentFirst=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true}});
+ const recentSecond=await prisma.recoverySecondAttempt.findFirst({where:{sessionId,status:"sent"},orderBy:{sentAt:"desc"},select:{sentAt:true}});
+ const recentCapture=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true}});
+ const newest=[lastSentAt,recentFirst?.sentAt,recentSecond?.sentAt,recentCapture?.sentAt].filter(Boolean).reduce((a,b)=>!a||b>a?b:a,null);
+ const schedule=getRecoveryRest({lastSentAt:newest,lastReplyAt:newest?.getTime()===new Date(lastSentAt||0).getTime()?lastReplyAt:null});
  if(!schedule.working||schedule.resting)return false;
  const today=dayKey();
  const [usedFirst,usedSecond,firstActive,secondActive,captureActive]=await Promise.all([
