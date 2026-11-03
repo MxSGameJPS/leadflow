@@ -288,3 +288,25 @@ model SocialWeeklyAnalysis {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
 }
+
+model RecoverySecondAttempt {
+ id String @id @default(cuid())
+ sessionId String
+ chatId String
+ firstSentAt DateTime
+ lastOutgoingAt DateTime
+ checkedAt DateTime @default(now())
+ eligibleAt DateTime
+ status String @default("review")
+ reason String @default("")
+ messageText String @default("")
+ approvedAt DateTime?
+ sentAt DateTime?
+ dayKey String?
+ lastError String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([sessionId,chatId])
+ @@index([sessionId,status,eligibleAt])
+ @@index([sessionId,dayKey])
+}
