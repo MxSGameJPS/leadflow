@@ -44,7 +44,7 @@ export async function inspectSecondAttempt({sessionId,chatId}){
  const dispatch=await prisma.recoveryDispatch.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
  if(!first?.sentAt||dispatch?.status!=="sent")throw Error("Primeiro envio da recuperação não confirmado.");
  const existing=await prisma.recoverySecondAttempt.findUnique({where:{sessionId_chatId:{sessionId,chatId}}});
- if(existing&&["sending","sent","uncertain"].includes(existing.status))return existing;
+ if(existing&&["sending","sent","uncertain","closed"].includes(existing.status))return existing;
  const [outcome,commercial,history]=await Promise.all([
   prisma.recoveryOutcome.findUnique({where:{sessionId_chatId:{sessionId,chatId}}}),
   prisma.recoveryCommercial.findUnique({where:{sessionId_chatId:{sessionId,chatId}}}),
