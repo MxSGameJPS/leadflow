@@ -56,9 +56,11 @@ async function globalState(){
  const recoveryCount=(await prisma.recoveryDispatch.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain","externally_sent"]}}}))+(await prisma.recoverySecondAttempt.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain"]}}}));
  const captureCount=await prisma.captureApproval.count({where:{sessionId,OR:[{status:"sent",sentAt:{gte:start}},{status:{in:["sending","uncertain"]},updatedAt:{gte:start}}]}});
  const recoveryLatest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const lastSecond=await prisma.recoverySecondAttempt.findFirst({where:{sessionId,status:"sent"},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const captureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
- const latest=(!captureLatest?.sentAt||recoveryLatest?.sentAt>captureLatest.sentAt)?recoveryLatest:captureLatest;
- const latestFromRecovery=latest===recoveryLatest;
+ const latestRecovery=lastSecond?.sentAt>recoveryLatest?.sentAt?lastSecond:recoveryLatest;
+ const latest=(!captureLatest?.sentAt||latestRecovery?.sentAt>captureLatest.sentAt)?latestRecovery:captureLatest;
+ const latestFromRecovery=latest===latestRecovery;
  let lastReplyAt=null;
  if(latestFromRecovery&&latest?.chatId){
   const snapshot=await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}});
