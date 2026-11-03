@@ -1,0 +1,11 @@
+"use client";
+import {useEffect,useState} from "react";
+import styles from "./SocialPermissions.module.css";
+const options=[["research","Pesquisa e análise de tendências (controle futuro)"],["planning","Planejamento de calendário (controle futuro)"],["approvedPublishing","Publicação de posts previamente aprovados (controle futuro)"],["replySuggestions","Sugestões de respostas por IA (controle futuro)"],["crmRegistration","Registro manual de oportunidades no CRM"],["autoReplies","Responder sem aprovação (não disponível)"],["autoStrategyChanges","Alterar estratégia sem revisão (não disponível)"]];
+export default function SocialPermissions(){
+ const [permissions,setPermissions]=useState(null),[busy,setBusy]=useState(false),[status,setStatus]=useState("");
+ async function load(){try{const r=await fetch("/api/social/permissions",{cache:"no-store"});const d=await r.json();if(!r.ok)throw Error(d.error);setPermissions(d.permissions)}catch(e){setStatus(e.message)}}
+ useEffect(()=>{load()},[]);
+ async function save(){setBusy(true);setStatus("");try{const r=await fetch("/api/social/permissions",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({permissions})});const d=await r.json();if(!r.ok)throw Error(d.error);setPermissions(d.permissions);setStatus("Permissões salvas neste computador.")}catch(e){setStatus(e.message)}finally{setBusy(false)}}
+ return <section className={styles.panel}><h2>Permissões do agente</h2><p>Preferências persistidas localmente. Nesta etapa, apenas o controle de registro de oportunidades no CRM é aplicado no servidor. Os demais são preferências futuras, ainda sem bloqueio operacional; publicações e respostas continuam sujeitas às aprovações atuais.</p>{permissions?<><div className={styles.options}>{options.map(([key,label])=><label key={key}><input type="checkbox" disabled={busy||key!=="crmRegistration"} checked={!!permissions[key]} onChange={e=>setPermissions(p=>({...p,[key]:e.target.checked}))}/><span>{label}</span></label>)}</div><button type="button" onClick={save} disabled={busy}>{busy?"Salvando...":"Salvar permissões"}</button></>:<p>Carregando preferências...</p>}{status&&<p role="status">{status}</p>}</section>;
+}

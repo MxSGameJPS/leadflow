@@ -1,0 +1,11 @@
+"use client";
+import {useState} from "react";
+import styles from "./SocialCampaignLinks.module.css";
+const clean=value=>String(value||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,90);
+export default function SocialCampaignLinks(){
+ const [url,setUrl]=useState("https://www.saulopavanello.com.br/"),[platform,setPlatform]=useState("instagram"),[campaign,setCampaign]=useState("conteudo-organico"),[content,setContent]=useState(""),[notice,setNotice]=useState("");
+ let result="",error="";
+ try{const u=new URL(url);if(!["https:","http:"].includes(u.protocol))throw Error("Informe um endereço HTTP ou HTTPS.");u.searchParams.set("utm_source",platform);u.searchParams.set("utm_medium","organic_social");u.searchParams.set("utm_campaign",clean(campaign)||"conteudo-organico");if(clean(content))u.searchParams.set("utm_content",clean(content));else u.searchParams.delete("utm_content");result=u.toString()}catch(e){error=e.message||"URL inválida."}
+ async function copy(){if(!result)return;try{await navigator.clipboard.writeText(result);setNotice("Link copiado.")}catch{setNotice("Não foi possível copiar automaticamente; selecione o link manualmente.")}}
+ return <section className={styles.panel}><h2>Links de campanhas com UTM</h2><p>Identifique a origem de visitas quando seu site tiver coleta de analytics configurada. Os links não medem conversões sozinhos.</p><div className={styles.fields}><label>URL de destino<input value={url} onChange={e=>setUrl(e.target.value)}/></label><label>Rede<select value={platform} onChange={e=>setPlatform(e.target.value)}><option value="instagram">Instagram</option><option value="facebook">Facebook</option></select></label><label>Campanha<input value={campaign} onChange={e=>setCampaign(e.target.value)}/></label><label>Identificador do post (opcional)<input value={content} onChange={e=>setContent(e.target.value)} placeholder="carrossel-seo"/></label></div>{error?<p role="alert">{error}</p>:<><label>Link pronto<textarea readOnly rows={3} value={result}/></label><button type="button" onClick={copy}>Copiar link</button></>}{notice&&<p role="status">{notice}</p>}</section>;
+}

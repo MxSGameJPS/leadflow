@@ -1,0 +1,1 @@
+.panel{margin:24px 0;padding:22px;border:1px solid var(--border,#333);border-radius:14px}.panel h2{margin:0 0 8px;font-size:20px}.panel p{color:var(--muted);font-size:13px}.options{display:grid;gap:12px;margin:18px 0}.options label{display:flex;align-items:center;gap:10px;font-size:14px}.options input{width:17px;height:17px}.panel button{padding:10px 16px;cursor:pointer}
