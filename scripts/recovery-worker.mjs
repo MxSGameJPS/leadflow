@@ -194,6 +194,7 @@ async function findLatestLiveReply(chatId,sentAt){
 let lastOutreachScan=0;
 let lastSocialCycle=0;
 let lastWeeklyCheck=0;
+let lastSecondScan=0;
 async function check(){
  if(drainRequested(root)){running=false;return;}
  if(Date.now()-lastSocialCycle>=60000){
@@ -210,6 +211,7 @@ async function check(){
   catch(e){console.error("[inteligência] Monitoramento indisponível:",e.message)}
  }
  if(!sessionId){console.log("[expediente] OPENWA_SESSION_ID ausente.");return;}
+ if(Date.now()-lastSecondScan>=10*60*1000){lastSecondScan=Date.now();try{await scanRecoverySecondAttempts(sessionId)}catch(e){console.error("[recuperação 2ª] Análise indisponível:",e.message)}}
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{chatId:true,sentAt:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
  let lastReplyAt=snapshot?.latestReplyAt;
