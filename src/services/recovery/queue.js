@@ -11,7 +11,7 @@ export async function getRecoveryQueue(sessionId) {
  const log=await prisma.recoveryDispatch.findMany({where:{sessionId},select:{chatId:true,status:true,dayKey:true}});
  const contacted=new Set(log.map(item=>item.chatId));
  const day=windowsLocalDate();
- const dailyCount=log.filter(item=>item.dayKey===day&&["sending","sent","uncertain","externally_sent"].includes(item.status)).length;
+ const dailyCount=log.filter(item=>item.dayKey===day&&["sending","sent","uncertain","externally_sent"].includes(item.status)).length+await prisma.recoverySecondAttempt.count({where:{sessionId,dayKey:day,status:{in:["sending","sent","uncertain"]}}});
  const reservations=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"reserved"},orderBy:{createdAt:"asc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const sent=await prisma.recoveryDispatch.findMany({where:{sessionId,status:"sent"},orderBy:{createdAt:"desc"},select:{chatId:true,messageSnapshot:true,createdAt:true}});
  const snapshots=await prisma.recoveryFollowupSnapshot.findMany({where:{sessionId}});
