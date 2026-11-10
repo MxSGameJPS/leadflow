@@ -4,10 +4,13 @@ import {captureApproachForLead,buildCaptureMessage} from "./approaches.js";
 import {scoreCaptureLead} from "./prioritization.js";
 
 export function candidatePhone(lead){
- let digits=String(lead.whatsapp||lead.phone||"").replace(/\D/g,"");
- if(digits.startsWith("0")&&digits.length===12)digits=digits.slice(1);
- if([10,11].includes(digits.length))digits="55"+digits;
- return /^55\d{10,11}$/.test(digits)?digits:null;
+ for(const raw of [lead?.whatsapp,lead?.phone]){
+  let digits=String(raw||"").replace(/\D/g,"");
+  if(digits.startsWith("0")&&digits.length===12)digits=digits.slice(1);
+  if([10,11].includes(digits.length))digits="55"+digits;
+  if(/^55\d{10,11}$/.test(digits))return digits;
+ }
+ return null;
 }
 const blockedStages=new Set(["ganho","perdido","contatado","sem_resposta","com_resposta","proposta","proposta_rejeitada","negociacao"]);
 export async function authorizeCaptureBatch({sessionId,leadIds}){
