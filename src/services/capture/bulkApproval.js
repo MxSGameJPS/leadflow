@@ -2,6 +2,7 @@ import {prisma} from "../../lib/prisma.js";
 import {getLead} from "../../repositories/leadRepository.js";
 import {captureApproachForLead,buildCaptureMessage} from "./approaches.js";
 import {scoreCaptureLead} from "./prioritization.js";
+import {getLeadWorkspace} from "../workspaces/leadWorkspaceStore.js";
 
 export function candidatePhone(lead){
  for(const raw of [lead?.whatsapp,lead?.phone]){
@@ -22,6 +23,9 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
    const lead=await getLead(leadId);
    if(!lead)throw Error("Lead não encontrado.");
    if(blockedStages.has(lead.stage))throw Error("Etapa comercial já iniciada ou encerrada.");
+   const workspace=await getLeadWorkspace(leadId);
+   if(workspace.lastContactAt||Number(workspace.contactCount||0)>0)throw Error("Contato anterior registrado no CRM; revisar antes de classificar como primeiro contato.");
+   if(/(?:não|nao) (?:tenho|temos|quero|queremos) interesse|sem interesse|pare de enviar|remova meu contato/i.test(String(lead.notes||"")))throw Error("Possível recusa registrada nas observações do lead.");
    const existing=await prisma.captureApproval.findUnique({where:{leadId}});
    if(existing)throw Error("Lead já possui registro na Captação ("+existing.status+").");
    const phone=candidatePhone(lead);
