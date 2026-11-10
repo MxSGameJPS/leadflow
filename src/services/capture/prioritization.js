@@ -36,10 +36,12 @@ export function scoreCaptureLead(lead,{alreadyContacted=false,hasRecovery=false}
 }
 export function rankCaptureCandidates(leads,{approvals=[],recoveryChatIds=[]}={}){
  const used=new Set(approvals.map(x=>x.leadId));
- const recovered=new Set(recoveryChatIds);
+ const digits=value=>String(value||"").replace(/\D/g,"");
+ const normalized=value=>{const x=digits(value);return x.startsWith("55")&&[12,13].includes(x.length)?x.slice(2):x;};
+ const recovered=new Set(recoveryChatIds.map(normalized).filter(x=>[10,11].includes(x.length)));
  return leads.map(lead=>{
-  const phones=[lead.whatsapp,lead.phone].filter(Boolean).map(x=>String(x).replace(/\D/g,"")).filter(Boolean);
-  const hasRecovery=phones.some(phone=>[...recovered].some(chat=>String(chat).replace(/\D/g,"").startsWith(phone)));
+  const phones=[lead.whatsapp,lead.phone].map(normalized).filter(x=>[10,11].includes(x.length));
+  const hasRecovery=phones.some(phone=>recovered.has(phone));
   return {...scoreCaptureLead(lead,{alreadyContacted:used.has(lead.id),hasRecovery}),id:lead.id,name:lead.name,segment:lead.segment||"",city:lead.city||""};
  }).sort((a,b)=>Number(b.eligible)-Number(a.eligible)||b.score-a.score||String(a.name).localeCompare(String(b.name),"pt-BR"));
 }
