@@ -8,6 +8,7 @@ import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning} from "../src/services/capture/dispatchControl.js";
+import {scanCaptureFollowups,dispatchCaptureFollowup} from "../src/services/capture/followup.js";
 import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
 import {dispatchSecondAttempt} from "../src/services/recovery/secondDispatch.js";
 import {scanRecoverySecondAttempts} from "../src/services/recovery/secondScanner.js";
@@ -52,10 +53,12 @@ function dayKey(now=new Date()){return now.getFullYear()+"-"+String(now.getMonth
 async function globalState(){
  const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
  const recoveryCount=(await prisma.recoveryDispatch.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain","externally_sent"]}}}))+(await prisma.recoverySecondAttempt.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain"]}}}));
- const captureCount=await prisma.captureApproval.count({where:{sessionId,OR:[{status:"sent",sentAt:{gte:start}},{status:{in:["sending","uncertain"]},updatedAt:{gte:start}}]}});
+ const captureCount=(await prisma.captureApproval.count({where:{sessionId,OR:[{status:"sent",sentAt:{gte:start}},{status:{in:["sending","uncertain"]},updatedAt:{gte:start}}]}}))+(await prisma.captureFollowup.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain"]}}}));
  const recoveryLatest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const lastSecond=await prisma.recoverySecondAttempt.findFirst({where:{sessionId,status:"sent"},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
- const captureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const initialCaptureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const followupLatest=await prisma.captureFollowup.findFirst({where:{sessionId,status:"sent"},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
+ const captureLatest=followupLatest?.sentAt>initialCaptureLatest?.sentAt?followupLatest:initialCaptureLatest;
  const latestRecovery=lastSecond?.sentAt>recoveryLatest?.sentAt?lastSecond:recoveryLatest;
  const latest=(!captureLatest?.sentAt||latestRecovery?.sentAt>captureLatest.sentAt)?latestRecovery:captureLatest;
  const latestFromRecovery=latest===latestRecovery;
@@ -72,7 +75,7 @@ async function captureOne(){
  const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
  if(!sessionId||!base||!key)return;
  const conflict=await prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}});
- const captureConflict=await prisma.captureApproval.count({where:{sessionId,status:"sending"}});
+ const captureConflict=await prisma.captureApproval.count({where:{sessionId,status:"sending"}})+await prisma.captureFollowup.count({where:{sessionId,status:{in:["sending","uncertain"]}}});
  // Tentativas incertas ficam isoladas por lead e nunca voltam a "approved" automaticamente.
  // Somente um envio efetivamente em andamento bloqueia novo despacho.
  if(conflict||captureConflict){console.error("[captação] Há envio em andamento; aguardando conclusão antes do próximo lead.");return}
@@ -195,6 +198,7 @@ async function findLatestLiveReply(chatId,sentAt){
 let lastOutreachScan=0;
 let lastSocialCycle=0;
 let lastWeeklyCheck=0;
+let lastCaptureFollowupScan=0;
 let lastSecondScan=0;
 async function check(){
  if(Date.now()-lastSocialCycle>=60000){
@@ -211,6 +215,7 @@ async function check(){
   catch(e){console.error("[inteligência] Monitoramento indisponível:",e.message)}
  }
  if(!sessionId){console.log("[expediente] OPENWA_SESSION_ID ausente.");return;}
+ if(Date.now()-lastCaptureFollowupScan>10*60*1000){lastCaptureFollowupScan=Date.now();try{await scanCaptureFollowups(sessionId)}catch(error){console.error("[captação acompanhamento] Falha ao analisar:",error.message)}}
  if(Date.now()-lastSecondScan>=10*60*1000){lastSecondScan=Date.now();try{await scanRecoverySecondAttempts(sessionId)}catch(e){console.error("[recuperação 2ª] Análise indisponível:",e.message)}}
  const latest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{chatId:true,sentAt:true}});
  const snapshot=latest?await prisma.recoveryFollowupSnapshot.findUnique({where:{sessionId_chatId:{sessionId,chatId:latest.chatId}},select:{latestReplyAt:true}}):null;
@@ -229,6 +234,7 @@ async function check(){
  if(state.working&&!state.resting){
   if(recoveryRunning()&&pending>0&&shared.recoveryCount<10)await dispatchOne();
   if(shared.captureCount<10)await captureOne();
+  if(shared.captureCount<10)await dispatchCaptureFollowup(sessionId);
   if(recoveryRunning()&&pending===0&&shared.recoveryCount<10)await dispatchSecondAttempt({sessionId,lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.lastReplyAt});
  }
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
