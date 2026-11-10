@@ -137,6 +137,9 @@ export default function CRMBoard({ initialLeads = [] }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [view, setView] = useState("list");
+  const [captureRecords,setCaptureRecords]=useState([]);
+  const [captureBusy,setCaptureBusy]=useState(false);
+  const [captureResults,setCaptureResults]=useState([]);
   const [cityFolder, setCityFolder] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -169,7 +172,7 @@ export default function CRMBoard({ initialLeads = [] }) {
     const savedCity = window.localStorage.getItem("leadflow_crm_city_folder");
     const savedView = window.localStorage.getItem("leadflow_crm_view");
     if (savedCity) setCityFolder(savedCity);
-    if (["list", "today", "pipeline"].includes(savedView)) setView(savedView);
+    if (["list", "today", "pipeline", "approved"].includes(savedView)) setView(savedView);
   }, []);
 
   const cityFolders = useMemo(() => {
@@ -212,6 +215,18 @@ export default function CRMBoard({ initialLeads = [] }) {
     setActiveLeadId("");
   }
 
+  async function refreshCaptureRecords(){
+    try{const response=await fetch("/api/capture/bulk",{cache:"no-store"});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao consultar Captação.");setCaptureRecords(data.items||[])}catch(error){showNotice(error.message)}
+  }
+  useEffect(()=>{refreshCaptureRecords()},[]);
+  async function approveSelectedCapture(){
+    const leadIds=[...selectedIds].filter(id=>leads.some(lead=>lead.id===id));
+    if(!leadIds.length)return;
+    if(leadIds.length>50){showNotice("Aprovação limitada a 50 leads por vez.");return}
+    if(!window.confirm("Autorizar o Agente de Captação a preparar e enviar o primeiro contato aos "+leadIds.length+" leads selecionados, conforme limites de expediente e cotas?"))return;
+    setCaptureBusy(true);setCaptureResults([]);
+    try{const response=await fetch("/api/capture/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadIds,confirmation:"AUTORIZO PRIMEIRO CONTATO"})});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha na aprovação.");setCaptureResults(data.results||[]);showNotice(data.approved+" autorizado(s), "+data.review+" para revisão.","success");setSelectedIds(new Set());await refreshCaptureRecords();changeView("approved");}catch(error){showNotice(error.message)}finally{setCaptureBusy(false)}
+  }
   function changeView(next) {
     setView(next);
     window.localStorage.setItem("leadflow_crm_view", next);
@@ -660,6 +675,7 @@ export default function CRMBoard({ initialLeads = [] }) {
       <button className={view === "list" ? s.viewActive : ""} onClick={() => changeView("list")}>Leads</button>
       <button className={view === "today" ? s.viewActive : ""} onClick={() => changeView("today")}>Hoje <span>{todayItems.length}</span></button>
       <button className={view === "pipeline" ? s.viewActive : ""} onClick={() => changeView("pipeline")}>Pipeline</button>
+      <button className={view === "approved" ? s.viewActive : ""} onClick={() => changeView("approved")}>Aprovados <span>{captureRecords.filter(x=>x.status==="approved").length}</span></button>
     </div>
 
     <section className={s.filterShell}>
@@ -691,10 +707,11 @@ export default function CRMBoard({ initialLeads = [] }) {
           <div><strong>{cityFolder === "all" ? "Todos os leads" : cityFolders.find(folder => folder.key === cityFolder)?.label || "Cidade"}{nicheFilter!=="all"?" / "+(nicheOptions.find(item=>item.value===nicheFilter)?.label||"Nicho"):""}</strong><span>{view === "today" ? `${todayItems.length} prioridades` : `${visible.length} de ${scopedLeads.length} leads`}</span></div>
           {view !== "today" && <div className={s.bulkActions}>
             <button onClick={toggleVisibleSelection} disabled={!visible.length || deleting}>{allVisibleSelected ? "Desmarcar" : "Selecionar exibidos"}</button>
+            {selectedCount > 0 && <button type="button" onClick={approveSelectedCapture} disabled={captureBusy||deleting}>{captureBusy?"Aprovando...":"Aprovar "+selectedCount+" para Captação"}</button>}
             {selectedCount > 0 && <button className={s.bulkDelete} onClick={removeSelectedLeads} disabled={deleting}>Excluir {selectedCount}</button>}
           </div>}
         </div>
-        {view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
+        {view === "approved" ? <section className={s.approvedPanel}><h2>Leads autorizados para Captação</h2><p>Selecione leads na aba Leads e clique em Aprovar para Captação. Os aprovados recebem mensagem contextual preparada e entram na fila do agente; nenhum contato é enviado fora do expediente ou sem o agente ligado.</p><button type="button" onClick={refreshCaptureRecords}>Atualizar situação</button>{captureResults.filter(x=>x.status==="review").map(x=><div className={s.approvedWarning} key={x.leadId}><strong>{leads.find(lead=>lead.id===x.leadId)?.name||x.leadId}</strong> — {x.reason}</div>)}{captureRecords.map(item=><article className={s.approvedRow} key={item.leadId}><div><strong>{leads.find(lead=>lead.id===item.leadId)?.name||item.leadId}</strong><small>{item.chatId}</small></div><span>{({approved:"Aguardando envio",sending:"Enviando",sent:"Enviado",uncertain:"Envio incerto",invalid_number:"Corrigir número",rejected:"Rejeitado",draft:"Rascunho"})[item.status]||item.status}</span><a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir lead</a></article>)}{!captureRecords.length&&<p>Nenhum lead autorizado ainda.</p>}</section> : view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
       </section>
 
       {renderQuickPanel()}
