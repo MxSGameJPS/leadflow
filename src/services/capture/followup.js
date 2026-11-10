@@ -82,7 +82,7 @@ export async function dispatchCaptureFollowup(sessionId){
   if(assessment.status!=="review"){
    await prisma.captureFollowup.updateMany({where:{id:item.id,status:"approved"},data:{status:assessment.status,reason:assessment.reason}});continue;
   }
-  if(!captureRunning())return false;
+  if(!captureRunning()||!getRecoveryRest({lastSentAt:latest}).working||new Date().getDay()===0)return false;
   const claimed=await prisma.captureFollowup.updateMany({where:{id:item.id,status:"approved",approvedAt:item.approvedAt},data:{status:"sending",dayKey:dayKey(),checkedAt:new Date()}});
   if(!claimed.count)continue;
   const base=process.env.OPENWA_URL?.trim().replace(/\/+$/,""),key=process.env.OPENWA_API_KEY?.trim();
