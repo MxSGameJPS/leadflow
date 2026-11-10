@@ -13,8 +13,13 @@ async function snapshot(){
   prisma.captureApproval.count({where:{sessionId,status:"sent"}}),
   prisma.captureApproval.count({where:{sessionId,status:{in:["sending","uncertain"]}}})
  ]):[0,0,0];
+ const [followupApproved,followupSent,followupUncertain]=sessionId?await Promise.all([
+  prisma.captureFollowup.count({where:{sessionId,status:"approved"}}),
+  prisma.captureFollowup.count({where:{sessionId,status:"sent"}}),
+  prisma.captureFollowup.count({where:{sessionId,status:{in:["sending","uncertain"]}}})
+ ]):[0,0,0];
  const [recoverySending,captureSending]=sessionId?await Promise.all([prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}}),prisma.captureApproval.count({where:{sessionId,status:"sending"}})]):[0,0];
- return {running:captureRunning(),recoveryRunning:recoveryRunning(),sundayBlocked:getWorkWindow().sundayBlocked,working:getWorkWindow().working,approved,sent,uncertain,recoveryBlock:recoverySending,blocked:recoverySending>0||captureSending>0,sessionConfigured:!!sessionId};
+ return {running:captureRunning(),recoveryRunning:recoveryRunning(),sundayBlocked:getWorkWindow().sundayBlocked,working:getWorkWindow().working,approved,sent,uncertain,followupApproved,followupSent,followupUncertain,recoveryBlock:recoverySending,blocked:recoverySending>0||captureSending>0||followupUncertain>0,sessionConfigured:!!sessionId};
 }
 export async function GET(){
  if(process.env.NODE_ENV==="production")return reject();
