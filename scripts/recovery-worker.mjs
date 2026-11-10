@@ -104,8 +104,8 @@ async function captureOne(){
     await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{messageText:outgoingText}});
    }
   }catch(error){
-   await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"uncertain"}});
-   console.error("[captação] Preparação falhou; revise:",error.message);
+   await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"message_review"}});
+   console.error("[captação] Falha antes do envio; revisar mensagem:",error.message);
    return;
   }
   console.log("[captação] Enviando contato autorizado:",item.leadId);
