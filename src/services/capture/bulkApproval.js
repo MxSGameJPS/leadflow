@@ -35,7 +35,7 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
    const variant=captureApproachForLead(lead);
    const message=buildCaptureMessage(lead,variant);
    if(message.length<20||message.length>2000)throw Error("Mensagem de abordagem inválida.");
-   await prisma.captureApproval.create({data:{leadId,sessionId,chatId,status:"approved",messageText:message,approachVariant:variant,approvedAt:new Date()}});
+   await prisma.captureApproval.create({data:{leadId,sessionId,chatId,status:"approved",messageText:message,approachVariant:"auto_"+variant,approvedAt:new Date()}});
    results.push({leadId,name:lead.name,status:"approved",reason:"Contato autorizado e mensagem contextual preparada."});
   }catch(error){results.push({leadId,status:"review",reason:String(error.message||error).slice(0,230)})}
  }
