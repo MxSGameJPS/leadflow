@@ -116,15 +116,22 @@ async function captureOne(){
     method:"POST",headers:{"X-API-Key":key,"Idempotency-Key":"capture-"+item.id+"-"+new Date(item.approvedAt).getTime(),"Content-Type":"application/json"},
     body:JSON.stringify({chatId:item.chatId,text:outgoingText,linkPreview:false}),signal:controller.signal,cache:"no-store"
    });}finally{clearTimeout(timer)}
-   if(!response.ok)throw Error("OpenWA HTTP "+response.status);
+   if(!response.ok){
+    let detail="";
+    try{const payload=await response.json();detail=String(payload?.error?.message||payload?.message||payload?.error||"").slice(0,250)}catch{}
+    const failure=new Error("OpenWA HTTP "+response.status+(detail?": "+detail:""));
+    if([400,404,422].includes(response.status)&&/(invalid (?:phone|number|recipient|chat)|(?:number|phone|recipient) (?:is )?(?:invalid|not on whatsapp|does not exist)|not a whatsapp user|wid not found|chat id invalid)/i.test(detail))failure.code="INVALID_DESTINATION";
+    throw failure;
+   }
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"sent",sentAt:new Date()}});
    // The dispatch is already confirmed. A CRM sync failure must never mark it uncertain or retry the message.
    try{const lead=await getLead(item.leadId);if(lead?.stage==="novo")await moveStage(item.leadId,"contatado");}
    catch(stageError){console.error("[captação] Mensagem confirmada, mas atualização do CRM falhou:",item.leadId,stageError.message)}
    console.log("[captação] Confirmado:",item.leadId);
   }catch(e){
-   await prisma.captureApproval.update({where:{id:item.id},data:{status:"uncertain"}}).catch(()=>{});
-   console.error("[captação] Resultado incerto neste lead; próximo contato aprovado poderá seguir após as regras de expediente:",e.message);
+   const invalid=e.code==="INVALID_DESTINATION";
+   await prisma.captureApproval.update({where:{id:item.id},data:{status:invalid?"invalid_number":"uncertain"}}).catch(()=>{});
+   console.error(invalid?"[captação] Número inválido confirmado — corrigir CRM:":"[captação] Resultado incerto — não repetir automaticamente:",e.message);
   }
   return;
  }
