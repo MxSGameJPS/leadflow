@@ -22,7 +22,12 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
    const existing=await prisma.captureApproval.findUnique({where:{leadId}});
    if(existing)throw Error("Lead já possui registro na Captação ("+existing.status+").");
    const phone=candidatePhone(lead);
-   if(!phone)throw Error("Telefone ausente ou formato inválido; corrigir no CRM.");
+   if(!phone){
+    const variant=captureApproachForLead(lead);
+    await prisma.captureApproval.create({data:{leadId,sessionId,chatId:"pending:"+leadId,status:"number_review",messageText:buildCaptureMessage(lead,variant),approachVariant:"auto_"+variant,approvedAt:new Date()}});
+    results.push({leadId,name:lead.name,status:"review",reason:"Sem telefone válido: corrija a ficha e reenfileire na aba Aprovados."});
+    continue;
+   }
    const chatId=phone+"@c.us";
    const duplicates=await prisma.captureApproval.count({where:{sessionId,chatId}});
    const recovery=await prisma.recoveryDecision.count({where:{sessionId,chatId}});
@@ -45,7 +50,7 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
 export async function repairInvalidCaptureNumber({sessionId,leadId}){
  if(!sessionId||typeof leadId!=="string")throw Error("Lead inválido.");
  const existing=await prisma.captureApproval.findUnique({where:{leadId}});
- if(!existing||existing.sessionId!==sessionId||existing.status!=="invalid_number")throw Error("Somente números definitivamente inválidos podem ser corrigidos neste fluxo.");
+ if(!existing||existing.sessionId!==sessionId||!["invalid_number","number_review"].includes(existing.status))throw Error("Somente contatos com número pendente podem ser reenfileirados.");
  const lead=await getLead(leadId);
  if(!lead)throw Error("Lead não encontrado.");
  const phone=candidatePhone(lead);
@@ -57,7 +62,7 @@ export async function repairInvalidCaptureNumber({sessionId,leadId}){
   prisma.recoveryDecision.count({where:{sessionId,chatId}})
  ]);
  if(other||recovery)throw Error("Novo número já consta na Captação ou Recuperação.");
- const changed=await prisma.captureApproval.updateMany({where:{id:existing.id,status:"invalid_number",chatId:existing.chatId},data:{chatId,status:"approved",approvedAt:new Date()}});
+ const changed=await prisma.captureApproval.updateMany({where:{id:existing.id,status:existing.status,chatId:existing.chatId},data:{chatId,status:"approved",approvedAt:new Date()}});
  if(changed.count!==1)throw Error("Situação alterada; atualize a tela.");
  return {leadId,status:"approved",chatId};
 }
