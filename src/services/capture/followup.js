@@ -10,11 +10,12 @@ export async function inspectCaptureFollowup({sessionId,leadId}){
  if(!first)throw Error("Primeiro envio não confirmado na Captação.");
  const existing=await prisma.captureFollowup.findUnique({where:{leadId}});
  if(existing&&locked.has(existing.status))return existing;
- const [outcome,history]=await Promise.all([
+ const [outcome,history,recoveryConflict]=await Promise.all([
   prisma.commercialOutcome.findUnique({where:{sessionId_channel_chatId:{sessionId,channel:"capture",chatId:first.chatId}}}),
-  getLiveHistory(sessionId,first.chatId)
+  getLiveHistory(sessionId,first.chatId),
+  prisma.recoveryDecision.findFirst({where:{sessionId,chatId:first.chatId}})
  ]);
- const assessment=outcome&&["interested","meeting_scheduled","meeting_held","proposal_sent","won","lost"].includes(outcome.stage)?
+ const assessment=recoveryConflict?{status:"closed",reason:"Contato também registrado na Recuperação."}:outcome&&["interested","meeting_scheduled","meeting_held","proposal_sent","won","lost"].includes(outcome.stage)?
   {status:"closed",reason:"Contato em atendimento comercial ou encerrado."}:evaluateSecondAttempt({history,firstSentAt:first.sentAt});
  const status=assessment.status==="review"&&existing?.status==="approved"?"approved":assessment.status;
  const payload={sessionId,leadId,chatId:first.chatId,firstSentAt:first.sentAt,lastOutgoingAt:assessment.lastOutgoingAt||first.sentAt,eligibleAt:assessment.eligibleAt||addBusinessDays(first.sentAt),checkedAt:new Date(),status,reason:assessment.reason||"",messageText:existing?.messageText||"",approvedAt:status==="approved"?existing?.approvedAt:null};
@@ -72,7 +73,11 @@ export async function dispatchCaptureFollowup(sessionId){
   let assessment;
   try{assessment=evaluateSecondAttempt({history:await getLiveHistory(sessionId,item.chatId),firstSentAt:first.sentAt})}
   catch(error){console.error("[captação acompanhamento] Falha no histórico:",error.message);continue;}
-  const outcome=await prisma.commercialOutcome.findUnique({where:{sessionId_channel_chatId:{sessionId,channel:"capture",chatId:item.chatId}}});
+  const [outcome,recoveryConflict]=await Promise.all([
+   prisma.commercialOutcome.findUnique({where:{sessionId_channel_chatId:{sessionId,channel:"capture",chatId:item.chatId}}}),
+   prisma.recoveryDecision.findFirst({where:{sessionId,chatId:item.chatId}})
+  ]);
+  if(recoveryConflict)assessment={status:"closed",reason:"Contato também registrado na Recuperação. Revisão necessária."};
   if(outcome&&["interested","meeting_scheduled","meeting_held","proposal_sent","won","lost"].includes(outcome.stage))assessment={status:"closed",reason:"Existe negociação ou encerramento cadastrado."};
   if(assessment.status!=="review"){
    await prisma.captureFollowup.updateMany({where:{id:item.id,status:"approved"},data:{status:assessment.status,reason:assessment.reason}});continue;
