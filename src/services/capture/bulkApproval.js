@@ -41,3 +41,23 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
  }
  return {approved:results.filter(x=>x.status==="approved").length,review:results.filter(x=>x.status==="review").length,results};
 }
+
+export async function repairInvalidCaptureNumber({sessionId,leadId}){
+ if(!sessionId||typeof leadId!=="string")throw Error("Lead inválido.");
+ const existing=await prisma.captureApproval.findUnique({where:{leadId}});
+ if(!existing||existing.sessionId!==sessionId||existing.status!=="invalid_number")throw Error("Somente números definitivamente inválidos podem ser corrigidos neste fluxo.");
+ const lead=await getLead(leadId);
+ if(!lead)throw Error("Lead não encontrado.");
+ const phone=candidatePhone(lead);
+ if(!phone)throw Error("Atualize um telefone brasileiro válido na ficha do CRM.");
+ const chatId=phone+"@c.us";
+ if(chatId===existing.chatId)throw Error("Altere o número no CRM antes de reenfileirar.");
+ const [other,recovery]=await Promise.all([
+  prisma.captureApproval.count({where:{sessionId,chatId,leadId:{not:leadId}}}),
+  prisma.recoveryDecision.count({where:{sessionId,chatId}})
+ ]);
+ if(other||recovery)throw Error("Novo número já consta na Captação ou Recuperação.");
+ const changed=await prisma.captureApproval.updateMany({where:{id:existing.id,status:"invalid_number",chatId:existing.chatId},data:{chatId,status:"approved",approvedAt:new Date()}});
+ if(changed.count!==1)throw Error("Situação alterada; atualize a tela.");
+ return {leadId,status:"approved",chatId};
+}
