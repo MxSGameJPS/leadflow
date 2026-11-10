@@ -8,6 +8,7 @@ import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning} from "../src/services/capture/dispatchControl.js";
+import {prepareAutonomousCaptureMessage} from "../src/services/capture/autonomousMessage.js";
 import {scanCaptureFollowups,dispatchCaptureFollowup} from "../src/services/capture/followup.js";
 import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
 import {dispatchSecondAttempt} from "../src/services/recovery/secondDispatch.js";
@@ -95,13 +96,25 @@ async function captureOne(){
   const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
   if(claimed.count!==1)continue;
   if(!captureRunning()){await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"approved"}});return;}
+  console.log("[captação] Preparando primeiro contato autorizado:",item.leadId);
+  let outgoingText=item.messageText;
+  try{
+   if(item.approachVariant?.startsWith("auto_")){
+    outgoingText=await prepareAutonomousCaptureMessage(item);
+    await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{messageText:outgoingText}});
+   }
+  }catch(error){
+   await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"uncertain"}});
+   console.error("[captação] Preparação falhou; revise:",error.message);
+   return;
+  }
   console.log("[captação] Enviando contato autorizado:",item.leadId);
   try{
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
    let response;
    try{response=await fetch(base+"/api/sessions/"+encodeURIComponent(sessionId)+"/messages/send-text",{
     method:"POST",headers:{"X-API-Key":key,"Idempotency-Key":"capture-"+item.id+"-"+new Date(item.approvedAt).getTime(),"Content-Type":"application/json"},
-    body:JSON.stringify({chatId:item.chatId,text:item.messageText,linkPreview:false}),signal:controller.signal,cache:"no-store"
+    body:JSON.stringify({chatId:item.chatId,text:outgoingText,linkPreview:false}),signal:controller.signal,cache:"no-store"
    });}finally{clearTimeout(timer)}
    if(!response.ok)throw Error("OpenWA HTTP "+response.status);
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"sent",sentAt:new Date()}});
