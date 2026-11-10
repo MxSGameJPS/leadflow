@@ -15,7 +15,7 @@ const segmentIdeas=[
  {terms:["loja","comercio","varejo","moda"],benefit:"organizar produtos, informações comerciais e canais de atendimento"}
 ];
 export function captureSegmentBenefit(lead){
- const segment=String(lead.segment||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase();
+ const segment=String(lead.segment||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  return segmentIdeas.find(group=>group.terms.some(term=>segment.includes(term)))?.benefit||"facilitar o acesso aos serviços e o contato pelo WhatsApp";
 }
 
