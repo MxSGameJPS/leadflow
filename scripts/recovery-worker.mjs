@@ -14,6 +14,7 @@ import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
 import {dispatchSecondAttempt} from "../src/services/recovery/secondDispatch.js";
 import {scanRecoverySecondAttempts} from "../src/services/recovery/secondScanner.js";
 import {getLead,moveStage} from "../src/repositories/leadRepository.js";
+import {getLeadWorkspace} from "../src/services/workspaces/leadWorkspaceStore.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 for(const name of [".env",".env.local"]){
@@ -93,6 +94,14 @@ async function captureOne(){
   const previouslySent=await prisma.recoveryDispatch.count({where:{sessionId,chatId:{in:knownChatIds}}});
   if(recovery||previouslySent){console.error("[captação] Contato consta na Recuperação, pulando:",item.leadId);continue}
   if(!captureRunning())return;
+  try{
+   const workspace=await getLeadWorkspace(item.leadId);
+   if(workspace.lastContactAt&&new Date(workspace.lastContactAt)>new Date(item.approvedAt)){
+    await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved"},data:{status:"message_review"}});
+    console.error("[captação] Contato manual mais recente que a aprovação; despacho suspenso:",item.leadId);
+    continue;
+   }
+  }catch(error){console.error("[captação] Não foi possível validar histórico local; sem envio:",error.message);continue}
   const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
   if(claimed.count!==1)continue;
   if(!captureRunning()){await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"approved"}});return;}
