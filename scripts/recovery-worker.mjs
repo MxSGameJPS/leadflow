@@ -123,6 +123,18 @@ async function captureOne(){
     if([400,404,422].includes(response.status)&&/(invalid (?:phone|number|recipient|chat)|(?:number|phone|recipient) (?:is )?(?:invalid|not on whatsapp|does not exist)|not a whatsapp user|wid not found|chat id invalid)/i.test(detail))failure.code="INVALID_DESTINATION";
     throw failure;
    }
+   // Uma resposta HTTP 2xx com erro explícito também não confirma entrega.
+   const rawResponse=await response.text().catch(()=>"");
+   if(rawResponse){
+    let payload=null;
+    try{payload=JSON.parse(rawResponse)}catch{}
+    if(payload&&(payload.success===false||payload.ok===false||payload.error)){
+     const reason=String(payload.error?.message||payload.error||payload.message||"Falha no despacho").slice(0,250);
+     const err=new Error(reason);
+     if(/(?:invalid|not registered|not on whatsapp|does not exist|not a whatsapp user|wid not found)/i.test(reason))err.code="INVALID_DESTINATION";
+     throw err;
+    }
+   }
    await prisma.captureApproval.update({where:{id:item.id},data:{status:"sent",sentAt:new Date()}});
    // The dispatch is already confirmed. A CRM sync failure must never mark it uncertain or retry the message.
    try{const lead=await getLead(item.leadId);if(lead?.stage==="novo")await moveStage(item.leadId,"contatado");}
