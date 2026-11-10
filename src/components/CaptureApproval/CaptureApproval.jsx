@@ -2,7 +2,9 @@
 import {useState} from "react";
 import s from "./CaptureApproval.module.css";
 import {CAPTURE_APPROACHES,captureApproachForLead,buildCaptureMessage} from "../../services/capture/approaches.js";
+import {scoreCaptureLead} from "../../services/capture/prioritization.js";
 export default function CaptureApproval({lead,initialMessage}){
+ const qualification=scoreCaptureLead(lead);
  const [approachVariant,setApproachVariant]=useState(()=>captureApproachForLead(lead));
  const [message,setMessage]=useState(()=>buildCaptureMessage(lead));
  const [whatsapp,setWhatsapp]=useState(lead.whatsapp||lead.phone||"");
@@ -31,6 +33,7 @@ export default function CaptureApproval({lead,initialMessage}){
  }
  return <section className={s.card}><h2>Agente de Captação — primeiro contato</h2>
  <p>Nova abordagem preparada na ficha do lead. Você revisa e autoriza individualmente. Não utiliza a fila de Recuperação.</p>
+ <div role="note"><strong>Avaliação preliminar: {qualification.score}/100 · {qualification.confidence}</strong><p>{qualification.reasons.join(" ")||"Sem evidência comercial registrada."}</p>{qualification.warnings.length>0&&<p>Antes de aprovar: {qualification.warnings.join(" ")}</p>}<small>A pontuação não comprova necessidade ou interesse. Verifique histórico e destinatário antes de qualquer contato.</small></div>
  <p><strong>Empresa:</strong> {lead.name} · <strong>Telefone disponível:</strong> {lead.whatsapp||lead.phone||"Não informado"}. O contato será aprovado usando esse número, com possibilidade de correção antes do envio.</p>
  <label>Número para o primeiro contato <input className={s.phone} type="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} disabled={busy||["approved","sending","sent","uncertain"].includes(approval?.status)} placeholder="Ex.: 51999998888"/></label>
  <p>Usamos o número comercial encontrado no cadastro como candidato. Um telefone válido não garante que tenha WhatsApp; confira o destinatário e autorize apenas se o contato for apropriado. Se houver falha ou resultado incerto, será necessária revisão antes de qualquer repetição.</p>
