@@ -30,7 +30,7 @@ export function buildCaptureMessage(lead,variant=captureApproachForLead(lead)){
  const context=segment?` do setor de ${segment}`:city?` de ${city}`:"";
  const benefit=captureSegmentBenefit(lead);
  const page="https://www.saulopavanello.com.br/previas";
- if(variant==="diagnostico")return `Olá! Tudo bem? Sou Saulo Pavanello, desenvolvedor de sites e sistemas. Conheci ${name}${context} e queria fazer uma pergunta: como vocês organizam hoje as informações sobre os serviços e o primeiro contato com clientes? Uma página própria pode ajudar a ${benefit}. Se fizer sentido, posso explicar por aqui. Alguns exemplos do meu trabalho: ${page}`;
+ if(variant==="diagnostico")return `Olá! Tudo bem? Sou Saulo Pavanello, desenvolvedor de sites e sistemas. Estou entrando em contato com ${name}${context} e queria fazer uma pergunta: como vocês organizam hoje as informações sobre os serviços e o primeiro contato com clientes? Uma página própria pode ${benefit}. Se fizer sentido, posso explicar por aqui. Alguns exemplos do meu trabalho: ${page}`;
  if(variant==="oportunidade")return `Olá, tudo bem? Meu nome é Saulo Pavanello. Estou entrando em contato porque trabalho com páginas que ajudam negócios como ${name} a ${benefit}. Posso te mostrar uma possibilidade simples para o negócio, sem compromisso? Aqui estão algumas prévias do que desenvolvo: ${page}`;
- return `Olá! Sou Saulo Pavanello, trabalho com desenvolvimento de sites e sistemas. Estou apresentando meu trabalho para negócios${context}, como ${name}. Um site próprio pode ajudar a ${benefit}. Posso te contar uma ideia para vocês? Se quiser conhecer meu estilo de trabalho: ${page}`;
+ return `Olá! Sou Saulo Pavanello, trabalho com desenvolvimento de sites e sistemas. Estou apresentando meu trabalho para negócios${context}, como ${name}. Um site próprio pode ${benefit}. Posso te contar uma ideia para vocês? Se quiser conhecer meu estilo de trabalho: ${page}`;
 }
