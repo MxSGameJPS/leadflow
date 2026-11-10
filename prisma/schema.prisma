@@ -310,3 +310,25 @@ model RecoverySecondAttempt {
  @@index([sessionId,status,eligibleAt])
  @@index([sessionId,dayKey])
 }
+
+model CaptureFollowup {
+ id String @id @default(cuid())
+ sessionId String
+ leadId String @unique
+ chatId String
+ firstSentAt DateTime
+ lastOutgoingAt DateTime
+ eligibleAt DateTime
+ checkedAt DateTime @default(now())
+ status String @default("waiting")
+ reason String @default("")
+ messageText String @default("")
+ approvedAt DateTime?
+ sentAt DateTime?
+ dayKey String?
+ lastError String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@index([sessionId,status,eligibleAt])
+ @@index([sessionId,dayKey])
+}
