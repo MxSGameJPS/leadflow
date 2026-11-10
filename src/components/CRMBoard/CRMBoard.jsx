@@ -138,6 +138,7 @@ export default function CRMBoard({ initialLeads = [] }) {
   const [leads, setLeads] = useState(initialLeads);
   const [view, setView] = useState("list");
   const [captureRecords,setCaptureRecords]=useState([]);
+  const [captureIntakePaused,setCaptureIntakePaused]=useState(false);
   const [captureBusy,setCaptureBusy]=useState(false);
   const [captureResults,setCaptureResults]=useState([]);
   const [cityFolder, setCityFolder] = useState("all");
@@ -216,9 +217,13 @@ export default function CRMBoard({ initialLeads = [] }) {
   }
 
   async function refreshCaptureRecords(){
-    try{const response=await fetch("/api/capture/bulk",{cache:"no-store"});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao consultar Captação.");setCaptureRecords(data.items||[])}catch(error){showNotice(error.message)}
+    try{const response=await fetch("/api/capture/bulk",{cache:"no-store"});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao consultar Captação.");setCaptureRecords(data.items||[]);setCaptureIntakePaused(data.intakePaused===true)}catch(error){showNotice(error.message)}
   }
   useEffect(()=>{refreshCaptureRecords()},[]);
+  async function toggleCaptureIntake(){
+    setCaptureBusy(true);
+    try{const response=await fetch("/api/capture/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:captureIntakePaused?"resume_intake":"pause_intake",confirmation:"CONFIRMO CONTROLE DE APROVACOES"})});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao alterar.");setCaptureIntakePaused(data.paused===true);showNotice(data.paused?"Novas aprovações pausadas. Envios já aprovados permanecem na fila.":"Novas aprovações liberadas.","success");}catch(error){showNotice(error.message)}finally{setCaptureBusy(false)}
+  }
   async function approveSelectedCapture(){
     const leadIds=[...selectedIds].filter(id=>leads.some(lead=>lead.id===id));
     if(!leadIds.length)return;
@@ -718,11 +723,11 @@ export default function CRMBoard({ initialLeads = [] }) {
           <div><strong>{cityFolder === "all" ? "Todos os leads" : cityFolders.find(folder => folder.key === cityFolder)?.label || "Cidade"}{nicheFilter!=="all"?" / "+(nicheOptions.find(item=>item.value===nicheFilter)?.label||"Nicho"):""}</strong><span>{view === "today" ? `${todayItems.length} prioridades` : `${visible.length} de ${scopedLeads.length} leads`}</span></div>
           {view !== "today" && <div className={s.bulkActions}>
             <button onClick={toggleVisibleSelection} disabled={!visible.length || deleting}>{allVisibleSelected ? "Desmarcar" : "Selecionar exibidos"}</button>
-            {selectedCount > 0 && <button type="button" onClick={approveSelectedCapture} disabled={captureBusy||deleting}>{captureBusy?"Aprovando...":"Aprovar "+selectedCount+" para Captação"}</button>}
+            {selectedCount > 0 && <button type="button" onClick={approveSelectedCapture} disabled={captureBusy||deleting||captureIntakePaused}>{captureBusy?"Aprovando...":captureIntakePaused?"Novas aprovações pausadas":"Aprovar "+selectedCount+" para Captação"}</button>}
             {selectedCount > 0 && <button className={s.bulkDelete} onClick={removeSelectedLeads} disabled={deleting}>Excluir {selectedCount}</button>}
           </div>}
         </div>
-        {view === "approved" ? <section className={s.approvedPanel}><h2>Leads autorizados para Captação</h2><p>Selecione leads na aba Leads e clique em Aprovar para Captação. Os aprovados recebem mensagem contextual preparada e entram na fila do agente; nenhum contato é enviado fora do expediente ou sem o agente ligado.</p><button type="button" onClick={refreshCaptureRecords}>Atualizar situação</button>{captureResults.filter(x=>x.status==="review").map(x=><div className={s.approvedWarning} key={x.leadId}><strong>{leads.find(lead=>lead.id===x.leadId)?.name||x.leadId}</strong> — {x.reason}</div>)}{captureRecords.map(item=><article className={s.approvedRow+" "+(["invalid_number","number_review","message_review","uncertain"].includes(item.status)?s.approvedRowWarning:"")} key={item.leadId}><div><strong>{leads.find(lead=>lead.id===item.leadId)?.name||item.leadId}</strong><small>{item.chatId}</small></div><span>{({approved:"Aguardando envio",sending:"Enviando",sent:"Enviado",uncertain:"Envio incerto",invalid_number:"Corrigir número",number_review:"Número pendente",message_review:"Revisar mensagem",rejected:"Rejeitado",draft:"Rascunho"})[item.status]||item.status}</span>{["invalid_number","number_review"].includes(item.status)&&<button type="button" disabled={captureBusy} onClick={()=>retryCorrectedCaptureNumber(item.leadId)}>Reenfileirar após corrigir número</button>}<a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir lead</a></article>)}{!captureRecords.length&&<p>Nenhum lead autorizado ainda.</p>}</section> : view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
+        {view === "approved" ? <section className={s.approvedPanel}><h2>Leads autorizados para Captação</h2><p>Selecione leads na aba Leads e clique em Aprovar para Captação. Os aprovados recebem mensagem contextual preparada e entram na fila do agente; nenhum contato é enviado fora do expediente ou sem o agente ligado.</p><div className={s.approvedControls}><button type="button" onClick={refreshCaptureRecords}>Atualizar situação</button><button type="button" disabled={captureBusy} onClick={toggleCaptureIntake}>{captureIntakePaused?"Retomar novas aprovações":"Pausar novas aprovações"}</button></div>{captureResults.filter(x=>x.status==="review").map(x=><div className={s.approvedWarning} key={x.leadId}><strong>{leads.find(lead=>lead.id===x.leadId)?.name||x.leadId}</strong> — {x.reason}</div>)}{captureRecords.map(item=><article className={s.approvedRow+" "+(["invalid_number","number_review","message_review","uncertain"].includes(item.status)?s.approvedRowWarning:"")} key={item.leadId}><div><strong>{leads.find(lead=>lead.id===item.leadId)?.name||item.leadId}</strong><small>{item.chatId}</small></div><span>{({approved:"Aguardando envio",sending:"Enviando",sent:"Enviado",uncertain:"Envio incerto",invalid_number:"Corrigir número",number_review:"Número pendente",message_review:"Revisar mensagem",rejected:"Rejeitado",draft:"Rascunho"})[item.status]||item.status}</span>{["invalid_number","number_review"].includes(item.status)&&<button type="button" disabled={captureBusy} onClick={()=>retryCorrectedCaptureNumber(item.leadId)}>Reenfileirar após corrigir número</button>}<a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir lead</a></article>)}{!captureRecords.length&&<p>Nenhum lead autorizado ainda.</p>}</section> : view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
       </section>
 
       {renderQuickPanel()}
