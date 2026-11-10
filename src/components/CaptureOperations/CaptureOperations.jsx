@@ -3,7 +3,7 @@ import {useMemo,useState} from "react";
 import {useRouter} from "next/navigation";
 import s from "./CaptureOperations.module.css";
 import {CAPTURE_APPROACHES} from "../../services/capture/approaches.js";
-const groups=[["all","Todos"],["approved","Aguardando envio"],["sending","Em envio"],["sent","Enviados / acompanhar"],["uncertain","Verificar envio"],["rejected","Rejeitados"]];
+const groups=[["all","Todos"],["approved","Aguardando envio"],["sending","Em envio"],["sent","Enviados / acompanhar"],["uncertain","Verificar envio"],["invalid_number","Corrigir número"],["message_review","Revisar mensagem"],["rejected","Rejeitados"]];
 const labels=Object.fromEntries(groups);
 const date=value=>value?new Date(value).toLocaleString("pt-BR"):"—";
 export default function CaptureOperations({items=[],intelligence=[],performance={}}){
@@ -55,6 +55,8 @@ export default function CaptureOperations({items=[],intelligence=[],performance=
  <small>{item.phone} · Abordagem: {CAPTURE_APPROACHES.find(v=>v.id===item.approachVariant)?.label||"Anterior"} · Etapa CRM: {item.leadStage||"Não definida"}</small>
  <p>{item.message}</p><small>Resposta: {item.replyStatus==="replied"?"Detectada ("+item.replyCategory+")":"Não confirmada"} · Resultado comercial: {item.outcome||"Não registrado"}</small><small>Aprovado: {date(item.approvedAt)} · Enviado: {date(item.sentAt)}</small>
  {item.status==="uncertain"&&<div><p>Resultado incerto: confira no aplicativo WhatsApp antes de liberar o agente. Não será realizado reenvio.</p><button className={s.action} type="button" disabled={busy===item.id} onClick={()=>confirmSent(item)}>{busy===item.id?"Conferindo...":"Confirmar que foi enviado"}</button><button className={s.action} type="button" disabled={busy===item.id} onClick={()=>confirmNotSent(item)}>Conferi: não foi enviado (corrigir número)</button></div>}
+ {item.status==="invalid_number"&&<p>OpenWA confirmou um destino inválido. Corrija o telefone no CRM e reenfileire pela aba Aprovados, sem repetir para o número anterior.</p>}
+ {item.status==="message_review"&&<p>A preparação automática falhou antes do envio. Revise este lead; nenhuma mensagem foi enviada nesta tentativa.</p>}
  {item.status==="sending"&&<p>Envio em andamento ou interrompido. Não confirme antes de verificar o processo no terminal.</p>}
  <a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir ficha do lead →</a>
  </article>)}</div></section>;
