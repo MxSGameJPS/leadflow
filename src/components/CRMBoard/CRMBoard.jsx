@@ -227,6 +227,17 @@ export default function CRMBoard({ initialLeads = [] }) {
     setCaptureBusy(true);setCaptureResults([]);
     try{const response=await fetch("/api/capture/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadIds,confirmation:"AUTORIZO PRIMEIRO CONTATO"})});const data=await response.json();if(!response.ok)throw Error(data.error||"Falha na aprovação.");setCaptureResults(data.results||[]);showNotice(data.approved+" autorizado(s), "+data.review+" para revisão.","success");setSelectedIds(new Set());await refreshCaptureRecords();changeView("approved");}catch(error){showNotice(error.message)}finally{setCaptureBusy(false)}
   }
+  async function retryCorrectedCaptureNumber(leadId){
+    if(!window.confirm("Você já corrigiu o número na ficha do CRM? O agente poderá tentar o novo número sem repetir o anterior."))return;
+    setCaptureBusy(true);
+    try{
+      const response=await fetch("/api/capture/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"repair",leadId,confirmation:"CORRIGI O NUMERO"})});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||"Falha ao reenfileirar.");
+      showNotice("Número atualizado; contato autorizado novamente.","success");
+      await refreshCaptureRecords();
+    }catch(error){showNotice(error.message)}finally{setCaptureBusy(false)}
+  }
   function changeView(next) {
     setView(next);
     window.localStorage.setItem("leadflow_crm_view", next);
@@ -711,7 +722,7 @@ export default function CRMBoard({ initialLeads = [] }) {
             {selectedCount > 0 && <button className={s.bulkDelete} onClick={removeSelectedLeads} disabled={deleting}>Excluir {selectedCount}</button>}
           </div>}
         </div>
-        {view === "approved" ? <section className={s.approvedPanel}><h2>Leads autorizados para Captação</h2><p>Selecione leads na aba Leads e clique em Aprovar para Captação. Os aprovados recebem mensagem contextual preparada e entram na fila do agente; nenhum contato é enviado fora do expediente ou sem o agente ligado.</p><button type="button" onClick={refreshCaptureRecords}>Atualizar situação</button>{captureResults.filter(x=>x.status==="review").map(x=><div className={s.approvedWarning} key={x.leadId}><strong>{leads.find(lead=>lead.id===x.leadId)?.name||x.leadId}</strong> — {x.reason}</div>)}{captureRecords.map(item=><article className={s.approvedRow} key={item.leadId}><div><strong>{leads.find(lead=>lead.id===item.leadId)?.name||item.leadId}</strong><small>{item.chatId}</small></div><span>{({approved:"Aguardando envio",sending:"Enviando",sent:"Enviado",uncertain:"Envio incerto",invalid_number:"Corrigir número",rejected:"Rejeitado",draft:"Rascunho"})[item.status]||item.status}</span><a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir lead</a></article>)}{!captureRecords.length&&<p>Nenhum lead autorizado ainda.</p>}</section> : view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
+        {view === "approved" ? <section className={s.approvedPanel}><h2>Leads autorizados para Captação</h2><p>Selecione leads na aba Leads e clique em Aprovar para Captação. Os aprovados recebem mensagem contextual preparada e entram na fila do agente; nenhum contato é enviado fora do expediente ou sem o agente ligado.</p><button type="button" onClick={refreshCaptureRecords}>Atualizar situação</button>{captureResults.filter(x=>x.status==="review").map(x=><div className={s.approvedWarning} key={x.leadId}><strong>{leads.find(lead=>lead.id===x.leadId)?.name||x.leadId}</strong> — {x.reason}</div>)}{captureRecords.map(item=><article className={s.approvedRow} key={item.leadId}><div><strong>{leads.find(lead=>lead.id===item.leadId)?.name||item.leadId}</strong><small>{item.chatId}</small></div><span>{({approved:"Aguardando envio",sending:"Enviando",sent:"Enviado",uncertain:"Envio incerto",invalid_number:"Corrigir número",rejected:"Rejeitado",draft:"Rascunho"})[item.status]||item.status}</span>{item.status==="invalid_number"&&<button type="button" disabled={captureBusy} onClick={()=>retryCorrectedCaptureNumber(item.leadId)}>Reenfileirar após corrigir número</button>}<a href={"/crm/"+encodeURIComponent(item.leadId)}>Abrir lead</a></article>)}{!captureRecords.length&&<p>Nenhum lead autorizado ainda.</p>}</section> : view === "today" ? renderToday() : view === "pipeline" ? renderPipeline() : renderList()}
       </section>
 
       {renderQuickPanel()}
