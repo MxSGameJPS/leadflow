@@ -15,9 +15,10 @@ export function getRecoveryRest({now=new Date(),lastSentAt=null,lastReplyAt=null
  const window=getWorkWindow(now);
  const sent=lastSentAt?new Date(lastSentAt):null;
  if(!sent||!Number.isFinite(sent.getTime()))return {...window,resting:false,restUntil:null,reason:window.working?"ready":"outside_hours"};
- const reply=lastReplyAt?new Date(lastReplyAt):null;
- const responded=reply&&Number.isFinite(reply.getTime())&&reply.getTime()>sent.getTime()&&reply.getTime()<=now.getTime();
+ // A resposta de um lead deve acionar o atendimento comercial, mas NÃO
+ // antecipar disparos para outros leads. O intervalo mínimo é absoluto.
+ // Mantemos lastReplyAt na assinatura por compatibilidade com os callers.
  const until=new Date(sent.getTime()+REST_MS);
- const resting=!responded&&now.getTime()<until.getTime();
- return {...window,resting,restUntil:resting?until:null,reason:!window.working?"outside_hours":resting?"resting":responded?"reply_woke_agent":"ready"};
+ const resting=now.getTime()<until.getTime();
+ return {...window,resting,restUntil:resting?until:null,reason:!window.working?"outside_hours":resting?"minimum_interval":"ready"};
 }
