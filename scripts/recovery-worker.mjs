@@ -8,6 +8,7 @@ import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
 import {captureRunning,captureCampaignActive} from "../src/services/capture/dispatchControl.js";
+import {CAPTURE_DAILY_LIMIT,captureCanDispatch,getCaptureDailyUsage} from "../src/services/capture/dailyQuota.js";
 import {prepareAutonomousCaptureMessage} from "../src/services/capture/autonomousMessage.js";
 import {scanCaptureFollowups,dispatchCaptureFollowup} from "../src/services/capture/followup.js";
 import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
@@ -53,9 +54,9 @@ const nap=ms=>new Promise(resolve=>{
 // Um único worker opera os dois canais e aplica a mesma janela de trabalho.
 function dayKey(now=new Date()){return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0")}
 async function globalState(){
- const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ const now=new Date();
  const recoveryCount=(await prisma.recoveryDispatch.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain","externally_sent"]}}}))+(await prisma.recoverySecondAttempt.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain"]}}}));
- const captureCount=(await prisma.captureApproval.count({where:{sessionId,OR:[{status:"sent",sentAt:{gte:start}},{status:{in:["sending","uncertain"]},updatedAt:{gte:start}}]}}))+(await prisma.captureFollowup.count({where:{sessionId,dayKey:dayKey(now),status:{in:["sending","sent","uncertain"]}}}));
+ const captureCount=(await getCaptureDailyUsage(prisma,sessionId,now)).used;
  const recoveryLatest=await prisma.recoveryDecision.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const lastSecond=await prisma.recoverySecondAttempt.findFirst({where:{sessionId,status:"sent"},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
  const initialCaptureLatest=await prisma.captureApproval.findFirst({where:{sessionId,sentAt:{not:null}},orderBy:{sentAt:"desc"},select:{sentAt:true,chatId:true}});
@@ -82,7 +83,7 @@ async function captureOne(){
  // Somente um envio efetivamente em andamento bloqueia novo despacho.
  if(conflict||captureConflict){console.error("[captação] Há envio em andamento; aguardando conclusão antes do próximo lead.");return}
  const state=await globalState();
- if(state.captureCount>=10){console.log("[captação] Limite diário próprio de 10 envios atingido.");return;}
+ if(!captureCanDispatch(state.captureCount)){console.log("[captação] Limite diário próprio de "+CAPTURE_DAILY_LIMIT+" envios atingido (primeiros contatos e follow-ups).");return;}
  const schedule=getRecoveryRest({lastSentAt:state.latest?.sentAt,lastReplyAt:state.lastReplyAt});
  if(!schedule.working||schedule.resting)return;
  const promotional=captureCampaignActive();
@@ -281,13 +282,13 @@ async function check(){
  const pending=await prisma.recoveryDispatch.count({where:{sessionId,status:"reserved"}});
  if(state.working&&!state.resting){
   if(recoveryRunning()&&pending>0&&shared.recoveryCount<10)await dispatchOne();
-  if(shared.captureCount<10)await captureOne();
-  if(shared.captureCount<10)await dispatchCaptureFollowup(sessionId);
+  if(captureCanDispatch(shared.captureCount))await captureOne();
+  if(captureCanDispatch(shared.captureCount))await dispatchCaptureFollowup(sessionId);
   if(recoveryRunning()&&pending===0&&shared.recoveryCount<10)await dispatchSecondAttempt({sessionId,lastSentAt:shared.latest?.sentAt,lastReplyAt:shared.lastReplyAt});
  }
  const phase=!state.working?"dormindo":state.resting?"descansando":"em expediente";
  if(state.working&&pending>0&&!recoveryRunning())console.log("[expediente] Envios pendentes, mas despacho automático desativado.");
- console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"recuperação hoje:",shared.recoveryCount+"/10","captação hoje:",shared.captureCount+"/10",state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
+ console.log("[expediente]",new Date().toLocaleString(),phase,"reservas:",pending,"captação aprovada:",await prisma.captureApproval.count({where:{sessionId,status:"approved"}}),"recuperação hoje:",shared.recoveryCount+"/10","captação hoje:",shared.captureCount+"/"+CAPTURE_DAILY_LIMIT,state.restUntil?"retorno: "+new Date(state.restUntil).toLocaleTimeString():"");
 }
 try{
  console.log("[expediente] Relógio local Windows; 08h–18h; pausa de 30 min. Recuperação: "+(recoveryRunning()?"ATIVADA":"DESATIVADA")+"; Captação: "+(captureRunning()?"ATIVADA":"DESATIVADA"));

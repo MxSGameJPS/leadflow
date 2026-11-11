@@ -6,7 +6,7 @@
 3. Clique em **Aprovar N para Captação** e confirme a autorização de primeiro contato. O limite por operação é de 50 leads.
 4. A nova aba **Aprovados** exibe a fila, os contatos enviados, resultados incertos e casos de número pendente.
 5. O agente usa o WhatsApp cadastrado (ou o telefone alternativo válido) sem exigir uma confirmação manual prévia de existência no WhatsApp. Ele prepara uma abordagem contextual por segmento; para aprovações do lote, o worker tenta enriquecer a mensagem usando IA, mantendo um modelo local como fallback.
-6. Somente contatos com autorização explícita, status aprovado e destino normalizado entram no fluxo existente de envio do worker, sujeito ao controle de ligar/desligar Captação, horário das 08h às 18h, bloqueio dominical, intervalo de 30 minutos e limite diário de 10 envios.
+6. Somente contatos com autorização explícita, status aprovado e destino normalizado entram no fluxo existente de envio do worker, sujeito ao controle de ligar/desligar Captação, horário das 08h às 18h, bloqueio dominical, intervalo de 30 minutos e limite diário de 20 envios na Captação (primeiros contatos + follow-ups; Recuperação permanece com 10/dia).
 7. Use **Pausar novas aprovações** para interromper novos lotes; aprovações antigas na fila permanecem intactas.
 
 ## Correções e revisões

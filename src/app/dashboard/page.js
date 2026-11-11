@@ -1,5 +1,6 @@
 import { listLeads, stats as getStats } from "../../repositories/leadRepository.js";
 import { prisma } from "../../lib/prisma.js";
+import {CAPTURE_DAILY_LIMIT,getCaptureDailyUsage} from "../../services/capture/dailyQuota.js";
 import { BRL } from "../../services/leads/format.js";
 import { isPossibleWhatsApp } from "../../services/places/googlePlaces.js";
 import styles from "./dashboard.module.css";
@@ -17,24 +18,25 @@ export default async function DashboardPage() {
   try {
     const sessionId=process.env.OPENWA_SESSION_ID?.trim()||"";
     const now=new Date();
-    const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-    const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
     const dayKey=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
     [s,leads,operations]=await Promise.all([
       getStats(),listLeads(),
       (async()=>{
         const where={sessionId};
-        const [captureSent,captureToday,capturePending,captureBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked]=await Promise.all([
+        const [captureSent,capturePending,captureBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked,followupSent,followupPending,followupBlocked,captureUsage]=await Promise.all([
           prisma.captureApproval.count({where:{...where,status:"sent"}}),
-          prisma.captureApproval.count({where:{...where,status:"sent",sentAt:{gte:today,lt:tomorrow}}}),
           prisma.captureApproval.count({where:{...where,status:"approved"}}),
           prisma.captureApproval.count({where:{...where,status:{in:["sending","uncertain"]}}}),
           prisma.recoveryDispatch.count({where:{...where,status:"sent"}}),
           prisma.recoveryDispatch.count({where:{...where,status:"sent",dayKey}}),
           prisma.recoveryDispatch.count({where:{...where,status:"reserved"}}),
-          prisma.recoveryDispatch.count({where:{...where,status:{in:["sending","uncertain"]}}})
+          prisma.recoveryDispatch.count({where:{...where,status:{in:["sending","uncertain"]}}}),
+          prisma.captureFollowup.count({where:{...where,status:"sent"}}),
+          prisma.captureFollowup.count({where:{...where,status:"approved"}}),
+          prisma.captureFollowup.count({where:{...where,status:{in:["sending","uncertain"]}}}),
+          getCaptureDailyUsage(prisma,sessionId,now)
         ]);
-        return {captureSent,captureToday,capturePending,captureBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked,dayKey};
+        return {captureSent:captureSent+followupSent,captureToday:captureUsage.confirmed,captureQuotaUsed:captureUsage.used,capturePending:capturePending+followupPending,captureBlocked:captureBlocked+followupBlocked,recoverySent,recoveryToday,recoveryPending,recoveryBlocked,dayKey};
       })()
     ]);
   } catch (e) {
@@ -77,13 +79,13 @@ export default async function DashboardPage() {
       </header>
 
       <section className={styles.agentSection} aria-label="Operação dos agentes">
-        <div className={styles.sectionHead}><div><h2>Mensagens dos agentes</h2><p>Envios confirmados pelo LeadFlow · {operations.dayKey.split("-").reverse().join("/")}</p></div><span className={styles.agentHint}>Cotas independentes de 10/dia</span></div>
+        <div className={styles.sectionHead}><div><h2>Mensagens dos agentes</h2><p>Envios confirmados pelo LeadFlow · {operations.dayKey.split("-").reverse().join("/")}</p></div><span className={styles.agentHint}>Captação: 20/dia · Recuperação: 10/dia</span></div>
         <div className={styles.agentGrid}>
           <article className={styles.agentCard}>
             <div className={styles.agentCardTop}><div><span>01 · Novos contatos</span><h3>Agente de Captação</h3></div><a href="/captacao">Acompanhar →</a></div>
-            <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.captureToday}<em>/10</em></strong></div><div><small>Total confirmado</small><strong>{operations.captureSent}</strong></div></div>
-            <progress className={styles.captureProgress} max={10} value={operations.captureToday} aria-label="Cota diária da Captação" />
-            <div className={styles.agentFoot}><span><b>{operations.capturePending}</b> aguardando</span><span><b>{operations.captureBlocked}</b> em envio/incertas</span></div>
+            <div className={styles.agentMainNumbers}><div><small>Enviadas hoje</small><strong>{operations.captureToday}<em>/{CAPTURE_DAILY_LIMIT}</em></strong></div><div><small>Total confirmado</small><strong>{operations.captureSent}</strong></div></div>
+            <progress className={styles.captureProgress} max={CAPTURE_DAILY_LIMIT} value={operations.captureQuotaUsed} aria-label="Cota diária da Captação, incluindo tentativas incertas" />
+            <div className={styles.agentFoot}><span><b>{operations.capturePending}</b> aguardando</span><span><b>{operations.captureBlocked}</b> em envio/incertas</span><span><b>{operations.captureQuotaUsed}</b> da cota de {CAPTURE_DAILY_LIMIT} ocupadas</span></div>
           </article>
           <article className={styles.agentCard}>
             <div className={styles.agentCardTop}><div><span>02 · Contatos antigos</span><h3>Agente de Recuperação</h3></div><a href="/recuperacao/central">Acompanhar →</a></div>

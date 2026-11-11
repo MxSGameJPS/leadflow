@@ -11,7 +11,7 @@ Página profissional por **R$ 500**, SEO avançado, configuração/atualização
 5. Na Central, acompanhe aprovados/enviados e priorize respostas positivas para contato humano. A IA apenas sugere respostas.
 
 ## Proteções mantidas
-- 10 mensagens por dia na Captação, 08h–18h no relógio Windows, sem domingo, intervalo mínimo de 30 minutos. A Recuperação continua independente.
+- 20 mensagens por dia na Captação (primeiras abordagens e follow-ups compartilham a cota), 08h–18h pelo relógio do Windows, sem domingo, intervalo mínimo de 30 minutos entre despachos. A Recuperação permanece com cota independente de 10/dia e pode ser pausada no painel. Com 30 minutos, 20 envios são apenas o máximo teórico de um expediente completo, não uma garantia de entregas.
 - Campanha desligada por padrão e ativa somente em novembro de 2026.
 - Mensagens já aprovadas não são reescritas; a promoção só prioriza aprovações identificadas como Black Friday.
 - Mensagens promocionais não são reescritas pela IA depois da aprovação.

@@ -3,6 +3,7 @@ import {prisma} from "../../../../lib/prisma.js";
 import {captureRunning,setCaptureRunning,captureCampaignActive,blackFridayWindow,setCaptureCampaignActive} from "../../../../services/capture/dispatchControl.js";
 import {recoveryRunning,setRecoveryRunning} from "../../../../services/recovery/dispatchControl.js";
 import {getWorkWindow} from "../../../../services/recovery/workSchedule.js";
+import {getCaptureDailyUsage} from "../../../../services/capture/dailyQuota.js";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 function reject(){return NextResponse.json({error:"Controle disponível apenas no ambiente local."},{status:403})}
@@ -20,7 +21,8 @@ async function snapshot(){
  ]):[0,0,0];
  const [campaignApproved,campaignSent]=sessionId?await Promise.all([prisma.captureApproval.count({where:{sessionId,status:"approved",approachVariant:{in:["black_friday","auto_black_friday"]}}}),prisma.captureApproval.count({where:{sessionId,status:"sent",approachVariant:{in:["black_friday","auto_black_friday"]}}})]):[0,0];
  const [recoverySending,captureSending]=sessionId?await Promise.all([prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}}),prisma.captureApproval.count({where:{sessionId,status:"sending"}})]):[0,0];
- return {campaign:{active:captureCampaignActive(),available:blackFridayWindow(),price:500},campaignApproved,campaignSent,running:captureRunning(),recoveryRunning:recoveryRunning(),sundayBlocked:getWorkWindow().sundayBlocked,working:getWorkWindow().working,approved,sent,uncertain,followupApproved,followupSent,followupUncertain,recoveryBlock:recoverySending,blocked:recoverySending>0||captureSending>0||followupUncertain>0,sessionConfigured:!!sessionId};
+ const captureUsage=await getCaptureDailyUsage(prisma,sessionId);
+ return {captureDailyLimit:captureUsage.limit,captureQuotaUsed:captureUsage.used,captureConfirmedToday:captureUsage.confirmed,captureRemaining:captureUsage.remaining,campaign:{active:captureCampaignActive(),available:blackFridayWindow(),price:500},campaignApproved,campaignSent,running:captureRunning(),recoveryRunning:recoveryRunning(),sundayBlocked:getWorkWindow().sundayBlocked,working:getWorkWindow().working,approved,sent,uncertain,followupApproved,followupSent,followupUncertain,recoveryBlock:recoverySending,blocked:recoverySending>0||captureSending>0||followupUncertain>0,sessionConfigured:!!sessionId};
 }
 export async function GET(){
  if(process.env.NODE_ENV==="production")return reject();
