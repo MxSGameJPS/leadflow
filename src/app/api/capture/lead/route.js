@@ -2,6 +2,7 @@ import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
 import {getLead,updateLead} from "../../../../repositories/leadRepository.js";
 import {CAPTURE_APPROACHES,captureApproachForLead} from "../../../../services/capture/approaches.js";
+import {captureCampaignActive} from "../../../../services/capture/dispatchControl.js";
 export const runtime="nodejs";
 const invalid=error=>NextResponse.json({error},{status:400});
 function normalizeWhatsapp(phone){
@@ -15,7 +16,7 @@ export async function GET(request){
  const leadId=new URL(request.url).searchParams.get("leadId");
  if(!leadId)return invalid("Lead obrigatório.");
  const approval=await prisma.captureApproval.findUnique({where:{leadId}});
- return NextResponse.json({approval});
+ return NextResponse.json({approval,campaignActive:captureCampaignActive()});
 }
 export async function POST(request){
  if(process.env.NODE_ENV==="production")return NextResponse.json({error:"Somente ambiente local."},{status:403});

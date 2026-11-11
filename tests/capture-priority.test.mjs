@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {scoreCaptureLead,rankCaptureCandidates} from "../src/services/capture/prioritization.js";
-import {captureSegmentBenefit,buildCaptureMessage} from "../src/services/capture/approaches.js";
+import {captureSegmentBenefit,buildCaptureMessage,captureApproachForLead} from "../src/services/capture/approaches.js";
 
 const lead={id:"a1",name:"Padaria Exemplo",segment:"Padaria",city:"Portão",phone:"51999998888",stage:"novo",problem:"perdendo pedidos",score:40};
 test("problema registrado gera justificativa, sem comprovação de compra",()=>{
@@ -27,7 +27,7 @@ test("não presumir necessidade apenas porque site não foi informado",()=>{
 });
 test("oferta Black Friday inclui R$ 500 e prévia ainda não criada",()=>{
  const msg=buildCaptureMessage(lead,"black_friday");
- assert.match(msg,/R\\$ 500/);
+ assert.ok(msg.includes("R$ 500"));
  assert.match(msg,/Black Friday/i);
  assert.match(msg,/prévia gratuita/i);
  assert.doesNotMatch(msg,/prévia já pronta|já preparamos/i);

@@ -89,7 +89,7 @@ async function captureOne(){
  const [promos,normal]=promotional?await Promise.all([
   prisma.captureApproval.findMany({where:{sessionId,status:"approved",approachVariant:{in:["black_friday","auto_black_friday"]}},orderBy:{approvedAt:"asc"},take:30}),
   prisma.captureApproval.findMany({where:{sessionId,status:"approved",approachVariant:{notIn:["black_friday","auto_black_friday"]}},orderBy:{approvedAt:"asc"},take:30})
- ]):[[],await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30})];
+ ]):[[],await prisma.captureApproval.findMany({where:{sessionId,status:"approved",approachVariant:{notIn:["black_friday","auto_black_friday"]}},orderBy:{approvedAt:"asc"},take:30})];
  const rows=[...promos,...normal];
  for(const item of rows){
   // Nunca despachar uma oferta Black Friday com o modo desativado ou fora da janela.
@@ -111,7 +111,7 @@ async function captureOne(){
   }catch(error){console.error("[captação] Não foi possível validar histórico local; sem envio:",error.message);continue}
   const claimed=await prisma.captureApproval.updateMany({where:{id:item.id,status:"approved",messageText:item.messageText,chatId:item.chatId},data:{status:"sending"}});
   if(claimed.count!==1)continue;
-  if(!captureRunning()){await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"approved"}});return;}
+  if(!captureRunning()||(["black_friday","auto_black_friday"].includes(item.approachVariant)&&!captureCampaignActive())){await prisma.captureApproval.updateMany({where:{id:item.id,status:"sending"},data:{status:"approved"}});return;}
   console.log("[captação] Preparando primeiro contato autorizado:",item.leadId);
   let outgoingText=item.messageText;
   try{
