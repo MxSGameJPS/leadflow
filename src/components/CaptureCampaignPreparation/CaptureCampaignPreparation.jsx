@@ -1,12 +1,14 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 import s from "./CaptureCampaignPreparation.module.css";
+import {capturePreparationBlockers} from "../../services/capture/campaignPreparationUiState.js";
 
 const GROUPS=[["convert","Já aprovados"],["new","Novos elegíveis"]];
 export default function CaptureCampaignPreparation(){
  const [data,setData]=useState(null),[group,setGroup]=useState("convert"),[selected,setSelected]=useState([]);
  const [drafts,setDrafts]=useState({}),[reviewed,setReviewed]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[result,setResult]=useState(null);
+ const [statusError,setStatusError]=useState(false),[checkingStatus,setCheckingStatus]=useState(false);
  async function refresh(){
   setBusy(true);setError("");
   try{
@@ -16,12 +18,29 @@ export default function CaptureCampaignPreparation(){
    setData(json);setSelected([]);setDrafts({});setReviewed(false);
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
- useEffect(()=>{refresh()},[]);
+ // Sincroniza a condição do botão sem perder destinatários ou mensagens já revisadas.
+ async function syncStatus(){
+  setCheckingStatus(true);
+  try{
+   const response=await fetch("/api/capture/campaign/prepare?status=1",{cache:"no-store"});
+   const json=await response.json();
+   if(!response.ok)throw Error(json.error||"Falha ao consultar status da Captação.");
+   setData(previous=>previous?{...previous,...json}:previous);
+   setStatusError(false);
+  }catch(error){setStatusError(true)}finally{setCheckingStatus(false)}
+ }
+ useEffect(()=>{
+  refresh();
+  const handler=()=>{void syncStatus()};
+  window.addEventListener("leadflow:capture-control-changed",handler);
+  const timer=setInterval(handler,10000);
+  return ()=>{window.removeEventListener("leadflow:capture-control-changed",handler);clearInterval(timer)};
+ },[]);
  const entries=useMemo(()=>data?[...data.old,...data.newLeads]:[],[data]);
  const visible=group==="convert"?(data?.old||[]):(data?.newLeads||[]);
  const queue=entries.filter(entry=>selected.includes(entry.leadId));
- const canCommit=data?.active&&!data?.running&&data?.inFlight===0&&reviewed&&queue.length>0&&!busy
-  &&queue.every(entry=>entry.mode!=="new"||!data?.intakePaused);
+ const blockers=capturePreparationBlockers({active:data?.active,running:data?.running,inFlight:data?.inFlight,intakePaused:data?.intakePaused,reviewed,queue,busy,statusError});
+ const canCommit=Boolean(data)&&blockers.length===0;
  function toggle(row){
   if(!row.eligible)return;
   setReviewed(false);setResult(null);
@@ -58,7 +77,10 @@ export default function CaptureCampaignPreparation(){
   <header className={s.header}>
    <div><span className={s.eyebrow}>BLACK FRIDAY · MODO EMERGÊNCIA</span><h2 id="campaign-preparation-title">Preparar campanha e revisar a fila</h2>
     <p>Escolha até 10 contatos, confira os números e ajuste cada mensagem antes de autorizar. Aprovação não envia WhatsApp automaticamente.</p></div>
-   <button type="button" onClick={refresh} disabled={busy}>{busy?"Carregando...":"Atualizar candidatos"}</button>
+   <div className={s.refreshActions}>
+    <button type="button" onClick={syncStatus} disabled={checkingStatus||busy}>{checkingStatus?"Verificando...":"Atualizar status"}</button>
+    <button type="button" onClick={refresh} disabled={busy}>{busy?"Carregando...":"Atualizar candidatos"}</button>
+   </div>
   </header>
   {!data&&<p>Carregando prévia de contatos...</p>}
   {data&&<>
@@ -101,6 +123,8 @@ export default function CaptureCampaignPreparation(){
     <p>Contatos selecionados aparecerão antes da fila tradicional quando a campanha estiver ativa. A ordem final respeita a data de aprovação e o worker.</p>
     <ol>{queue.map(row=><li key={row.leadId}><strong>{row.name}</strong> · {row.phone} · {row.mode==="convert"?"Converter texto já aprovado":"Novo primeiro contato"}<p>{drafts[row.leadId]??row.message}</p></li>)}</ol>
     <label className={s.review}><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)} disabled={busy}/> Conferi cada destinatário, o histórico no CRM, a mensagem e autorizo a preparação destas abordagens.</label>
+    {blockers.length>0?<p role="status" className={s.warning}><strong>Botão bloqueado:</strong> {blockers.join(" ")}</p>
+     :<p role="status" className={s.ready}><strong>Revisão pronta:</strong> você pode confirmar a preparação dos contatos. Nenhuma mensagem será enviada nesta etapa.</p>}
     <button type="button" className={s.confirm} disabled={!canCommit} onClick={commit}>{busy?"Registrando...":"Confirmar revisão e preparar "+queue.length+" contato(s)"}</button>
    </div>}
   </>}
