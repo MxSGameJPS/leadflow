@@ -2,7 +2,8 @@ const text=(value,max=130)=>String(value||"").trim().slice(0,max);
 const variants=[
  {id:"diagnostico",label:"Diagnóstico consultivo"},
  {id:"oportunidade",label:"Oportunidade de contato"},
- {id:"autoridade",label:"Autoridade e exemplos"}
+ {id:"autoridade",label:"Autoridade e exemplos"},
+ {id:"black_friday",label:"Black Friday R$ 500 + prévia gratuita"}
 ];
 export const CAPTURE_APPROACHES=variants;
 
@@ -19,12 +20,23 @@ export function captureSegmentBenefit(lead){
  return segmentIdeas.find(group=>group.terms.some(term=>segment.includes(term)))?.benefit||"facilitar o acesso aos serviços e o contato pelo WhatsApp";
 }
 
-export function captureApproachForLead(lead){
+export function captureApproachForLead(lead,{blackFriday=false}={}){
+ if(blackFriday)return "black_friday";
  const seed=String(lead.id||lead.name||"").split("").reduce((acc,ch)=>(acc*31+ch.charCodeAt(0))>>>0,7);
- return variants[seed%variants.length].id;
+ return variants[seed%3].id;
 }
 export function buildCaptureMessage(lead,variant=captureApproachForLead(lead)){
  const name=text(lead.name,90)||"seu negócio";
+ if(variant==="black_friday"){
+  const company=text(lead.name,55)||"sua empresa";
+  const seed=String(lead.id||lead.name||"").split("").reduce((acc,ch)=>(acc*31+ch.charCodeAt(0))>>>0,7);
+  const options=[
+   `Olá! Sou Saulo Pavanello. Nesta Black Friday, ofereço uma página profissional com SEO e apoio na presença no Google e Waze por R$ 500. Posso preparar uma prévia gratuita para ${company}, sem compromisso?`,
+   `Oi, tudo bem? Sou Saulo, desenvolvedor. Minha oferta de Black Friday é página profissional com SEO e atualização da presença no Google/Waze por R$ 500. Quer que eu prepare uma prévia gratuita para ${company}?`,
+   `Olá! Aqui é o Saulo. Estou com uma condição de Black Friday: página profissional, SEO e apoio para Google/Waze por R$ 500. Gostaria de ver uma prévia gratuita para ${company}?`
+  ];
+  return options[seed%options.length];
+ }
  const segment=text(lead.segment,75);
  const city=text(lead.city,70);
  const context=segment?` do setor de ${segment}`:city?` de ${city}`:"";

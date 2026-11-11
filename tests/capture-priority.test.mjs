@@ -25,6 +25,16 @@ test("não presumir necessidade apenas porque site não foi informado",()=>{
  assert.ok(result.reasons.some(x=>x.includes("não prova")));
  assert.ok(result.warnings.some(x=>x.includes("Intenção")));
 });
+test("oferta Black Friday inclui R$ 500 e prévia ainda não criada",()=>{
+ const msg=buildCaptureMessage(lead,"black_friday");
+ assert.match(msg,/R\\$ 500/);
+ assert.match(msg,/Black Friday/i);
+ assert.match(msg,/prévia gratuita/i);
+ assert.doesNotMatch(msg,/prévia já pronta|já preparamos/i);
+ assert.ok(msg.length<400);
+ assert.equal(captureApproachForLead(lead,{blackFriday:true}),"black_friday");
+ assert.notEqual(captureApproachForLead(lead),"black_friday");
+});
 test("mensagem por segmento inclui benefício e portfólio sem prometer diagnóstico",()=>{
  assert.match(captureSegmentBenefit(lead),/cardápio/);
  const msg=buildCaptureMessage(lead,"oportunidade");

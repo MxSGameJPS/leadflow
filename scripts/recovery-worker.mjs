@@ -7,7 +7,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {PrismaClient} from "@prisma/client";
 import {getRecoveryRest} from "../src/services/recovery/workSchedule.js";
-import {captureRunning} from "../src/services/capture/dispatchControl.js";
+import {captureRunning,captureCampaignActive} from "../src/services/capture/dispatchControl.js";
 import {prepareAutonomousCaptureMessage} from "../src/services/capture/autonomousMessage.js";
 import {scanCaptureFollowups,dispatchCaptureFollowup} from "../src/services/capture/followup.js";
 import {recoveryRunning} from "../src/services/recovery/dispatchControl.js";
@@ -85,8 +85,15 @@ async function captureOne(){
  if(state.captureCount>=10){console.log("[captação] Limite diário próprio de 10 envios atingido.");return;}
  const schedule=getRecoveryRest({lastSentAt:state.latest?.sentAt,lastReplyAt:state.lastReplyAt});
  if(!schedule.working||schedule.resting)return;
- const rows=await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30});
+ const promotional=captureCampaignActive();
+ const [promos,normal]=promotional?await Promise.all([
+  prisma.captureApproval.findMany({where:{sessionId,status:"approved",approachVariant:{in:["black_friday","auto_black_friday"]}},orderBy:{approvedAt:"asc"},take:30}),
+  prisma.captureApproval.findMany({where:{sessionId,status:"approved",approachVariant:{notIn:["black_friday","auto_black_friday"]}},orderBy:{approvedAt:"asc"},take:30})
+ ]):[[],await prisma.captureApproval.findMany({where:{sessionId,status:"approved"},orderBy:{approvedAt:"asc"},take:30})];
+ const rows=[...promos,...normal];
  for(const item of rows){
+  // Nunca despachar uma oferta Black Friday com o modo desativado ou fora da janela.
+  if(["black_friday","auto_black_friday"].includes(item.approachVariant)&&!captureCampaignActive())continue;
   if(!/^55\d{10,11}@c\.us$/.test(item.chatId)||!item.messageText?.trim())continue;
   const linkedChats=await prisma.whatsAppLeadLink.findMany({where:{leadId:item.leadId},select:{chatId:true}});
   const knownChatIds=[item.chatId,...linkedChats.map(link=>link.chatId)];

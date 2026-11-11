@@ -2,6 +2,7 @@ import {prisma} from "../../lib/prisma.js";
 import {getLead} from "../../repositories/leadRepository.js";
 import {captureApproachForLead,buildCaptureMessage} from "./approaches.js";
 import {scoreCaptureLead} from "./prioritization.js";
+import {captureCampaignActive} from "./dispatchControl.js";
 import {getLeadWorkspace} from "../workspaces/leadWorkspaceStore.js";
 
 export function candidatePhone(lead){
@@ -18,6 +19,7 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
  if(!sessionId)throw Error("Sessão OpenWA não configurada.");
  if(!Array.isArray(leadIds)||!leadIds.length||leadIds.length>50||new Set(leadIds).size!==leadIds.length||leadIds.some(x=>typeof x!=="string"||x.length>128))throw Error("Selecione de 1 a 50 leads distintos.");
  const results=[];
+ const blackFriday=captureCampaignActive();
  for(const leadId of leadIds){
   try{
    const lead=await getLead(leadId);
@@ -30,7 +32,7 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
    if(existing)throw Error("Lead já possui registro na Captação ("+existing.status+").");
    const phone=candidatePhone(lead);
    if(!phone){
-    const variant=captureApproachForLead(lead);
+    const variant=captureApproachForLead(lead,{blackFriday});
     await prisma.captureApproval.create({data:{leadId,sessionId,chatId:"pending:"+leadId,status:"number_review",messageText:buildCaptureMessage(lead,variant),approachVariant:"auto_"+variant,approvedAt:new Date()}});
     results.push({leadId,name:lead.name,status:"review",reason:"Sem telefone válido: corrija a ficha e reenfileire na aba Aprovados."});
     continue;
@@ -44,7 +46,7 @@ export async function authorizeCaptureBatch({sessionId,leadIds}){
    if(duplicates||recovery||recoveryDispatch||otherRecovery)throw Error("Contato já registrado na Captação ou Recuperação.");
    const qualified=scoreCaptureLead(lead);
    if(!qualified.eligible)throw Error("Revisão necessária: "+qualified.warnings.join(" "));
-   const variant=captureApproachForLead(lead);
+   const variant=captureApproachForLead(lead,{blackFriday});
    const message=buildCaptureMessage(lead,variant);
    if(message.length<20||message.length>2000)throw Error("Mensagem de abordagem inválida.");
    await prisma.captureApproval.create({data:{leadId,sessionId,chatId,status:"approved",messageText:message,approachVariant:"auto_"+variant,approvedAt:new Date()}});

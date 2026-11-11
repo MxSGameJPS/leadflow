@@ -32,5 +32,8 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run capture tests
+        run: npm run test:capture
+
       - name: Build application
         run: npm run build
