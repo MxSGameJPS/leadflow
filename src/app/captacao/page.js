@@ -3,6 +3,7 @@ import {listLeads} from "../../repositories/leadRepository.js";
 import CaptureControl from "../../components/CaptureControl/CaptureControl.jsx";
 import CaptureOperations from "../../components/CaptureOperations/CaptureOperations.jsx";
 import CapturePriority from "../../components/CapturePriority/CapturePriority.jsx";
+import CaptureCampaignPreparation from "../../components/CaptureCampaignPreparation/CaptureCampaignPreparation.jsx";
 import CaptureFollowup from "../../components/CaptureFollowup/CaptureFollowup.jsx";
 import {rankCaptureCandidates} from "../../services/capture/prioritization.js";
 import {captureNextStep,summarizeCapturePerformance} from "../../services/capture/commercialIntelligence.js";
@@ -26,5 +27,5 @@ export default async function Page(){
  const intelligence=items.filter(x=>x.status==="sent").map(x=>({...x,nextStep:captureNextStep({replyStatus:x.replyStatus,replyCategory:x.replyCategory,aiCategory:x.aiCategory,outcome:x.outcome,meetingAt:x.meetingAt,lastError:x.replyError})})).sort((a,b)=>b.nextStep.priority-a.nextStep.priority);
  const performance=summarizeCapturePerformance(items);
  const followupCandidates=items.filter(x=>x.status==="sent").map(x=>({...x,followup:followupByLead.get(x.leadId)||null}));
- return <main className={s.main}><h1>Agente de Captação</h1><p>Central de atendimentos: veja o que foi aprovado, enviado e o que exige acompanhamento. As respostas ainda precisam ser consultadas e classificadas manualmente.</p><CaptureControl/><CapturePriority candidates={candidates}/><CaptureOperations items={items} intelligence={intelligence} performance={performance}/><CaptureFollowup candidates={followupCandidates}/></main>;
+ return <main className={s.main}><h1>Agente de Captação</h1><p>Central de atendimentos: veja o que foi aprovado, enviado e o que exige acompanhamento. As respostas ainda precisam ser consultadas e classificadas manualmente.</p><CaptureControl/><CaptureCampaignPreparation/><CapturePriority candidates={candidates}/><CaptureOperations items={items} intelligence={intelligence} performance={performance}/><CaptureFollowup candidates={followupCandidates}/></main>;
 }

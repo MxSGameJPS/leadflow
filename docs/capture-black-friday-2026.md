@@ -24,3 +24,8 @@ Página profissional por **R$ 500**, SEO avançado, configuração/atualização
 npm run test:capture
 npm run build
 ```
+
+## Assistente de revisão em lote
+Na página `/captacao`, use **Preparar campanha e revisar a fila**. Pause a Captação antes de confirmar; a Recuperação permanece independente. Há duas categorias: **Já aprovados** (substitui mensagem antiga não enviada, após comparar os textos) e **Novos elegíveis** (sugere até 10 contatos para análise). Selecione cada contato ou use **Selecionar até 10 elegíveis desta aba**, ajuste as mensagens e confirme com `CONFIRMO CAMPANHA BLACK FRIDAY`. O backend revalida números, histórico, recusas, duplicações, elegibilidade e estado do worker em transação; alterações são registradas nas atividades do lead. Envio não ocorre na preparação.
+
+Use `npm run test:capture` para validar regras da campanha e `npm run build` antes de ligar os envios no Windows.
