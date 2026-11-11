@@ -1,6 +1,7 @@
 import {prisma} from "../../lib/prisma.js";
 import {addBusinessDays,getLiveHistory,evaluateSecondAttempt,dayKey} from "../recovery/secondAttempt.js";
 import {captureRunning} from "./dispatchControl.js";
+import {captureCanDispatch,getCaptureDailyUsage} from "./dailyQuota.js";
 import {getRecoveryRest} from "../recovery/workSchedule.js";
 
 const locked=new Set(["sent","sending","uncertain","closed"]);
@@ -57,15 +58,14 @@ export async function dispatchCaptureFollowup(sessionId){
  const schedule=getRecoveryRest({lastSentAt:latest});
  if(!schedule.working||schedule.resting)return false;
  const today=dayKey();
- const [initialUsed,followupUsed,firstSending,secondSending,otherSending,uncertain]=await Promise.all([
-  prisma.captureApproval.count({where:{sessionId,status:{in:["sending","sent","uncertain"]},OR:[{sentAt:{gte:new Date(new Date().setHours(0,0,0,0))}},{status:{in:["sending","uncertain"]},updatedAt:{gte:new Date(new Date().setHours(0,0,0,0))}}]}}),
-  prisma.captureFollowup.count({where:{sessionId,dayKey:today,status:{in:["sending","sent","uncertain"]}}}),
+ const [usage,firstSending,secondSending,otherSending,uncertain]=await Promise.all([
+  getCaptureDailyUsage(prisma,sessionId),
   prisma.captureApproval.count({where:{sessionId,status:"sending"}}),
   prisma.recoveryDispatch.count({where:{sessionId,status:"sending"}}),
   prisma.recoverySecondAttempt.count({where:{sessionId,status:"sending"}}),
   prisma.captureFollowup.count({where:{sessionId,status:{in:["sending","uncertain"]}}})
  ]);
- if(initialUsed+followupUsed>=10||firstSending||secondSending||otherSending||uncertain)return false;
+ if(!captureCanDispatch(usage.used)||firstSending||secondSending||otherSending||uncertain)return false;
  const rows=await prisma.captureFollowup.findMany({where:{sessionId,status:"approved",eligibleAt:{lte:new Date()},approvedAt:{not:null}},orderBy:{approvedAt:"asc"},take:10});
  for(const item of rows){
   const first=await prisma.captureApproval.findFirst({where:{sessionId,leadId:item.leadId,status:"sent"}});

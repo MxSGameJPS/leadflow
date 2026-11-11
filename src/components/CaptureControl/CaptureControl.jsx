@@ -43,9 +43,10 @@ export default function CaptureControl(){
  return <section className={s.panel}>
   <div><strong>Agente de Captação</strong><p>{state?.running?"Ativo — aguardando o próximo ciclo permitido pelo worker.":"Pausado — nenhum novo envio de Captação será iniciado."}</p>
   <div className={s.campaign}><strong>Operação Black Friday · R$ 500</strong><p>{state?.campaign?.active?"ATIVA — novas aprovações com prévia gratuita e prioridade no envio.":"DESATIVADA — abordagem padrão."}</p><small>Página profissional, SEO avançado, apoio na presença no Google e Waze, hospedagem gratuita e 30 dias de suporte. Vigência técnica: novembro de 2026.</small><p>{state?.campaignApproved??0} aprovado(s) da campanha · {state?.campaignSent??0} enviado(s) com confirmação.</p></div>
-  <small>Captação: {state?.running?"ligada":"desligada"} · Recuperação: {state?.recoveryRunning?"ligada":"desligada"} · 08h–18h, segunda a sábado · domingo sem envio automático · até 10 mensagens/dia por agente · intervalo de 30 min</small>
+  <small>Captação: {state?.running?"ligada":"desligada"} · Recuperação: {state?.recoveryRunning?"ligada":"desligada"} · 08h–18h, segunda a sábado · domingo sem envio automático · Captação até {state?.captureDailyLimit??20}/dia (inclui follow-ups) · Recuperação até 10/dia · intervalo de 30 min</small>
   {state?.sundayBlocked&&<p role="status">Hoje é domingo: ambos os agentes ficam impedidos de enviar, mesmo se a chave estiver ligada. O painel continua disponível.</p>}
   {state&&<p>{state.approved} aprovado(s) aguardando · {state.sent} enviado(s) · {state.uncertain} em andamento/incerto(s)</p>}
+  {state&&<p role="status">Cota da Captação hoje: <strong>{state.captureQuotaUsed}/{state.captureDailyLimit}</strong> ocupadas · {state.captureConfirmedToday} confirmadas · {state.captureRemaining} disponíveis (inclui envios incertos).</p>}
   {state?.blocked&&<p role="status" className={s.error}>Há um envio em andamento. O agente aguardará sua conclusão antes de abordar o próximo lead.</p>}
   {state&&state.uncertain>0&&<p role="status">{state.uncertain} tentativa(s) em andamento/incerta(s) para conferência. Resultados incertos não bloqueiam os próximos leads; não serão reenviados automaticamente.</p>}
   {error&&<p role="alert" className={s.error}>{error}</p>}</div>

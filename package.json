@@ -38,7 +38,7 @@
     "test:site-variants": "node tests/site-variants.test.mjs",
     "test:crm": "node tests/crm-folders.test.mjs",
     "test:search": "node tests/search-results.test.mjs",
-    "test:capture": "node --test tests/capture-priority.test.mjs tests/capture-commercial.test.mjs tests/capture-bulk.test.mjs tests/capture-campaign-preparation.test.mjs",
+    "test:capture": "node --test tests/capture-priority.test.mjs tests/capture-commercial.test.mjs tests/capture-bulk.test.mjs tests/capture-campaign-preparation.test.mjs tests/capture-daily-quota.test.mjs",
     "test:recovery-interval": "node --test tests/recovery-minimum-interval.test.mjs"
   },
   "dependencies": {
