@@ -1,5 +1,5 @@
 import {NextResponse} from "next/server";
-import {previewCaptureCampaign,commitCaptureCampaign} from "../../../../services/capture/campaignPreparation.js";
+import {previewCaptureCampaign,commitCaptureCampaign} from "../../../../../services/capture/campaignPreparation.js";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 function fail(message,status=400){return NextResponse.json({error:message},{status})}
