@@ -7,6 +7,8 @@ export async function prepareAutonomousCaptureMessage(item){
  const lead=await getLead(item.leadId);
  if(!lead)throw Error("Lead não encontrado para preparar mensagem.");
  const variant=String(item.approachVariant).slice(5);
+ // A mensagem promocional aprovada não é reescrita depois da autorização.
+ if(variant==="black_friday")return item.messageText;
  const fallback=buildCaptureMessage(lead,variant);
  try{
   const result=await generateResilientWithDefaultProvider({

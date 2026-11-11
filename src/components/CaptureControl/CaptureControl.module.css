@@ -1,2 +1,4 @@
 .panel{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;padding:16px 20px;margin:12px 0;border:1px solid #536981;background:#172237;border-radius:12px;color:#eef5ff}.panel p{margin:6px 0}.panel small{color:#bac7da}.panel button{background:#29405c;color:#fff;border:1px solid #8498b2;border-radius:8px;padding:12px 20px;cursor:pointer}.panel button:disabled{opacity:.5;cursor:wait}.error{color:#ffaaaa}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.controls button{white-space:nowrap}
+
+.campaign{margin-top:12px;padding:12px 14px;border-radius:10px;background:#24344a;border:1px solid #bd935b}.campaign strong{color:#ffe0a8}.campaign p{margin:7px 0}.controls .campaignButton{background:#6b4027;border-color:#cd995f;color:#fff3dc}.controls .campaignOn{background:#284534;border-color:#94cba5;color:#e1ffeb}

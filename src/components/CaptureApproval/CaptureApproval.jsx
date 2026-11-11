@@ -11,13 +11,13 @@ export default function CaptureApproval({lead,initialMessage}){
  const [approval,setApproval]=useState(null);
  const [confirmed,setConfirmed]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
- const [loaded,setLoaded]=useState(false);
+ const [loaded,setLoaded]=useState(false),[campaignActive,setCampaignActive]=useState(false);
  async function load(){
   setBusy(true);setError("");
   try{
    const r=await fetch("/api/capture/lead?leadId="+encodeURIComponent(lead.id),{cache:"no-store"}),d=await r.json();
    if(!r.ok)throw Error(d.error||"Erro ao consultar autorização");
-   setApproval(d.approval);if(d.approval?.messageText)setMessage(d.approval.messageText);if(d.approval?.approachVariant&&CAPTURE_APPROACHES.some(a=>a.id===d.approval.approachVariant))setApproachVariant(d.approval.approachVariant);setLoaded(true);
+   setApproval(d.approval);setCampaignActive(d.campaignActive===true);if(d.approval?.messageText)setMessage(d.approval.messageText);else if(d.campaignActive===true){setApproachVariant("black_friday");setMessage(buildCaptureMessage(lead,"black_friday"));}if(d.approval?.approachVariant&&CAPTURE_APPROACHES.some(a=>a.id===d.approval.approachVariant))setApproachVariant(d.approval.approachVariant);setLoaded(true);
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function generate(){if(!loaded){setError("Consulte a situação antes de gerar.");return}setBusy(true);setError("");setNotice("");try{const res=await fetch("/api/capture/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadId:lead.id,approachVariant})});const data=await res.json();if(!res.ok)throw Error(data.error||"Não foi possível gerar a mensagem");setMessage(data.message);setNotice(data.source==="ia"?"Mensagem personalizada pela IA. Revise e aprove antes do envio.":"Mensagem modelo preparada. Revise antes da aprovação.");}catch(e){setError(e.message)}finally{setBusy(false)}}
@@ -33,6 +33,7 @@ export default function CaptureApproval({lead,initialMessage}){
  }
  return <section className={s.card}><h2>Agente de Captação — primeiro contato</h2>
  <p>Nova abordagem preparada na ficha do lead. Você revisa e autoriza individualmente. Não utiliza a fila de Recuperação.</p>
+ {campaignActive&&<p role="status"><strong>Black Friday ativa:</strong> R$ 500 com prévia gratuita. Revise o texto e autorize individualmente.</p>}
  <div role="note"><strong>Avaliação preliminar: {qualification.score}/100 · {qualification.confidence}</strong><p>{qualification.reasons.join(" ")||"Sem evidência comercial registrada."}</p>{qualification.warnings.length>0&&<p>Antes de aprovar: {qualification.warnings.join(" ")}</p>}<small>A pontuação não comprova necessidade ou interesse. Verifique histórico e destinatário antes de qualquer contato.</small></div>
  <p><strong>Empresa:</strong> {lead.name} · <strong>Telefone disponível:</strong> {lead.whatsapp||lead.phone||"Não informado"}. O contato será aprovado usando esse número, com possibilidade de correção antes do envio.</p>
  <label>Número para o primeiro contato <input className={s.phone} type="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} disabled={busy||["approved","sending","sent","uncertain"].includes(approval?.status)} placeholder="Ex.: 51999998888"/></label>
