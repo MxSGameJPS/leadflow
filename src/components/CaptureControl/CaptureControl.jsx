@@ -22,6 +22,7 @@ export default function CaptureControl(){
    const response=await fetch("/api/capture/control",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,confirmation})});
    const json=await response.json();if(!response.ok)throw Error(json.error||"Falha ao alterar Captação.");
    setState(json);
+   window.dispatchEvent(new Event("leadflow:capture-control-changed"));
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function toggleCampaign(){
@@ -36,6 +37,7 @@ export default function CaptureControl(){
    const response=await fetch("/api/capture/control",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:active?"campaign_pause":"campaign_start",confirmation:active?"":phrase})});
    const json=await response.json();if(!response.ok)throw Error(json.error||"Falha ao alterar campanha.");
    setState(json);
+   window.dispatchEvent(new Event("leadflow:capture-control-changed"));
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <section className={s.panel}>

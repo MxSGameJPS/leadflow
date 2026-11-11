@@ -16,6 +16,12 @@ async function inFlightCount(db=prisma,sessionId){
  ]);
  return capture+followup+recovery;
 }
+// Consulta leve para atualizar apenas os bloqueios de envio, sem reconstruir a lista.
+export async function capturePreparationStatus({sessionId}){
+ if(!sessionId)throw Error("Sessão OpenWA não configurada.");
+ const inFlight=await inFlightCount(prisma,sessionId);
+ return {active:captureCampaignActive(),running:captureRunning(),inFlight,intakePaused:captureIntakePaused()};
+}
 async function inspect({db=prisma,sessionId,lead,approval,mode,workspace}){
  const phone=candidatePhone(lead),chatId=phone?phone+"@c.us":null;
  const links=await db.whatsAppLeadLink.findMany({where:{leadId:lead.id},select:{chatId:true}});
