@@ -38,9 +38,18 @@ function svgSlide(slide,index,total){
  <text x="940" y="1275" text-anchor="end" font-family="Arial,sans-serif" font-size="25" fill="#b8b0a2">${index+1}/${total}</text>
  </svg>`;
 }
-function parsePlan(text){
- const raw=String(text||"").replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"").trim();
- try{return JSON.parse(raw)}catch{throw Error("A IA não retornou um roteiro visual válido. Tente gerar novamente.")}
+export function parseCreativePlan(text){
+ const raw=String(text||"").trim().replace(/^\uFEFF/,"");
+ const candidates=[raw,...[...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(match=>match[1].trim())];
+ const start=raw.indexOf("{"),end=raw.lastIndexOf("}");
+ if(start>=0&&end>start)candidates.push(raw.slice(start,end+1));
+ for(const candidate of candidates){
+  try{
+   const value=JSON.parse(candidate);
+   if(value&&typeof value==="object"&&!Array.isArray(value)&&Array.isArray(value.slides)&&value.slides.length>0)return value;
+  }catch{}
+ }
+ throw Error("A IA não retornou JSON válido com slides.");
 }
 export async function generateSocialCreative({topic,format="image",goal="autoridade e contatos"}){
  const subject=trim(topic,180);if(subject.length<5)throw Error("Informe um tema com pelo menos 5 caracteres.");
@@ -50,7 +59,15 @@ export async function generateSocialCreative({topic,format="image",goal="autorid
   systemPrompt:`Você é diretor de arte e estrategista de conteúdo de Saulo Pavanello, desenvolvedor de sites e sistemas. Gere somente JSON válido, sem Markdown, no formato {"caption":"legenda com CTA e até 5 hashtags","slides":[{"headline":"título curto","body":"texto curto e útil","cta":"chamada curta"}]}. Produza exatamente ${count} slides, com narrativa coerente, títulos de até 65 caracteres, textos de até 125 caracteres e CTA de até 36 caracteres. Português brasileiro natural. Não invente métricas, clientes, depoimentos ou promessas de resultado. Para carrossel: capa, problema, insight, solução e CTA. Não repita o mesmo texto em todos os slides.`,
   prompt:JSON.stringify({topic:subject,format,goal:trim(goal,120)}),disableTools:true,timeoutMs:60000,retries:1,maxTokens:1700
  });
- const plan=normalizeCreativePlan(parsePlan(result.text),{format,topic:subject});
+ let parsed;
+ try{parsed=parseCreativePlan(result.text)}catch{
+  const repair=await generateResilientWithDefaultProvider({
+   systemPrompt:"Você corrige formatos JSON. Responda somente com um objeto JSON válido contendo caption (string) e slides (array de objetos com headline, body, cta). Não inclua Markdown nem comentários. Não invente informações.",
+   prompt:JSON.stringify({expectedSlides:count,originalResponse:String(result.text||"").slice(0,9000),topic:subject}),disableTools:true,timeoutMs:45000,retries:0,maxTokens:2000
+  });
+  parsed=parseCreativePlan(repair.text);
+ }
+ const plan=normalizeCreativePlan(parsed,{format,topic:subject});
  const directory=path.join(process.cwd(),"data","social-media");
  await fs.mkdir(directory,{recursive:true});
  const files=[];
