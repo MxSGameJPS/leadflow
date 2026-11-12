@@ -8,6 +8,7 @@ const variants=[
 export const CAPTURE_APPROACHES=variants;
 
 const segmentIdeas=[
+ {terms:["barbearia","barbeiro","salao","cabeleireiro"],benefit:"conheçam os serviços e solicitem agendamentos pelo WhatsApp"},
  {terms:["padaria","confeitaria","restaurante","lanchonete","pizzaria","delivery","alimento"],benefit:"facilitar o acesso ao cardápio, aos horários e ao WhatsApp para pedidos"},
  {terms:["oficina","mecanica","auto center","automotivo","carro"],benefit:"apresentar os serviços e facilitar pedidos de orçamento e agendamento"},
  {terms:["advogado","advocacia","juridico","escritorio de advocacia"],benefit:"organizar informações institucionais e facilitar o primeiro contato, respeitando as regras de publicidade profissional"},
@@ -29,11 +30,12 @@ export function buildCaptureMessage(lead,variant=captureApproachForLead(lead)){
  const name=text(lead.name,90)||"seu negócio";
  if(variant==="black_friday"){
   const company=text(lead.name,55)||"sua empresa";
+  const benefit=captureSegmentBenefit(lead);
   const seed=String(lead.id||lead.name||"").split("").reduce((acc,ch)=>(acc*31+ch.charCodeAt(0))>>>0,7);
   const options=[
-   `Olá! Sou Saulo Pavanello. Nesta Black Friday, ofereço uma página profissional com SEO e apoio na presença no Google e Waze por R$ 500. Posso preparar uma prévia gratuita para ${company}, sem compromisso?`,
-   `Oi, tudo bem? Sou Saulo, desenvolvedor. Minha oferta de Black Friday é página profissional com SEO e atualização da presença no Google/Waze por R$ 500. Quer que eu prepare uma prévia gratuita para ${company}?`,
-   `Olá! Aqui é o Saulo. Estou com uma condição de Black Friday: página profissional, SEO e apoio para Google/Waze por R$ 500. Gostaria de ver uma prévia gratuita para ${company}?`
+   `Oi! Tudo bem? Vi ${company} no Google e tive uma ideia para ajudar novos clientes a ${benefit}. Posso te mostrar uma prévia gratuita, sem compromisso?`,
+   `Olá! Sou Saulo, desenvolvedor. Tenho uma ideia de página para ${company} que pode ajudar clientes a ${benefit}. Posso preparar uma prévia gratuita para você avaliar?`,
+   `Oi, tudo bem? Gostaria de te mostrar uma ideia para facilitar que novos clientes ${benefit} em ${company}. Posso preparar uma prévia gratuita, sem compromisso?`
   ];
   return options[seed%options.length];
  }
