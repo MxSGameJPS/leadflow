@@ -3,6 +3,8 @@
 ## Oferta
 Página profissional por **R$ 500**, SEO avançado, configuração/atualização elegível no Google, inclusão elegível no Waze, hospedagem gratuita e 30 dias de suporte. Prévia personalizada gratuita é **proposta futura**, nunca afirmar que já está pronta.
 
+No primeiro contato, a mensagem prioriza o benefício para o segmento e a prévia gratuita; o preço de R$ 500 é apresentado depois da manifestação de interesse. A validação da campanha não exige preço no primeiro contato.
+
 ## Operação local
 1. Na Central `/captacao`, clique **Ativar Black Friday**, confirme `ATIVAR BLACK FRIDAY`. Isso **não inicia o envio**.
 2. No CRM `/crm`, filtre contatos novos e apropriados. Use **Aprovar N para Captação** para autorizar os contatos individualmente pelo lote. Novas aprovações usam mensagem Black Friday com variação por lead.
