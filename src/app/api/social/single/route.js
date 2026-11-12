@@ -1,3 +1,4 @@
+import {parseSocialJson} from "../../../../services/social/parseAiJson.js";
 import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
 import {generateResilientWithDefaultProvider} from "../../../../services/ai/providerService.js";
@@ -24,8 +25,11 @@ export async function POST(request){
    systemPrompt:"Você é redator e estrategista de social media brasileiro. Crie EXATAMENTE UM post avulso para o negócio descrito, sem elaborar calendário. Responda apenas um OBJETO JSON com title (até 100 caracteres), caption (até 1800 caracteres, com CTA e hashtags apropriadas), script (até 3500 caracteres: roteiro de vídeo, estrutura slide a slide de carrossel ou briefing visual completo para arte estática). Respeite rigorosamente o assunto, público, formato e redes informados. Não invente preços, porcentagens, prazos, condições de promoções ou afirmações factuais não fornecidas pelo usuário. Caso faltem condições ou valores, escreva uma copy sem inventá-los e inclua no roteiro quais detalhes devem ser confirmados. Você NÃO cria a mídia, NÃO agenda e NÃO publica. Português brasileiro.",
    prompt:JSON.stringify({subject,details,audience,format,platforms}),disableTools:true,timeoutMs:60000,retries:1
   });
-  const raw=String(output.text||"").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"");
-  let item;try{item=JSON.parse(raw)}catch{throw Error("A IA não retornou JSON válido. Tente novamente.")}
+  let item;
+  try{item=parseSocialJson(output.text)}catch{
+   const repaired=await generateResilientWithDefaultProvider({systemPrompt:"Reformate o conteúdo em um único objeto JSON válido com title, caption e script como strings. Não acrescente fatos. Não use Markdown.",prompt:JSON.stringify({original:String(output.text||"").slice(0,11000),subject,details,format}),disableTools:true,timeoutMs:45000,retries:0,maxTokens:2200});
+   item=parseSocialJson(repaired.text);
+  }
   if(!item||Array.isArray(item)||typeof item!=="object")throw Error("Resposta inválida do agente.");
   const title=String(item.title||"").trim().slice(0,100),caption=String(item.caption||"").trim().slice(0,1800),script=String(item.script||"").trim().slice(0,3500);
   if(!title||!caption||!script)throw Error("O agente retornou conteúdo incompleto. Tente novamente.");
