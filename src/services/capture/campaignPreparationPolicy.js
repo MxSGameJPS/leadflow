@@ -10,7 +10,6 @@ export function validateCampaignDraft(value){
  const message=String(value||"").trim();
  const clean=normalize(message);
  if(message.length<50||message.length>500)throw Error("Mensagem deve ter entre 50 e 500 caracteres.");
- if(!/r\$\s*500\b/.test(clean))throw Error("A mensagem precisa informar a oferta de R$ 500.");
  if(!clean.includes("previa gratuita"))throw Error("A mensagem precisa oferecer prévia gratuita.");
  if(/ja (preparei|criei|fiz) (a |uma )?previa|garantimos|100%|primeiro lugar/.test(clean))
   throw Error("Revise alegações não comprovadas sobre prévia ou resultados.");
