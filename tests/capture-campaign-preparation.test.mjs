@@ -5,7 +5,7 @@ import {validateCampaignDraft,campaignBlockers,checkCampaignPreparationState,CAM
 const lead={name:"Loja Teste",stage:"novo",phone:"51999998888",notes:""};
 const approval={sessionId:"sessao",status:"approved",sentAt:null,approvedAt:new Date("2026-11-11T08:00:00Z"),chatId:"5551999998888@c.us"};
 const cleanWorkspace={contactCount:0,lastContactAt:null};
-test("mensagem da oferta precisa ser curta, trazer valor e prévia",()=>{
+test("primeiro contato permite prévia gratuita sem antecipar o preço",()=>{
  assert.equal(validateCampaignDraft("Olá, nesta Black Friday temos uma página por R$ 500. Posso preparar uma prévia gratuita para sua loja?").includes("R$ 500"),true);
  assert.throws(()=>validateCampaignDraft("Olá! Tenho uma proposta interessante para o seu negócio, podemos conversar?"),/R\$ 500/);
  assert.throws(()=>validateCampaignDraft("Oi! Por R$ 500 já preparei uma prévia gratuita para você, garanto resultados."),/alegações/);
