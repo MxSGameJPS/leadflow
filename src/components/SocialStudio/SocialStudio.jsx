@@ -21,15 +21,6 @@ export default function SocialStudio({initialPosts=[]}){
   const files=[...event.target.files||[]];if(!files.length)return;setBusy(true);setError("");
   try{const form=new FormData();files.forEach(file=>form.append("files",file));const response=await fetch("/api/social/upload",{method:"POST",body:form});const json=await response.json();if(!response.ok)throw Error(json.error);setUploaded(json.files);setMedia(json.files.map(x=>x.publicUrl||x.localUrl));setNotice(json.files.every(x=>x.publicUrl)?"Mídias hospedadas e prontas para agendamento.":"Criativos guardados no computador. O LeadFlow enviará ao R2 automaticamente quando você aprovar o agendamento.");}catch(e){setError(e.message)}finally{setBusy(false)}
  }
- async function generateCreative(){
-  setBusy(true);setError("");setNotice("");
-  try{
-   const response=await fetch("/api/social/creative",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic:topic||title,format:mediaType,goal:"autoridade e conversas comerciais"})});
-   const data=await response.json();if(!response.ok)throw Error(data.error||"Falha ao criar arte.");
-   setMedia(data.files.map(file=>file.localUrl));setUploaded(data.files);if(data.caption)setCaption(data.caption);
-   setNotice(`${data.files.length} arte(s) gerada(s). Revise o conteúdo antes de salvar e agendar.`);
-  }catch(e){setError(e.message)}finally{setBusy(false)}
- }
  async function generateCaption(){setBusy(true);setError("");try{const r=await fetch("/api/social/caption",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({topic,platforms})});const data=await r.json();if(!r.ok)throw Error(data.error);setCaption(data.caption)}catch(e){setError(e.message)}finally{setBusy(false)}}
  async function create(){
   setBusy(true);setError("");setNotice("");
@@ -81,7 +72,7 @@ export default function SocialStudio({initialPosts=[]}){
  <div className={styles.platforms}><label><input type="checkbox" checked={platforms.includes("instagram")} onChange={e=>setPlatforms(p=>e.target.checked?[...new Set([...p,"instagram"])]:p.filter(x=>x!=="instagram"))}/> Instagram</label><label><input type="checkbox" checked={platforms.includes("facebook")} onChange={e=>setPlatforms(p=>e.target.checked?[...new Set([...p,"facebook"])]:p.filter(x=>x!=="facebook"))}/> Facebook</label></div>
  {mediaType!=="text"&&<><label>Upload de arquivos<input type="file" accept="image/jpeg,image/png,video/mp4,video/quicktime" multiple={mediaType==="carousel"} onChange={upload}/></label>{uploaded.length>0&&<div className={styles.files}>{uploaded.map(x=><span key={x.name}>{x.name.slice(0,8)} · {x.publicUrl?"Hospedado":"Somente local"}{x.storageError?" · "+x.storageError:""}</span>)}</div>}
  <label>URLs das mídias (uma por linha, na ordem do carrossel)<textarea rows={3} value={media.join("\n")} onChange={e=>setMedia(e.target.value.split("\n").map(x=>x.trim()).filter(Boolean))} placeholder="https://.../arte.jpg"/></label><small>Os criativos permanecem locais até a aprovação. Se o R2 estiver configurado, o LeadFlow cria as URLs públicas automaticamente ao agendar.</small></>}
- <label>Tema para IA<input value={topic} onChange={e=>setTopic(e.target.value)} placeholder="Ex.: vantagens de ter um site próprio"/></label><button type="button" className={styles.secondary} disabled={busy||!(topic||title).trim()||!["image","carousel"].includes(mediaType)} onClick={generateCreative}>{busy?"Gerando criativo...":"Gerar criativo com IA (PNG)"}</button> <button type="button" className={styles.secondary} disabled={busy||!topic.trim()} onClick={generateCaption}>Gerar legenda com OmniRoute</button> {media.length>0&&["image","carousel"].includes(mediaType)&&<div className={styles.files}>{media.map((url,index)=><a key={url} href={url} target="_blank" rel="noreferrer">Visualizar arte {index+1}</a>)}</div>}
+ <label>Tema para IA<input value={topic} onChange={e=>setTopic(e.target.value)} placeholder="Ex.: vantagens de ter um site próprio"/></label><button type="button" className={styles.secondary} disabled={busy||!topic.trim()} onClick={generateCaption}>Gerar legenda com OmniRoute</button>
  <label>Legenda<textarea rows={7} value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Sua legenda, CTA e hashtags"/></label>
  <button type="button" className={styles.primary} disabled={busy||!title.trim()||!caption.trim()} onClick={create}>{busy?"Processando...":"Salvar rascunho"}</button>
  </section>
