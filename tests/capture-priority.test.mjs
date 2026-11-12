@@ -25,10 +25,9 @@ test("não presumir necessidade apenas porque site não foi informado",()=>{
  assert.ok(result.reasons.some(x=>x.includes("não prova")));
  assert.ok(result.warnings.some(x=>x.includes("Intenção")));
 });
-test("oferta Black Friday inclui R$ 500 e prévia ainda não criada",()=>{
+test("primeiro contato Black Friday oferece prévia sem antecipar preço",()=>{
  const msg=buildCaptureMessage(lead,"black_friday");
- assert.ok(msg.includes("R$ 500"));
- assert.match(msg,/Black Friday/i);
+ assert.doesNotMatch(msg,/R\$\s*500/);
  assert.match(msg,/prévia gratuita/i);
  assert.doesNotMatch(msg,/prévia já pronta|já preparamos/i);
  assert.ok(msg.length<400);
