@@ -2,6 +2,13 @@ import {NextResponse} from "next/server";
 import {prisma} from "../../../../lib/prisma.js";
 import {generateResilientWithDefaultProvider} from "../../../../services/ai/providerService.js";
 export const runtime="nodejs";
+function parsePost(text){
+ const raw=String(text||"").trim().replace(/^\\uFEFF/,"");
+ const candidates=[raw,...[...raw.matchAll(/```(?:json)?\\s*([\\s\\S]*?)```/gi)].map(m=>m[1].trim())];
+ const start=raw.indexOf("{"),end=raw.lastIndexOf("}");if(start>=0&&end>start)candidates.push(raw.slice(start,end+1));
+ for(const candidate of candidates){try{const value=JSON.parse(candidate);if(value&&!Array.isArray(value)&&typeof value==="object")return value}catch{}}
+ throw Error("A IA não retornou JSON válido para o post.");
+}
 export async function POST(request){
  if(process.env.NODE_ENV==="production")return NextResponse.json({error:"Apenas ambiente local."},{status:403});
  try{
